@@ -1,0 +1,286 @@
+"""All SQLAlchemy models for the SDA platform."""
+
+from datetime import datetime, timezone
+
+from werkzeug.security import generate_password_hash, check_password_hash
+
+from app.extensions import db
+
+
+class User(db.Model):
+    __tablename__ = "users"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    orders = db.relationship("Order", backref="user", lazy="dynamic")
+    assignments = db.relationship("Assignment", backref="user", lazy="dynamic")
+    code_request_logs = db.relationship(
+        "CodeRequestLog", backref="user", lazy="dynamic"
+    )
+
+    def set_password(self, password: str):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        return check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "email": self.email,
+            "is_admin": self.is_admin,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+class SteamAccount(db.Model):
+    __tablename__ = "steam_accounts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    account_name = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    steam_id = db.Column(db.String(64), nullable=True)
+    mafile_data = db.Column(db.JSON, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    game_accounts = db.relationship(
+        "GameAccount", backref="steam_account", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    assignments = db.relationship(
+        "Assignment", backref="steam_account", lazy="dynamic"
+    )
+    code_request_logs = db.relationship(
+        "CodeRequestLog", backref="steam_account", lazy="dynamic"
+    )
+
+    def to_dict(self, include_password=False):
+        result = {
+            "id": self.id,
+            "account_name": self.account_name,
+            "steam_id": self.steam_id,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat(),
+            "game_count": self.game_accounts.count(),
+        }
+        if include_password:
+            result["password"] = self.password
+        return result
+
+
+class Game(db.Model):
+    __tablename__ = "games"
+
+    id = db.Column(db.Integer, primary_key=True)
+    appid = db.Column(db.Integer, unique=True, nullable=False, index=True)
+    name = db.Column(db.String(500), nullable=False)
+    icon = db.Column(db.String(500), nullable=True, default="")
+    price = db.Column(db.Integer, default=50000, nullable=False)  # in smallest currency unit
+    is_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    game_accounts = db.relationship(
+        "GameAccount", backref="game", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    orders = db.relationship("Order", backref="game", lazy="dynamic")
+    play_instruction = db.relationship(
+        "PlayInstruction", backref="game", uselist=False, cascade="all, delete-orphan"
+    )
+
+    def available_account_count(self):
+        """Count how many Steam accounts own this game and are active."""
+        return (
+            GameAccount.query.join(SteamAccount)
+            .filter(
+                GameAccount.game_id == self.id,
+                SteamAccount.is_active == True,  # noqa: E712
+            )
+            .count()
+        )
+
+    def to_dict(self, include_availability=False):
+        result = {
+            "id": self.id,
+            "appid": self.appid,
+            "name": self.name,
+            "icon": self.icon,
+            "price": self.price,
+            "is_enabled": self.is_enabled,
+            "created_at": self.created_at.isoformat(),
+        }
+        if include_availability:
+            result["available_accounts"] = self.available_account_count()
+        return result
+
+
+class GameAccount(db.Model):
+    __tablename__ = "game_accounts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(
+        db.Integer, db.ForeignKey("games.id", ondelete="CASCADE"), nullable=False
+    )
+    steam_account_id = db.Column(
+        db.Integer,
+        db.ForeignKey("steam_accounts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("game_id", "steam_account_id", name="uq_game_steam_account"),
+    )
+
+
+class Order(db.Model):
+    __tablename__ = "orders"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    game_id = db.Column(
+        db.Integer, db.ForeignKey("games.id"), nullable=False
+    )
+    assignment_id = db.Column(
+        db.Integer, db.ForeignKey("assignments.id"), nullable=True
+    )
+    status = db.Column(
+        db.String(20), default="pending", nullable=False, index=True
+    )  # pending, fulfilled, cancelled
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    assignment = db.relationship(
+        "Assignment", foreign_keys=[assignment_id], backref="order_ref", uselist=False
+    )
+
+    def to_dict(self, include_credentials=False):
+        result = {
+            "id": self.id,
+            "user_id": self.user_id,
+            "game_id": self.game_id,
+            "game": self.game.to_dict() if self.game else None,
+            "status": self.status,
+            "created_at": self.created_at.isoformat(),
+            "assignment_id": self.assignment_id,
+        }
+        if include_credentials and self.assignment:
+            result["credentials"] = {
+                "account_name": self.assignment.steam_account.account_name,
+                "password": self.assignment.steam_account.password,
+            }
+        return result
+
+
+class Assignment(db.Model):
+    __tablename__ = "assignments"
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(
+        db.Integer, db.ForeignKey("orders.id"), nullable=False
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False
+    )
+    steam_account_id = db.Column(
+        db.Integer, db.ForeignKey("steam_accounts.id"), nullable=False
+    )
+    game_id = db.Column(
+        db.Integer, db.ForeignKey("games.id"), nullable=False
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    order = db.relationship(
+        "Order",
+        foreign_keys=[order_id],
+        backref="assignment_record",
+        uselist=False,
+        overlaps="assignment,order_ref",
+    )
+
+
+class CodeRequestLog(db.Model):
+    __tablename__ = "code_request_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    steam_account_id = db.Column(
+        db.Integer, db.ForeignKey("steam_accounts.id"), nullable=False
+    )
+    assignment_id = db.Column(
+        db.Integer, db.ForeignKey("assignments.id"), nullable=False
+    )
+    code = db.Column(db.String(10), nullable=False)
+    ip_address = db.Column(db.String(45), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    assignment = db.relationship("Assignment", backref="code_logs")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "steam_account_id": self.steam_account_id,
+            "assignment_id": self.assignment_id,
+            "code": self.code,
+            "ip_address": self.ip_address,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+class PlayInstruction(db.Model):
+    __tablename__ = "play_instructions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(
+        db.Integer,
+        db.ForeignKey("games.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+    content = db.Column(db.Text, nullable=False)
+    is_custom = db.Column(db.Boolean, default=False, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "game_id": self.game_id,
+            "content": self.content,
+            "is_custom": self.is_custom,
+            "updated_at": self.updated_at.isoformat(),
+        }
