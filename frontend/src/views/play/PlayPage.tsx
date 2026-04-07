@@ -19,6 +19,8 @@ import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import Snackbar from '@mui/material/Snackbar'
 
+import ReactMarkdown from 'react-markdown'
+
 import { storeApi } from '@/lib/api'
 
 interface Props {
@@ -465,12 +467,63 @@ const PlayPage = ({ orderId }: Props) => {
               How to Play
             </Typography>
             <Divider sx={{ mb: 2 }} />
-            <Typography
-              variant='body1'
-              sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#c7d5e0' }}
+            <Box
+              sx={{
+                color: '#c7d5e0',
+                lineHeight: 1.8,
+                '& h1, & h2, & h3, & h4, & h5, & h6': {
+                  color: '#fff',
+                  mt: 2,
+                  mb: 1,
+                  fontWeight: 700,
+                },
+                '& h1': { fontSize: '1.5rem' },
+                '& h2': { fontSize: '1.3rem' },
+                '& h3': { fontSize: '1.15rem' },
+                '& p': { mb: 1.5 },
+                '& a': { color: '#66c0f4', textDecoration: 'underline' },
+                '& code': {
+                  fontFamily: 'monospace',
+                  bgcolor: 'rgba(102,192,244,0.1)',
+                  px: 0.8,
+                  py: 0.2,
+                  borderRadius: 0.5,
+                  fontSize: '0.9em',
+                },
+                '& pre': {
+                  bgcolor: 'rgba(0,0,0,0.3)',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  p: 2,
+                  overflow: 'auto',
+                  '& code': {
+                    bgcolor: 'transparent',
+                    px: 0,
+                    py: 0,
+                  },
+                },
+                '& ul, & ol': { pl: 3, mb: 1.5 },
+                '& li': { mb: 0.5 },
+                '& blockquote': {
+                  borderLeft: '3px solid',
+                  borderColor: '#66c0f4',
+                  pl: 2,
+                  ml: 0,
+                  color: '#8f98a0',
+                  fontStyle: 'italic',
+                },
+                '& hr': {
+                  border: 'none',
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  my: 2,
+                },
+                '& img': { maxWidth: '100%', borderRadius: 1 },
+              }}
             >
-              {instructions}
-            </Typography>
+              <ReactMarkdown>{instructions}</ReactMarkdown>
+            </Box>
           </CardContent>
         </Card>
       )}

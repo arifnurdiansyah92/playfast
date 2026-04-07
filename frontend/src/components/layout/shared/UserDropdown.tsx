@@ -120,6 +120,10 @@ const UserDropdown = () => {
                     </div>
                   </div>
                   <Divider className='mlb-1' />
+                  <MenuItem className='mli-2 gap-3' onClick={e => handleDropdownClose(e, '/profile')}>
+                    <i className='tabler-user-circle' />
+                    <Typography color='text.primary'>Profile</Typography>
+                  </MenuItem>
                   <MenuItem className='mli-2 gap-3' onClick={e => handleDropdownClose(e, '/store')}>
                     <i className='tabler-building-store' />
                     <Typography color='text.primary'>Store</Typography>
