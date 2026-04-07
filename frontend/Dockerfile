@@ -1,21 +1,20 @@
 FROM node:22-alpine AS base
 
-# --- Dependencies ---
-FROM base AS deps
-WORKDIR /app
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --legacy-peer-deps
-
-# --- Build ---
+# --- Dependencies + Build ---
 FROM base AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY frontend/ .
 
-# Backend URL for server-side rewrites (Docker internal network)
+COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/src/ ./src/
+COPY frontend/public/ ./public/
+COPY frontend/next.config.ts frontend/tsconfig.json frontend/postcss.config.mjs frontend/declarations.d.ts ./
+
+# Install deps (postinstall needs src/assets for icon build)
+RUN npm ci --legacy-peer-deps
+
+# Build Next.js
 ENV INTERNAL_API_URL=http://backend:5000
 ENV NEXT_TELEMETRY_DISABLED=1
-
 RUN npm run build
 
 # --- Production ---
@@ -34,7 +33,5 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
-
 EXPOSE 3000
-
 CMD ["node", "server.js"]
