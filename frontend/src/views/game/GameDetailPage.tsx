@@ -61,7 +61,7 @@ const GameDetailPage = ({ appid }: Props) => {
     try {
       const order = await storeApi.createOrder(appid)
 
-      router.push(`/play/${order.id}`)
+      router.push(`/order/${order.id}`)
     } catch (err) {
       const apiErr = err as ApiError
 
