@@ -227,7 +227,10 @@ def create_order():
             "error": "You already have an active order for this game"
         }), 409
 
-    # Round-robin: find the account with the fewest active assignments for this game
+    # Smart assignment: pick the best account for this game.
+    # Priority:
+    #   1. Fewest active assignments (balance load)
+    #   2. Fewest total games in library (burn small accounts first, preserve valuable ones)
     # Use FOR UPDATE to prevent race conditions
     assignment_count = (
         func.coalesce(
@@ -235,8 +238,22 @@ def create_order():
             .filter(
                 Assignment.steam_account_id == GameAccount.steam_account_id,
                 Assignment.game_id == game.id,
+                Assignment.is_revoked == False,  # noqa: E712
             )
             .correlate(GameAccount)
+            .scalar_subquery(),
+            0,
+        )
+    )
+
+    # Count total games per account (fewer games = less valuable = assign first)
+    total_game_count = (
+        func.coalesce(
+            db.session.query(func.count(GameAccount.id))
+            .filter(
+                GameAccount.steam_account_id == SteamAccount.id,
+            )
+            .correlate(SteamAccount)
             .scalar_subquery(),
             0,
         )
@@ -248,7 +265,11 @@ def create_order():
             GameAccount.game_id == game.id,
             SteamAccount.is_active == True,  # noqa: E712
         )
-        .order_by(assignment_count.asc(), GameAccount.id.asc())
+        .order_by(
+            assignment_count.asc(),       # fewest assignments first
+            total_game_count.asc(),       # fewest total games first (burn small accounts)
+            GameAccount.id.asc(),         # stable tie-break
+        )
         .with_for_update()
         .first()
     )
