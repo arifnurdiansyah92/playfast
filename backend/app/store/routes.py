@@ -1,12 +1,19 @@
 """Store endpoints: public catalog, ordering, credentials, code generation."""
 
+import hashlib
+import logging
+import os
 import time
 import threading
 from collections import defaultdict
+from datetime import datetime, timezone
 
+import midtransclient
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import func
+
+logger = logging.getLogger(__name__)
 
 from app.extensions import db
 from app.models import (
@@ -17,10 +24,22 @@ from app.models import (
     Order,
     PlayInstruction,
     SteamAccount,
+    User,
 )
 from app.steam.service import get_guard_code
 
 store_bp = Blueprint("store", __name__, url_prefix="/api/store")
+
+# ---------------------------------------------------------------------------
+# Midtrans Configuration
+# ---------------------------------------------------------------------------
+
+def _get_snap():
+    return midtransclient.Snap(
+        is_production=os.getenv("MIDTRANS_IS_PRODUCTION", "false").lower() == "true",
+        server_key=os.getenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-7Fp0W-6BPItzBeHc4WmVz0rh"),
+        client_key=os.getenv("MIDTRANS_CLIENT_KEY", "SB-Mid-client-VNwEU_8NEdo5N3og"),
+    )
 
 # ---------------------------------------------------------------------------
 # In-memory rate limiter for code generation (per-user, 10 req/min)
@@ -186,12 +205,93 @@ def game_detail(appid: int):
     return jsonify({"game": game.to_dict()}), 200
 
 
+def _fulfill_order(order):
+    """Assign a Steam account to a paid order using smart round-robin.
+
+    Picks the active account with the fewest current assignments for the
+    ordered game, preferring accounts with fewer total games (burn small
+    accounts first, preserve valuable ones).
+
+    Returns True on success, False if no account is available.
+    """
+    game = order.game
+
+    # Smart assignment: pick the best account for this game.
+    assignment_count = (
+        func.coalesce(
+            db.session.query(func.count(Assignment.id))
+            .filter(
+                Assignment.steam_account_id == GameAccount.steam_account_id,
+                Assignment.game_id == game.id,
+                Assignment.is_revoked == False,  # noqa: E712
+            )
+            .correlate(GameAccount)
+            .scalar_subquery(),
+            0,
+        )
+    )
+
+    total_game_count = (
+        func.coalesce(
+            db.session.query(func.count(GameAccount.id))
+            .filter(
+                GameAccount.steam_account_id == SteamAccount.id,
+            )
+            .correlate(SteamAccount)
+            .scalar_subquery(),
+            0,
+        )
+    )
+
+    best_game_account = (
+        GameAccount.query.join(SteamAccount)
+        .filter(
+            GameAccount.game_id == game.id,
+            SteamAccount.is_active == True,  # noqa: E712
+        )
+        .order_by(
+            assignment_count.asc(),
+            total_game_count.asc(),
+            GameAccount.id.asc(),
+        )
+        .with_for_update()
+        .first()
+    )
+
+    if not best_game_account:
+        logger.error("No accounts available for game %s (order %s)", game.id, order.id)
+        return False
+
+    steam_account = best_game_account.steam_account
+
+    # Create assignment
+    assignment = Assignment(
+        order_id=order.id,
+        user_id=order.user_id,
+        steam_account_id=steam_account.id,
+        game_id=game.id,
+    )
+    db.session.add(assignment)
+    db.session.flush()
+
+    # Link assignment to order and mark fulfilled
+    order.assignment_id = assignment.id
+    order.status = "fulfilled"
+    db.session.commit()
+
+    logger.info(
+        "Order %s fulfilled: assigned account %s to user %s for game %s",
+        order.id, steam_account.id, order.user_id, game.id,
+    )
+    return True
+
+
 @store_bp.route("/orders", methods=["POST"])
 @jwt_required()
 def create_order():
     """
-    Create a new order and auto-assign a Steam account via round-robin.
-    Picks the active account with the fewest current assignments for this game.
+    Create a new order with pending_payment status, generate a Midtrans
+    snap token, and return it to the frontend for payment.
     """
     user_id = int(get_jwt_identity())
     data = request.get_json() or {}
@@ -227,81 +327,215 @@ def create_order():
             "error": "You already have an active order for this game"
         }), 409
 
-    # Smart assignment: pick the best account for this game.
-    # Priority:
-    #   1. Fewest active assignments (balance load)
-    #   2. Fewest total games in library (burn small accounts first, preserve valuable ones)
-    # Use FOR UPDATE to prevent race conditions
-    assignment_count = (
-        func.coalesce(
-            db.session.query(func.count(Assignment.id))
-            .filter(
-                Assignment.steam_account_id == GameAccount.steam_account_id,
-                Assignment.game_id == game.id,
-                Assignment.is_revoked == False,  # noqa: E712
-            )
-            .correlate(GameAccount)
-            .scalar_subquery(),
-            0,
-        )
-    )
+    # Also check for an existing pending_payment order for this game
+    existing_pending = Order.query.filter_by(
+        user_id=user_id,
+        game_id=game.id,
+        status="pending_payment",
+    ).first()
+    if existing_pending and existing_pending.snap_token:
+        return jsonify({
+            "message": "Existing pending order found",
+            "order": existing_pending.to_dict(),
+            "snap_token": existing_pending.snap_token,
+        }), 200
 
-    # Count total games per account (fewer games = less valuable = assign first)
-    total_game_count = (
-        func.coalesce(
-            db.session.query(func.count(GameAccount.id))
-            .filter(
-                GameAccount.steam_account_id == SteamAccount.id,
-            )
-            .correlate(SteamAccount)
-            .scalar_subquery(),
-            0,
-        )
-    )
-
-    best_game_account = (
+    # Check availability before creating order
+    available = (
         GameAccount.query.join(SteamAccount)
         .filter(
             GameAccount.game_id == game.id,
             SteamAccount.is_active == True,  # noqa: E712
         )
-        .order_by(
-            assignment_count.asc(),       # fewest assignments first
-            total_game_count.asc(),       # fewest total games first (burn small accounts)
-            GameAccount.id.asc(),         # stable tie-break
-        )
-        .with_for_update()
         .first()
     )
-
-    if not best_game_account:
+    if not available:
         return jsonify({"error": "No accounts available for this game"}), 409
 
-    steam_account = best_game_account.steam_account
+    # Fetch user for Midtrans customer details
+    user = db.session.get(User, user_id)
 
-    # Create order
-    order = Order(user_id=user_id, game_id=game.id, status="fulfilled")
+    # Generate unique Midtrans order ID
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    midtrans_order_id = f"PF-{user_id}-{game.id}-{timestamp}"
+
+    # Create order with pending_payment status
+    order = Order(
+        user_id=user_id,
+        game_id=game.id,
+        status="pending_payment",
+        midtrans_order_id=midtrans_order_id,
+        amount=game.price,
+    )
     db.session.add(order)
     db.session.flush()  # get order.id
 
-    # Create assignment
-    assignment = Assignment(
-        order_id=order.id,
-        user_id=user_id,
-        steam_account_id=steam_account.id,
-        game_id=game.id,
-    )
-    db.session.add(assignment)
-    db.session.flush()
+    # Create Midtrans transaction
+    try:
+        snap = _get_snap()
+        transaction = snap.create_transaction({
+            "transaction_details": {
+                "order_id": midtrans_order_id,
+                "gross_amount": game.price,
+            },
+            "item_details": [{
+                "id": str(game.id),
+                "price": game.price,
+                "quantity": 1,
+                "name": game.name[:50],  # Midtrans limits item name length
+            }],
+            "customer_details": {
+                "email": user.email if user else "",
+            },
+        })
+        snap_token = transaction["token"]
+        order.snap_token = snap_token
+        db.session.commit()
 
-    # Link assignment to order
-    order.assignment_id = assignment.id
-    db.session.commit()
+        logger.info(
+            "Order %s created with Midtrans order ID %s for user %s",
+            order.id, midtrans_order_id, user_id,
+        )
+
+        return jsonify({
+            "message": "Order created, awaiting payment",
+            "order": order.to_dict(),
+            "snap_token": snap_token,
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Failed to create Midtrans transaction: %s", e)
+        return jsonify({"error": "Payment service unavailable, please try again later"}), 502
+
+
+# ---------------------------------------------------------------------------
+# Midtrans Webhook (server-to-server, NO auth)
+# ---------------------------------------------------------------------------
+
+@store_bp.route("/webhook/midtrans", methods=["POST"])
+def midtrans_webhook():
+    """Handle Midtrans payment notification callback.
+
+    This endpoint is called by Midtrans servers -- no JWT required.
+    The notification is verified using SHA-512 signature.
+    """
+    notification = request.get_json(silent=True) or {}
+
+    order_id = notification.get("order_id", "")
+    status_code = notification.get("status_code", "")
+    gross_amount = notification.get("gross_amount", "")
+    transaction_status = notification.get("transaction_status", "")
+    fraud_status = notification.get("fraud_status", "")
+    payment_type = notification.get("payment_type", "")
+    signature_key = notification.get("signature_key", "")
+
+    # Verify signature: SHA512(order_id + status_code + gross_amount + server_key)
+    server_key = os.getenv("MIDTRANS_SERVER_KEY", "")
+    raw = order_id + status_code + gross_amount + server_key
+    expected_signature = hashlib.sha512(raw.encode("utf-8")).hexdigest()
+
+    if signature_key != expected_signature:
+        logger.warning("Midtrans webhook signature mismatch for order %s", order_id)
+        return jsonify({"error": "Invalid signature"}), 403
+
+    # Look up order by midtrans_order_id
+    order = Order.query.filter_by(midtrans_order_id=order_id).first()
+    if not order:
+        logger.warning("Midtrans webhook: order not found for %s", order_id)
+        return jsonify({"error": "Order not found"}), 404
+
+    logger.info(
+        "Midtrans webhook: order=%s status=%s fraud=%s payment_type=%s",
+        order_id, transaction_status, fraud_status, payment_type,
+    )
+
+    # Process based on transaction status
+    if transaction_status in ("capture", "settlement"):
+        # For capture, only accept if fraud_status is "accept" or empty
+        if transaction_status == "capture" and fraud_status not in ("accept", ""):
+            logger.warning(
+                "Midtrans webhook: fraud detected for %s (fraud_status=%s)",
+                order_id, fraud_status,
+            )
+            order.status = "cancelled"
+            db.session.commit()
+            return jsonify({"status": "cancelled"}), 200
+
+        # Only fulfill if still pending
+        if order.status == "pending_payment":
+            order.payment_type = payment_type
+            order.paid_at = datetime.now(timezone.utc)
+            db.session.flush()
+
+            success = _fulfill_order(order)
+            if not success:
+                logger.error(
+                    "Midtrans webhook: payment received but fulfillment failed for %s",
+                    order_id,
+                )
+                # Still mark as paid even if no account available -- admin can resolve
+                order.status = "fulfilled"
+                db.session.commit()
+
+        return jsonify({"status": "ok"}), 200
+
+    elif transaction_status in ("cancel", "deny", "expire"):
+        if order.status == "pending_payment":
+            order.status = "cancelled"
+            db.session.commit()
+            logger.info("Midtrans webhook: order %s cancelled (%s)", order_id, transaction_status)
+        return jsonify({"status": "cancelled"}), 200
+
+    elif transaction_status == "pending":
+        # Payment is pending (e.g. bank transfer) -- do nothing
+        return jsonify({"status": "pending"}), 200
+
+    else:
+        logger.info("Midtrans webhook: unhandled status %s for %s", transaction_status, order_id)
+        return jsonify({"status": "ignored"}), 200
+
+
+# ---------------------------------------------------------------------------
+# Order pay / status endpoints
+# ---------------------------------------------------------------------------
+
+@store_bp.route("/orders/<int:order_id>/pay", methods=["POST"])
+@jwt_required()
+def order_pay(order_id: int):
+    """Return existing snap_token for a pending_payment order (retry payment)."""
+    user_id = int(get_jwt_identity())
+    order = Order.query.filter_by(id=order_id, user_id=user_id).first()
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    if order.status != "pending_payment":
+        return jsonify({"error": "Order is not awaiting payment", "status": order.status}), 400
+
+    if not order.snap_token:
+        return jsonify({"error": "No payment token available for this order"}), 400
 
     return jsonify({
-        "message": "Order created",
-        "order": order.to_dict(include_credentials=True),
-    }), 201
+        "snap_token": order.snap_token,
+        "order": order.to_dict(),
+    }), 200
+
+
+@store_bp.route("/orders/<int:order_id>/status", methods=["GET"])
+@jwt_required()
+def order_status(order_id: int):
+    """Return just the order status (for frontend polling after payment)."""
+    user_id = int(get_jwt_identity())
+    order = Order.query.filter_by(id=order_id, user_id=user_id).first()
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    return jsonify({
+        "order_id": order.id,
+        "status": order.status,
+        "payment_type": order.payment_type,
+        "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+    }), 200
 
 
 @store_bp.route("/orders", methods=["GET"])

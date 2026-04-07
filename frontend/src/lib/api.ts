@@ -165,6 +165,10 @@ export interface Order {
   game: Game | null
   assignment_id: number | null
   is_revoked: boolean
+  snap_token?: string
+  payment_type?: string
+  amount?: number
+  paid_at?: string
   credentials?: {
     account_name: string
     password: string
@@ -214,11 +218,14 @@ export const storeApi = {
     return res.game
   },
   async createOrder(appid: number | string) {
-    const res = await request<{ order: Order }>('/api/store/orders', {
+    const res = await request<{ order: Order; snap_token: string }>('/api/store/orders', {
       method: 'POST',
       body: JSON.stringify({ appid: Number(appid) })
     })
-    return res.order
+    return res
+  },
+  getOrderStatus(orderId: number | string) {
+    return request<{ status: string; payment_type?: string; paid_at?: string }>(`/api/store/orders/${orderId}/status`)
   },
   async getOrders() {
     const res = await request<{ orders: Order[] }>('/api/store/orders')

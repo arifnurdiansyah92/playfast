@@ -107,6 +107,12 @@ def _run_schema_upgrades():
         "ALTER TABLE games ADD COLUMN header_image VARCHAR(500)",
         "ALTER TABLE games ADD COLUMN genres VARCHAR(500)",
         "ALTER TABLE games ADD COLUMN is_featured BOOLEAN NOT NULL DEFAULT FALSE",
+        # Order table: Midtrans payment columns
+        "ALTER TABLE orders ADD COLUMN snap_token VARCHAR(255)",
+        "ALTER TABLE orders ADD COLUMN midtrans_order_id VARCHAR(100)",
+        "ALTER TABLE orders ADD COLUMN payment_type VARCHAR(50)",
+        "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP",
+        "ALTER TABLE orders ADD COLUMN amount INTEGER",
     ]
     for stmt in alter_statements:
         try:

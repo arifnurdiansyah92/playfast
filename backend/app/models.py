@@ -172,8 +172,13 @@ class Order(db.Model):
         db.Integer, db.ForeignKey("assignments.id"), nullable=True
     )
     status = db.Column(
-        db.String(20), default="pending", nullable=False, index=True
-    )  # pending, fulfilled, cancelled
+        db.String(30), default="pending_payment", nullable=False, index=True
+    )  # pending_payment, fulfilled, cancelled, revoked, expired
+    snap_token = db.Column(db.String(255), nullable=True)
+    midtrans_order_id = db.Column(db.String(100), nullable=True, unique=True, index=True)
+    payment_type = db.Column(db.String(50), nullable=True)
+    paid_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    amount = db.Column(db.Integer, nullable=True)  # actual amount paid in IDR
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -192,6 +197,10 @@ class Order(db.Model):
             "game": self.game.to_dict() if self.game else None,
             "status": self.status,
             "is_revoked": self.assignment.is_revoked if self.assignment else False,
+            "snap_token": self.snap_token,
+            "payment_type": self.payment_type,
+            "amount": self.amount,
+            "paid_at": self.paid_at.isoformat() if self.paid_at else None,
             "created_at": self.created_at.isoformat(),
             "assignment_id": self.assignment_id,
         }

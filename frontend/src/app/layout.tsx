@@ -32,7 +32,14 @@ const RootLayout = async (props: ChildrenType) => {
   const direction = 'ltr'
 
   return (
-    <html id='__next' lang='en' dir={direction} suppressHydrationWarning>
+    <html id='__next' lang='id' dir={direction} suppressHydrationWarning>
+      <head>
+        <script
+          type='text/javascript'
+          src='https://app.sandbox.midtrans.com/snap/snap.js'
+          data-client-key='SB-Mid-client-VNwEU_8NEdo5N3og'
+        />
+      </head>
       <body className='flex is-full min-bs-full flex-auto flex-col'>
         <InitColorSchemeScript attribute='data' defaultMode={systemMode} />
         <QueryProvider>
