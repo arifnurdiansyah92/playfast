@@ -29,10 +29,23 @@ const LandingPage = () => {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
 
   useEffect(() => {
-    storeApi.getGames({ page: 1 }).then(data => {
-      setGames(data.games.slice(0, 8))
-      setGamesLoading(false)
-    }).catch(() => setGamesLoading(false))
+    // Try featured first, fall back to first page of all games
+    storeApi.getFeaturedGames().then(featured => {
+      if (featured.length > 0) {
+        setGames(featured.slice(0, 8))
+        setGamesLoading(false)
+      } else {
+        return storeApi.getGames({ page: 1 }).then(data => {
+          setGames(data.games.slice(0, 8))
+          setGamesLoading(false)
+        })
+      }
+    }).catch(() => {
+      storeApi.getGames({ page: 1 }).then(data => {
+        setGames(data.games.slice(0, 8))
+        setGamesLoading(false)
+      }).catch(() => setGamesLoading(false))
+    })
   }, [])
 
   // If already logged in, redirect to store

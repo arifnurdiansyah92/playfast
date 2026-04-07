@@ -97,6 +97,29 @@ def list_games():
     }), 200
 
 
+@store_bp.route("/games/featured", methods=["GET"])
+def featured_games():
+    """Return featured games (flagged by admin)."""
+    available_game_ids = (
+        db.session.query(GameAccount.game_id)
+        .join(SteamAccount)
+        .filter(SteamAccount.is_active == True)  # noqa: E712
+        .group_by(GameAccount.game_id)
+        .subquery()
+    )
+    games = (
+        Game.query.filter(
+            Game.is_enabled == True,  # noqa: E712
+            Game.is_featured == True,  # noqa: E712
+            Game.id.in_(db.session.query(available_game_ids.c.game_id)),
+        )
+        .order_by(Game.name.asc())
+        .limit(12)
+        .all()
+    )
+    return jsonify({"games": [g.to_dict() for g in games]}), 200
+
+
 @store_bp.route("/games/<int:appid>", methods=["GET"])
 def game_detail(appid: int):
     """Get a single game's details by Steam appid."""

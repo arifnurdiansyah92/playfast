@@ -106,6 +106,7 @@ def _run_schema_upgrades():
         "ALTER TABLE games ADD COLUMN description TEXT",
         "ALTER TABLE games ADD COLUMN header_image VARCHAR(500)",
         "ALTER TABLE games ADD COLUMN genres VARCHAR(500)",
+        "ALTER TABLE games ADD COLUMN is_featured BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     for stmt in alter_statements:
         try:

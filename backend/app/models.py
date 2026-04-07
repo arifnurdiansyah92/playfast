@@ -95,6 +95,7 @@ class Game(db.Model):
     genres = db.Column(db.String(500), nullable=True)  # comma-separated genre names
     price = db.Column(db.Integer, default=50000, nullable=False)  # in smallest currency unit
     is_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    is_featured = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -131,6 +132,7 @@ class Game(db.Model):
             "genres": self.genres,
             "price": self.price,
             "is_enabled": self.is_enabled,
+            "is_featured": self.is_featured,
             "created_at": self.created_at.isoformat(),
         }
         if include_availability:

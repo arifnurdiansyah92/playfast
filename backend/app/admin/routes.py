@@ -73,14 +73,44 @@ def dashboard():
     fulfilled_orders = Order.query.filter_by(status="fulfilled").count()
     total_users = User.query.count()
 
+    featured_games = Game.query.filter_by(is_featured=True, is_enabled=True).count()
+    revoked_orders = Order.query.filter_by(status="revoked").count()
+
+    # Recent 10 orders
+    recent_orders = (
+        Order.query.order_by(Order.created_at.desc()).limit(10).all()
+    )
+    recent_orders_data = []
+    for o in recent_orders:
+        od = o.to_dict(include_credentials=False)
+        od["user_email"] = o.user.email if o.user else None
+        recent_orders_data.append(od)
+
+    # Recent 5 code requests
+    recent_codes = (
+        CodeRequestLog.query.order_by(CodeRequestLog.created_at.desc()).limit(5).all()
+    )
+    recent_codes_data = []
+    for c in recent_codes:
+        recent_codes_data.append({
+            "id": c.id,
+            "user_email": c.user.email if c.user else None,
+            "account_name": c.steam_account.account_name if c.steam_account else None,
+            "created_at": c.created_at.isoformat(),
+        })
+
     return jsonify({
         "total_accounts": total_accounts,
         "active_accounts": active_accounts,
         "total_games": total_games,
         "enabled_games": enabled_games,
+        "featured_games": featured_games,
         "total_orders": total_orders,
         "fulfilled_orders": fulfilled_orders,
+        "revoked_orders": revoked_orders,
         "total_users": total_users,
+        "recent_orders": recent_orders_data,
+        "recent_codes": recent_codes_data,
     }), 200
 
 
@@ -466,6 +496,8 @@ def update_game(game_id: int):
         game.price = int(data["price"])
     if "is_enabled" in data:
         game.is_enabled = bool(data["is_enabled"])
+    if "is_featured" in data:
+        game.is_featured = bool(data["is_featured"])
     if "name" in data:
         game.name = data["name"]
 

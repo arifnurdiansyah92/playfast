@@ -74,6 +74,7 @@ export interface Game {
   icon: string
   price: number
   is_enabled: boolean
+  is_featured: boolean
   description?: string
   header_image?: string
   genres?: string
@@ -132,6 +133,10 @@ export const storeApi = {
 
     return request<GamesResponse>(`/api/store/games${qs ? `?${qs}` : ''}`)
   },
+  async getFeaturedGames() {
+    const res = await request<{ games: Game[] }>('/api/store/games/featured')
+    return res.games
+  },
   async getGame(appid: number | string) {
     const res = await request<{ game: Game }>(`/api/store/games/${appid}`)
     return res.game
@@ -177,9 +182,13 @@ export interface DashboardStats {
   active_accounts: number
   total_games: number
   enabled_games: number
+  featured_games: number
   total_orders: number
   fulfilled_orders: number
+  revoked_orders: number
   total_users: number
+  recent_orders: Order[]
+  recent_codes: AuditEntry[]
 }
 
 export interface AuditEntry {
@@ -215,6 +224,15 @@ export const adminApi = {
   deleteAccount(id: number) {
     return request<{ message: string }>(`/api/admin/accounts/${id}`, { method: 'DELETE' })
   },
+  updateAccount(id: number, data: Partial<{ password: string; is_active: boolean }>) {
+    return request<{ account: SteamAccount }>(`/api/admin/accounts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  },
+  syncAccount(id: number) {
+    return request<{ success: boolean; total_games?: number; error?: string }>(`/api/admin/accounts/${id}/sync`, { method: 'POST' })
+  },
   syncGames() {
     return request<{ message: string }>('/api/admin/accounts/sync-games', { method: 'POST' })
   },
@@ -222,7 +240,7 @@ export const adminApi = {
     const res = await request<{ games: Game[] }>('/api/admin/games')
     return res.games
   },
-  async updateGame(id: number, data: Partial<{ price: number; is_enabled: boolean }>) {
+  async updateGame(id: number, data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean }>) {
     const res = await request<{ game: Game }>(`/api/admin/games/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
