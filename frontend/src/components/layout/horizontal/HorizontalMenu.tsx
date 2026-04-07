@@ -84,7 +84,7 @@ const HorizontalMenu = () => {
         }}
       >
         <MenuItem href='/store' icon={<i className='tabler-building-store' />}>
-          Toko Game
+          Toko
         </MenuItem>
         <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
           Game Saya

@@ -69,16 +69,16 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
         renderExpandedMenuItemIcon={{ icon: <i className='tabler-circle text-xs' /> }}
         menuSectionStyles={menuSectionStyles(verticalNavOptions, theme)}
       >
-        <MenuSection label='Menu'>
+        <MenuSection label='Jelajahi'>
           <MenuItem href='/store' icon={<i className='tabler-building-store' />}>
-            Toko Game
+            Toko
           </MenuItem>
           <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
             Game Saya
           </MenuItem>
         </MenuSection>
         {isAdmin && (
-          <MenuSection label='Admin'>
+          <MenuSection label='Administrasi'>
             <MenuItem href='/admin' icon={<i className='tabler-dashboard' />}>
               Dashboard
             </MenuItem>

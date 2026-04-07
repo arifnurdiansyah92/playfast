@@ -464,6 +464,91 @@ const LandingPage = () => {
           </Container>
         )}
 
+        {/* Testimonials */}
+        <Container maxWidth='lg' sx={{ py: 10 }}>
+          <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>
+            Kata Mereka
+          </Typography>
+          <Typography variant='body1' sx={{ textAlign: 'center', color: '#8f98a0', mb: 6 }}>
+            Pengalaman gamer yang sudah menggunakan Playfast
+          </Typography>
+          <Grid container spacing={3}>
+            {[
+              {
+                name: 'Riski',
+                city: 'Jakarta',
+                text: 'Gila sih, baru bayar langsung dapat akses. Kode Steam Guard-nya instan, nggak perlu nunggu balesan seller kayak biasa. Lima menit udah bisa download game-nya. Mantap banget!',
+              },
+              {
+                name: 'Dian',
+                city: 'Surabaya',
+                text: 'Harganya jauh lebih murah dibanding beli langsung di Steam. Satu game AAA cuma Rp 50-100 ribu, padahal harga aslinya bisa ratusan ribu. Worth it banget buat yang mau main game single-player.',
+              },
+              {
+                name: 'Fadli',
+                city: 'Bandung',
+                text: 'Awalnya ragu soal kode Steam Guard, takut ribet. Ternyata gampang banget, tinggal klik generate terus copy-paste. Prosesnya smooth, nggak pernah gagal. Recommended!',
+              },
+            ].map((t, idx) => (
+              <Grid size={{ xs: 12, md: 4 }} key={t.name}>
+                <Card
+                  sx={{
+                    bgcolor: 'rgba(30,42,58,0.6)',
+                    backdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(42,63,85,0.6)',
+                    height: '100%',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      borderColor: 'rgba(0,230,118,0.3)',
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                    },
+                    animation: `fadeInUp 0.6s ease-out ${0.15 * idx}s both`,
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    {/* Stars */}
+                    <Box sx={{ display: 'flex', gap: 0.5, mb: 2 }}>
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <i key={star} className='tabler-star-filled' style={{ fontSize: 18, color: '#FFD700' }} />
+                      ))}
+                    </Box>
+                    {/* Quote */}
+                    <Typography variant='body2' sx={{ color: '#c7d5e0', lineHeight: 1.7, mb: 3, fontStyle: 'italic' }}>
+                      &ldquo;{t.text}&rdquo;
+                    </Typography>
+                    {/* Author */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'linear-gradient(135deg, rgba(0,230,118,0.15) 0%, rgba(0,230,118,0.05) 100%)',
+                          border: '1px solid rgba(0,230,118,0.2)',
+                        }}
+                      >
+                        <i className='tabler-user' style={{ fontSize: 20, color: '#00E676' }} />
+                      </Box>
+                      <Box>
+                        <Typography variant='subtitle2' sx={{ fontWeight: 700 }}>
+                          {t.name}
+                        </Typography>
+                        <Typography variant='caption' sx={{ color: '#8f98a0' }}>
+                          {t.city}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+
         {/* FAQ Section */}
         <Box sx={{ py: 10, bgcolor: 'rgba(0,0,0,0.15)' }}>
           <Container maxWidth='md'>
@@ -550,8 +635,34 @@ const LandingPage = () => {
 
         {/* Footer */}
         <Box sx={{ py: 4, textAlign: 'center', borderTop: '1px solid #1e2a3a' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 2, flexWrap: 'wrap' }}>
+            <Typography
+              component={Link}
+              href='/syarat-ketentuan'
+              variant='body2'
+              sx={{ color: '#8f98a0', textDecoration: 'none', '&:hover': { color: '#00E676' } }}
+            >
+              Syarat &amp; Ketentuan
+            </Typography>
+            <Typography
+              component={Link}
+              href='/kebijakan-privasi'
+              variant='body2'
+              sx={{ color: '#8f98a0', textDecoration: 'none', '&:hover': { color: '#00E676' } }}
+            >
+              Kebijakan Privasi
+            </Typography>
+            <Typography
+              component={Link}
+              href='/bantuan'
+              variant='body2'
+              sx={{ color: '#8f98a0', textDecoration: 'none', '&:hover': { color: '#00E676' } }}
+            >
+              Bantuan
+            </Typography>
+          </Box>
           <Typography variant='body2' sx={{ color: '#4a5568' }}>
-            Playfast {new Date().getFullYear()}. Tidak berafiliasi dengan Valve atau Steam.
+            {`© 2026 Playfast. Tidak berafiliasi dengan Valve atau Steam.`}
           </Typography>
         </Box>
       </Box>

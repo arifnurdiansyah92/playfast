@@ -126,7 +126,7 @@ const UserDropdown = () => {
                   </MenuItem>
                   <MenuItem className='mli-2 gap-3' onClick={e => handleDropdownClose(e, '/store')}>
                     <i className='tabler-building-store' />
-                    <Typography color='text.primary'>Toko Game</Typography>
+                    <Typography color='text.primary'>Toko</Typography>
                   </MenuItem>
                   <MenuItem className='mli-2 gap-3' onClick={e => handleDropdownClose(e, '/my-games')}>
                     <i className='tabler-device-gamepad-2' />

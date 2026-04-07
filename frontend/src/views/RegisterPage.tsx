@@ -51,7 +51,7 @@ const RegisterPage = () => {
       await register(email, password)
       router.push(redirect || '/store')
     } catch (err: any) {
-      setError(err.message || 'Registration failed')
+      setError(err.message || 'Gagal mendaftar')
     } finally {
       setLoading(false)
     }

@@ -37,7 +37,7 @@ const LoginPage = () => {
       await login(email, password)
       router.push(redirect || '/store')
     } catch (err: any) {
-      setError(err.message || 'Login failed')
+      setError(err.message || 'Gagal masuk')
     } finally {
       setLoading(false)
     }

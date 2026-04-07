@@ -161,7 +161,7 @@ const MyGamesPage = () => {
                   {/* Card content */}
                   <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 2.5 }}>
                     <Typography variant='subtitle1' sx={{ fontWeight: 700, mb: 0.5, lineHeight: 1.3 }} noWrap>
-                      {order.game?.name || 'Unknown Game'}
+                      {order.game?.name || 'Game Tidak Dikenal'}
                     </Typography>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>

@@ -42,7 +42,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
     )
   }
 
-  if (!order) return <Alert severity='error'>Order not found</Alert>
+  if (!order) return <Alert severity='error'>Pesanan tidak ditemukan</Alert>
 
   return (
     <Box sx={{ maxWidth: 600, mx: 'auto' }}>

@@ -1,5 +1,8 @@
 'use client'
 
+// Next.js Imports
+import Link from 'next/link'
+
 // Third-party Imports
 import classnames from 'classnames'
 
@@ -17,11 +20,19 @@ const FooterContent = () => {
       className={classnames(horizontalLayoutClasses.footerContent, 'flex items-center justify-between flex-wrap gap-4')}
     >
       <p>
-        <span className='text-textSecondary'>{`© ${new Date().getFullYear()} Playfast. Hak cipta dilindungi.`}</span>
+        <span className='text-textSecondary'>{`© 2026 Playfast. Hak cipta dilindungi.`}</span>
       </p>
       {!isBreakpointReached && (
         <div className='flex items-center gap-4'>
-          <span className='text-textSecondary text-sm'>Tidak berafiliasi dengan Valve atau Steam.</span>
+          <Link href='/syarat-ketentuan' className='text-textSecondary text-sm hover:text-primary' style={{ textDecoration: 'none' }}>
+            Syarat &amp; Ketentuan
+          </Link>
+          <Link href='/kebijakan-privasi' className='text-textSecondary text-sm hover:text-primary' style={{ textDecoration: 'none' }}>
+            Kebijakan Privasi
+          </Link>
+          <Link href='/bantuan' className='text-textSecondary text-sm hover:text-primary' style={{ textDecoration: 'none' }}>
+            Bantuan
+          </Link>
         </div>
       )}
     </div>

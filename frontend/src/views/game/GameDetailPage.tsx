@@ -65,7 +65,7 @@ const GameDetailPage = ({ appid }: Props) => {
     } catch (err) {
       const apiErr = err as ApiError
 
-      setError(apiErr.message || 'Failed to purchase game')
+      setError(apiErr.message || 'Gagal membeli game')
     } finally {
       setBuying(false)
     }

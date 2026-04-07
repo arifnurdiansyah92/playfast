@@ -113,7 +113,7 @@ const PlayPage = ({ orderId }: Props) => {
       setCode(result.code)
       setCodeExpiresIn(result.remaining)
     } catch (err: any) {
-      setCodeError(err.message || 'Failed to get Steam Guard code')
+      setCodeError(err.message || 'Gagal mendapatkan kode Steam Guard')
     } finally {
       setCodeLoading(false)
     }
@@ -145,7 +145,7 @@ const PlayPage = ({ orderId }: Props) => {
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
-    setCopySnack(`${label} copied!`)
+    setCopySnack(`${label} disalin!`)
     setJustCopied(label)
     setTimeout(() => setJustCopied(null), 1500)
   }
@@ -161,7 +161,7 @@ const PlayPage = ({ orderId }: Props) => {
   }
 
   if (!order) {
-    return <Alert severity='error'>Order not found</Alert>
+    return <Alert severity='error'>Pesanan tidak ditemukan</Alert>
   }
 
   const instructions = instructionsData?.instructions?.content
