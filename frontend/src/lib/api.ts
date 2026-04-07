@@ -1,5 +1,25 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''  // Empty = same origin (proxied via next.config rewrites)
 
+let isRefreshing = false
+let refreshPromise: Promise<boolean> | null = null
+
+/**
+ * Try to obtain a new access token using the refresh token cookie.
+ * Returns true on success, false on failure.
+ */
+async function refreshAccessToken(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     credentials: 'include',
@@ -9,6 +29,45 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     },
     ...options
   })
+
+  // On 401, attempt a single token refresh and retry the original request
+  if (res.status === 401 && !url.includes('/api/auth/refresh')) {
+    // Deduplicate concurrent refresh attempts
+    if (!isRefreshing) {
+      isRefreshing = true
+      refreshPromise = refreshAccessToken().finally(() => {
+        isRefreshing = false
+        refreshPromise = null
+      })
+    }
+
+    const refreshed = await (refreshPromise ?? refreshAccessToken())
+
+    if (refreshed) {
+      // Retry the original request with the new access token cookie
+      const retryRes = await fetch(`${API_BASE}${url}`, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...options?.headers
+        },
+        ...options
+      })
+
+      if (!retryRes.ok) {
+        const body = await retryRes.json().catch(() => ({ error: retryRes.statusText }))
+        throw new ApiError(retryRes.status, body.error || body.message || retryRes.statusText)
+      }
+
+      if (retryRes.status === 204) return undefined as T
+      return retryRes.json()
+    }
+
+    // Refresh failed — redirect to login
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+    }
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }))
@@ -62,6 +121,12 @@ export const authApi = {
   async me() {
     const res = await request<{ user: User }>('/api/auth/me')
     return res.user
+  },
+  updateProfile(data: { email?: string; password?: string; current_password: string }) {
+    return request<AuthResponse>('/api/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
   }
 }
 
@@ -123,15 +188,21 @@ export interface PlayInstructions {
 }
 
 export const storeApi = {
-  getGames(params?: { q?: string; page?: number }) {
+  getGames(params?: { q?: string; page?: number; genre?: string; sort?: string }) {
     const search = new URLSearchParams()
 
     if (params?.q) search.set('q', params.q)
     if (params?.page) search.set('page', String(params.page))
+    if (params?.genre) search.set('genre', params.genre)
+    if (params?.sort) search.set('sort', params.sort)
 
     const qs = search.toString()
 
     return request<GamesResponse>(`/api/store/games${qs ? `?${qs}` : ''}`)
+  },
+  async getGenres() {
+    const res = await request<{ genres: string[] }>('/api/store/genres')
+    return res.genres
   },
   async getFeaturedGames() {
     const res = await request<{ games: Game[] }>('/api/store/games/featured')
