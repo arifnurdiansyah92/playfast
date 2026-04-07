@@ -60,7 +60,7 @@ DEFAULT_PLAY_INSTRUCTIONS = """## How to Play (Offline Mode)
 
 @store_bp.route("/games", methods=["GET"])
 def list_games():
-    """List enabled games with optional search and pagination."""
+    """List enabled games with optional search, genre filter, sorting, and pagination."""
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
     per_page = min(per_page, 100)
@@ -83,7 +83,33 @@ def list_games():
     if q:
         query = query.filter(Game.name.ilike(f"%{q}%"))
 
-    query = query.order_by(Game.name.asc())
+    # Filter by genre (case-insensitive, checks if the comma-separated genres column contains the value)
+    genre = request.args.get("genre", "").strip()
+    if genre:
+        query = query.filter(func.lower(Game.genres).contains(genre.lower()))
+
+    # Sorting
+    sort = request.args.get("sort", "").strip()
+    if sort == "price_asc":
+        query = query.order_by(Game.price.asc(), Game.name.asc())
+    elif sort == "price_desc":
+        query = query.order_by(Game.price.desc(), Game.name.asc())
+    elif sort == "name":
+        query = query.order_by(Game.name.asc())
+    elif sort == "newest":
+        query = query.order_by(Game.created_at.desc(), Game.name.asc())
+    elif sort == "popular":
+        # Sort by order count descending
+        order_count = (
+            db.session.query(func.count(Order.id))
+            .filter(Order.game_id == Game.id)
+            .correlate(Game)
+            .scalar_subquery()
+        )
+        query = query.order_by(order_count.desc(), Game.name.asc())
+    else:
+        query = query.order_by(Game.name.asc())
+
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     # User-facing: no availability/slot info
@@ -95,6 +121,36 @@ def list_games():
         "per_page": pagination.per_page,
         "pages": pagination.pages,
     }), 200
+
+
+@store_bp.route("/genres", methods=["GET"])
+def list_genres():
+    """Return a sorted list of unique genres across all enabled games."""
+    available_game_ids = (
+        db.session.query(GameAccount.game_id)
+        .join(SteamAccount)
+        .filter(SteamAccount.is_active == True)  # noqa: E712
+        .group_by(GameAccount.game_id)
+        .subquery()
+    )
+    rows = (
+        db.session.query(Game.genres)
+        .filter(
+            Game.is_enabled == True,  # noqa: E712
+            Game.id.in_(db.session.query(available_game_ids.c.game_id)),
+            Game.genres.isnot(None),
+            Game.genres != "",
+        )
+        .all()
+    )
+    genre_set: set[str] = set()
+    for (genres_str,) in rows:
+        for g in genres_str.split(","):
+            stripped = g.strip()
+            if stripped:
+                genre_set.add(stripped)
+
+    return jsonify({"genres": sorted(genre_set)}), 200
 
 
 @store_bp.route("/games/featured", methods=["GET"])

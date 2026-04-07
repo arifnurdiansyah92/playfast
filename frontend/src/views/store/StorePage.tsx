@@ -20,14 +20,28 @@ import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 import Button from '@mui/material/Button'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
 
 import { storeApi, formatIDR } from '@/lib/api'
+
+const SORT_OPTIONS = [
+  { value: '', label: 'Relevance' },
+  { value: 'price_asc', label: 'Price: Low to High' },
+  { value: 'price_desc', label: 'Price: High to Low' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'popular', label: 'Most Popular' },
+] as const
 
 const StorePage = () => {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [sort, setSort] = useState('')
+  const [selectedGenre, setSelectedGenre] = useState('')
 
   // Debounce search
   const [timer, setTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
@@ -52,14 +66,59 @@ const StorePage = () => {
     if (timer) clearTimeout(timer)
   }
 
+  const { data: genres = [] } = useQuery({
+    queryKey: ['store-genres'],
+    queryFn: () => storeApi.getGenres()
+  })
+
   const { data, isLoading } = useQuery({
-    queryKey: ['store-games', debouncedSearch, page],
-    queryFn: () => storeApi.getGames({ q: debouncedSearch || undefined, page })
+    queryKey: ['store-games', debouncedSearch, page, sort, selectedGenre],
+    queryFn: () =>
+      storeApi.getGames({
+        q: debouncedSearch || undefined,
+        page,
+        sort: sort || undefined,
+        genre: selectedGenre || undefined
+      })
   })
 
   const games = data?.games || []
   const totalPages = data?.pages || 1
   const totalGames = data?.total || 0
+
+  const handleSortChange = (value: string) => {
+    setSort(value)
+    setPage(1)
+  }
+
+  const handleGenreClick = (genre: string) => {
+    setSelectedGenre(genre === selectedGenre ? '' : genre)
+    setPage(1)
+  }
+
+  const clearGenre = () => {
+    setSelectedGenre('')
+    setPage(1)
+  }
+
+  // Build result count text
+  const resultCountText = (() => {
+    if (isLoading) return null
+
+    if (selectedGenre && debouncedSearch) {
+      return `${totalGames} game${totalGames !== 1 ? 's' : ''} in ${selectedGenre} matching "${debouncedSearch}"`
+    }
+
+    if (selectedGenre) {
+      return `${totalGames} game${totalGames !== 1 ? 's' : ''} in ${selectedGenre}`
+    }
+
+    if (debouncedSearch) {
+      return `${totalGames} result${totalGames !== 1 ? 's' : ''} for "${debouncedSearch}"`
+    }
+
+    return `Showing ${totalGames} game${totalGames !== 1 ? 's' : ''}`
+  })()
 
   return (
     <div className='flex flex-col gap-6'>
@@ -72,7 +131,7 @@ const StorePage = () => {
         </Typography>
       </Box>
 
-      {/* Search bar */}
+      {/* Search bar + Sort */}
       <Card
         sx={{
           bgcolor: 'background.paper',
@@ -81,42 +140,96 @@ const StorePage = () => {
         }}
       >
         <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
-          <TextField
-            placeholder='Search games by name...'
-            value={search}
-            onChange={e => handleSearchChange(e.target.value)}
-            fullWidth
-            variant='outlined'
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                fontSize: '1.05rem',
-              },
-            }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position='start'>
-                    <i className='tabler-search' style={{ fontSize: 22 }} />
-                  </InputAdornment>
-                ),
-                endAdornment: search ? (
-                  <InputAdornment position='end'>
-                    <IconButton
-                      size='small'
-                      onClick={clearSearch}
-                      aria-label='Clear search'
-                      sx={{ color: 'text.secondary' }}
-                    >
-                      <i className='tabler-x' style={{ fontSize: 18 }} />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null,
-              }
-            }}
-          />
-          {!isLoading && debouncedSearch && (
-            <Typography variant='body2' color='text.secondary' sx={{ mt: 1 }}>
-              {totalGames} result{totalGames !== 1 ? 's' : ''} for &quot;{debouncedSearch}&quot;
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <TextField
+              placeholder='Search games by name...'
+              value={search}
+              onChange={e => handleSearchChange(e.target.value)}
+              fullWidth
+              variant='outlined'
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  fontSize: '1.05rem',
+                },
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position='start'>
+                      <i className='tabler-search' style={{ fontSize: 22 }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: search ? (
+                    <InputAdornment position='end'>
+                      <IconButton
+                        size='small'
+                        onClick={clearSearch}
+                        aria-label='Clear search'
+                        sx={{ color: 'text.secondary' }}
+                      >
+                        <i className='tabler-x' style={{ fontSize: 18 }} />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                }
+              }}
+            />
+            <FormControl sx={{ minWidth: 200 }} size='medium'>
+              <InputLabel id='sort-label'>Sort by</InputLabel>
+              <Select
+                labelId='sort-label'
+                value={sort}
+                label='Sort by'
+                onChange={e => handleSortChange(e.target.value)}
+              >
+                {SORT_OPTIONS.map(opt => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Genre filter chips */}
+          {genres.length > 0 && (
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 1,
+                mt: 2,
+                overflowX: 'auto',
+                pb: 0.5,
+                '&::-webkit-scrollbar': { height: 4 },
+                '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 2 },
+              }}
+            >
+              <Chip
+                label='All'
+                size='small'
+                variant={selectedGenre === '' ? 'filled' : 'outlined'}
+                color={selectedGenre === '' ? 'primary' : 'default'}
+                onClick={clearGenre}
+                sx={{ fontWeight: 600, flexShrink: 0 }}
+              />
+              {genres.map(genre => (
+                <Chip
+                  key={genre}
+                  label={genre}
+                  size='small'
+                  variant={selectedGenre === genre ? 'filled' : 'outlined'}
+                  color={selectedGenre === genre ? 'primary' : 'default'}
+                  onClick={() => handleGenreClick(genre)}
+                  sx={{ fontWeight: 500, flexShrink: 0 }}
+                />
+              ))}
+            </Box>
+          )}
+
+          {/* Result count */}
+          {resultCountText && (
+            <Typography variant='body2' color='text.secondary' sx={{ mt: 1.5 }}>
+              {resultCountText}
             </Typography>
           )}
         </CardContent>
@@ -163,17 +276,20 @@ const StorePage = () => {
               No games found
             </Typography>
             <Typography color='text.secondary' sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
-              {search
-                ? `We couldn't find any games matching "${search}". Try a different search term or browse all games.`
+              {search || selectedGenre
+                ? `We couldn't find any games${selectedGenre ? ` in ${selectedGenre}` : ''}${search ? ` matching "${search}"` : ''}. Try a different search term or browse all games.`
                 : 'No games are available right now. Please check back later!'}
             </Typography>
-            {search && (
+            {(search || selectedGenre) && (
               <Button
                 variant='outlined'
-                onClick={clearSearch}
+                onClick={() => {
+                  clearSearch()
+                  clearGenre()
+                }}
                 startIcon={<i className='tabler-x' />}
               >
-                Clear Search
+                Clear Filters
               </Button>
             )}
           </CardContent>
