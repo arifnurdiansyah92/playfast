@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: playfast
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-playfast_secret_2026}
+      POSTGRES_DB: playfast
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - playfast
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U playfast"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://playfast:${POSTGRES_PASSWORD:-playfast_secret_2026}@postgres:5432/playfast
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production-please}
+      FLASK_ENV: production
+      FRONTEND_URL: https://playfast.andev.web.id
+    networks:
+      - playfast
+    expose:
+      - "5000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://backend:5000
+    networks:
+      - playfast
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  pgdata:
+
+networks:
+  playfast:
+    driver: bridge

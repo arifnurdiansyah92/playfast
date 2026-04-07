@@ -1,0 +1,14 @@
+.git
+.planning
+__pycache__
+*.pyc
+*.mafile
+accounts.json
+games_cache.json
+backend/.env
+backend/instance
+frontend/node_modules
+frontend/.next
+.env
+.env.production
+task_plan.md
