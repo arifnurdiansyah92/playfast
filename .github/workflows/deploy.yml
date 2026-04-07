@@ -16,9 +16,22 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /opt/playfast
+
+            # Backup database BEFORE any changes
+            ./backup.sh
+
+            # Pull and rebuild
             git pull origin master
             docker compose build
+
+            # Restart WITHOUT -v (preserves data)
+            docker compose down
             docker compose up -d
+
+            # Wait for DB
+            sleep 8
+
+            # Run migrations
             docker compose exec -T backend python -c "
             from app import create_app
             from app.extensions import db
