@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 
 import { authApi } from '@/lib/api'
 import type { User } from '@/lib/api'
@@ -23,8 +23,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const redirect = searchParams.get('redirect')
 
   const refreshUser = useCallback(async () => {
     try {
@@ -46,14 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await authApi.login(email, password)
 
     setUser(res.user)
-    router.push(redirect || '/store')
   }
 
   const register = async (email: string, password: string) => {
     const res = await authApi.register(email, password)
 
     setUser(res.user)
-    router.push(redirect || '/store')
   }
 
   const logout = async () => {

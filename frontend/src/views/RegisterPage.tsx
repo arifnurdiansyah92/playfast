@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
@@ -25,6 +25,7 @@ const RegisterPage = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { register } = useAuth()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const redirect = searchParams.get('redirect')
 
@@ -48,6 +49,7 @@ const RegisterPage = () => {
 
     try {
       await register(email, password)
+      router.push(redirect || '/store')
     } catch (err: any) {
       setError(err.message || 'Registration failed')
     } finally {

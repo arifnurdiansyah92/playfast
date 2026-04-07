@@ -31,7 +31,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   })
 
   // On 401, attempt a single token refresh and retry the original request
-  if (res.status === 401 && !url.includes('/api/auth/refresh')) {
+  // Skip for auth endpoints that are expected to fail when not logged in
+  const skipRefreshUrls = ['/api/auth/refresh', '/api/auth/me', '/api/auth/login', '/api/auth/register']
+  if (res.status === 401 && !skipRefreshUrls.some(u => url.includes(u))) {
     // Deduplicate concurrent refresh attempts
     if (!isRefreshing) {
       isRefreshing = true
@@ -63,10 +65,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
       return retryRes.json()
     }
 
-    // Refresh failed — redirect to login
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login'
-    }
+    // Refresh failed — throw so callers can handle it
+    const body = await res.json().catch(() => ({ error: 'Session expired' }))
+    throw new ApiError(401, body.error || 'Session expired')
   }
 
   if (!res.ok) {

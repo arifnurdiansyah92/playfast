@@ -115,7 +115,7 @@ const LandingPage = () => {
             width: '140%',
             height: '60%',
             borderRadius: '50%',
-            background: 'radial-gradient(ellipse, rgba(102,192,244,0.06) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse, rgba(0,230,118,0.06) 0%, transparent 70%)',
             animation: 'heroGlow 8s ease-in-out infinite alternate',
           },
           '@keyframes heroGlow': {
@@ -181,7 +181,7 @@ const LandingPage = () => {
                 component='span'
                 sx={{
                   color: 'primary.main',
-                  background: 'linear-gradient(135deg, #66c0f4 0%, #4fa3d7 100%)',
+                  background: 'linear-gradient(135deg, #00E676 0%, #00C853 100%)',
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                 }}
@@ -208,7 +208,7 @@ const LandingPage = () => {
             <Typography
               variant='body2'
               sx={{
-                color: '#66c0f4',
+                color: '#00E676',
                 mb: 5,
                 fontWeight: 600,
                 display: 'flex',
@@ -233,9 +233,9 @@ const LandingPage = () => {
                   py: 1.5,
                   fontSize: '1rem',
                   fontWeight: 700,
-                  boxShadow: '0 4px 24px rgba(102,192,244,0.25)',
+                  boxShadow: '0 4px 24px rgba(0,230,118,0.25)',
                   '&:hover': {
-                    boxShadow: '0 6px 32px rgba(102,192,244,0.35)',
+                    boxShadow: '0 6px 32px rgba(0,230,118,0.35)',
                   },
                 }}
               >
@@ -253,7 +253,7 @@ const LandingPage = () => {
                   fontWeight: 700,
                   borderColor: '#3d5a80',
                   color: '#c7d5e0',
-                  '&:hover': { borderColor: '#66c0f4', bgcolor: 'rgba(102,192,244,0.04)' },
+                  '&:hover': { borderColor: '#00E676', bgcolor: 'rgba(0,230,118,0.04)' },
                 }}
               >
                 Create Account
@@ -282,7 +282,7 @@ const LandingPage = () => {
                   variant='h4'
                   sx={{
                     fontWeight: 800,
-                    background: 'linear-gradient(135deg, #66c0f4 0%, #4fa3d7 100%)',
+                    background: 'linear-gradient(135deg, #00E676 0%, #00C853 100%)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }}
@@ -309,7 +309,7 @@ const LandingPage = () => {
                     transition: 'all 0.3s ease',
                     '&:hover': {
                       transform: 'translateY(-4px)',
-                      borderColor: 'rgba(102,192,244,0.3)',
+                      borderColor: 'rgba(0,230,118,0.3)',
                       boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
                     },
                     animation: `fadeInUp 0.6s ease-out ${0.1 * idx}s both`,
@@ -325,10 +325,10 @@ const LandingPage = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'linear-gradient(135deg, rgba(102,192,244,0.12) 0%, rgba(102,192,244,0.04) 100%)',
-                      border: '1px solid rgba(102,192,244,0.2)',
+                      background: 'linear-gradient(135deg, rgba(0,230,118,0.12) 0%, rgba(0,230,118,0.04) 100%)',
+                      border: '1px solid rgba(0,230,118,0.2)',
                     }}>
-                      <i className={f.icon} style={{ fontSize: 28, color: '#66c0f4' }} />
+                      <i className={f.icon} style={{ fontSize: 28, color: '#00E676' }} />
                     </Box>
                     <Typography variant='subtitle1' sx={{ fontWeight: 700, mb: 1 }}>{f.title}</Typography>
                     <Typography variant='body2' sx={{ color: '#8f98a0', lineHeight: 1.6 }}>{f.desc}</Typography>
@@ -359,7 +359,7 @@ const LandingPage = () => {
                       p: 2.5,
                       borderRadius: 2,
                       transition: 'background 0.2s',
-                      '&:hover': { bgcolor: 'rgba(102,192,244,0.04)' },
+                      '&:hover': { bgcolor: 'rgba(0,230,118,0.04)' },
                     }}
                   >
                     <Box sx={{
@@ -369,11 +369,11 @@ const LandingPage = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: 'linear-gradient(135deg, #66c0f4 0%, #4fa3d7 100%)',
+                      background: 'linear-gradient(135deg, #00E676 0%, #00C853 100%)',
                       color: '#0a0e17',
                       fontWeight: 800,
                       fontSize: '1.1rem',
-                      boxShadow: '0 4px 12px rgba(102,192,244,0.3)',
+                      boxShadow: '0 4px 12px rgba(0,230,118,0.3)',
                     }}>
                       {s.num}
                     </Box>
@@ -432,7 +432,7 @@ const LandingPage = () => {
                         transition: 'all 0.3s ease',
                         '&:hover': {
                           transform: 'translateY(-4px)',
-                          borderColor: '#66c0f4',
+                          borderColor: '#00E676',
                           boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                         },
                       }}
@@ -481,10 +481,10 @@ const LandingPage = () => {
                   sx={{
                     bgcolor: 'rgba(30,42,58,0.5)',
                     border: '1px solid',
-                    borderColor: openFaq === idx ? 'rgba(102,192,244,0.3)' : 'rgba(42,63,85,0.6)',
+                    borderColor: openFaq === idx ? 'rgba(0,230,118,0.3)' : 'rgba(42,63,85,0.6)',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
-                    '&:hover': { borderColor: 'rgba(102,192,244,0.2)' },
+                    '&:hover': { borderColor: 'rgba(0,230,118,0.2)' },
                   }}
                   onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
                 >
@@ -515,12 +515,12 @@ const LandingPage = () => {
           sx={{
             py: 10,
             textAlign: 'center',
-            background: 'linear-gradient(180deg, rgba(102,192,244,0.03) 0%, rgba(102,192,244,0.08) 100%)',
+            background: 'linear-gradient(180deg, rgba(0,230,118,0.03) 0%, rgba(0,230,118,0.08) 100%)',
             borderTop: '1px solid rgba(42,63,85,0.6)',
           }}
         >
           <Container maxWidth='sm'>
-            <i className='tabler-rocket' style={{ fontSize: 48, color: '#66c0f4', marginBottom: 16 }} />
+            <i className='tabler-rocket' style={{ fontSize: 48, color: '#00E676', marginBottom: 16 }} />
             <Typography variant='h4' sx={{ fontWeight: 700, mb: 2 }}>
               Ready to Play?
             </Typography>
@@ -537,9 +537,9 @@ const LandingPage = () => {
                 py: 1.5,
                 fontSize: '1rem',
                 fontWeight: 700,
-                boxShadow: '0 4px 24px rgba(102,192,244,0.25)',
+                boxShadow: '0 4px 24px rgba(0,230,118,0.25)',
                 '&:hover': {
-                  boxShadow: '0 6px 32px rgba(102,192,244,0.35)',
+                  boxShadow: '0 6px 32px rgba(0,230,118,0.35)',
                 },
               }}
             >

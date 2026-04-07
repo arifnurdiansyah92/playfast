@@ -67,7 +67,7 @@ const MyGamesPage = () => {
                 border: '1px solid rgba(102,192,244,0.15)',
               }}
             >
-              <i className='tabler-device-gamepad-2' style={{ fontSize: 48, color: '#66c0f4', opacity: 0.6 }} />
+              <i className='tabler-device-gamepad-2' style={{ fontSize: 48, color: '#00E676', opacity: 0.6 }} />
             </Box>
             <Typography variant='h5' sx={{ fontWeight: 600, mb: 1 }}>
               No games yet

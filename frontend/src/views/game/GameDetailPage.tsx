@@ -162,7 +162,7 @@ const GameDetailPage = ({ appid }: Props) => {
                         size='small'
                         variant='outlined'
                         sx={{
-                          borderColor: 'rgba(102,192,244,0.3)',
+                          borderColor: 'rgba(0,230,118,0.3)',
                           color: '#8f98a0',
                           fontSize: '0.75rem',
                           fontWeight: 500,
@@ -232,8 +232,8 @@ const GameDetailPage = ({ appid }: Props) => {
                     py: 1.5,
                     fontSize: '1rem',
                     fontWeight: 700,
-                    boxShadow: '0 4px 16px rgba(102,192,244,0.2)',
-                    '&:hover': { boxShadow: '0 6px 24px rgba(102,192,244,0.3)' },
+                    boxShadow: '0 4px 16px rgba(0,230,118,0.2)',
+                    '&:hover': { boxShadow: '0 6px 24px rgba(0,230,118,0.3)' },
                   }}
                 >
                   {buying ? 'Processing...' : user ? 'Get This Game' : 'Sign Up to Get This Game'}
@@ -262,11 +262,11 @@ const GameDetailPage = ({ appid }: Props) => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    bgcolor: 'rgba(102,192,244,0.08)',
+                    bgcolor: 'rgba(0,230,118,0.08)',
                     flexShrink: 0,
                   }}
                 >
-                  <i className={f.icon} style={{ fontSize: 22, color: '#66c0f4' }} />
+                  <i className={f.icon} style={{ fontSize: 22, color: '#00E676' }} />
                 </Box>
                 <Box>
                   <Typography variant='subtitle2' sx={{ fontWeight: 700 }}>{f.title}</Typography>
