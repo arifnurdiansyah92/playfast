@@ -1,9 +1,11 @@
 """Admin endpoints: account CRUD, game sync, orders, audit, dashboard."""
 
 import json
+import logging
 from datetime import datetime, timezone
 from functools import wraps
 
+import requests as http_requests
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -19,6 +21,8 @@ from app.models import (
     User,
 )
 from app.steam.service import ensure_valid_token, fetch_owned_games
+
+logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
@@ -81,6 +85,69 @@ def dashboard():
 
 
 # ---------------------------------------------------------------------------
+# Users
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/users", methods=["GET"])
+@admin_required
+def list_users():
+    """List all users."""
+    users = User.query.order_by(User.created_at.desc()).all()
+    result = []
+    for u in users:
+        ud = u.to_dict()
+        ud["order_count"] = u.orders.count()
+        result.append(ud)
+    return jsonify({"users": result}), 200
+
+
+@admin_bp.route("/users/<int:user_id>", methods=["PUT"])
+@admin_required
+def update_user(user_id: int):
+    """Update user (toggle admin, disable)."""
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    current_admin_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+
+    if "is_admin" in data:
+        if target.id == current_admin_id:
+            return jsonify({"error": "Cannot change your own admin status"}), 400
+        target.is_admin = bool(data["is_admin"])
+
+    if "is_active" in data:
+        if target.id == current_admin_id:
+            return jsonify({"error": "Cannot deactivate yourself"}), 400
+        target.is_active = bool(data["is_active"])
+
+    if "password" in data and data["password"]:
+        target.set_password(data["password"])
+
+    db.session.commit()
+    return jsonify({"message": "User updated", "user": target.to_dict()}), 200
+
+
+@admin_bp.route("/users/<int:user_id>", methods=["DELETE"])
+@admin_required
+def delete_user(user_id: int):
+    """Delete a user."""
+    current_admin_id = int(get_jwt_identity())
+    if user_id == current_admin_id:
+        return jsonify({"error": "Cannot delete yourself"}), 400
+
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    db.session.delete(target)
+    db.session.commit()
+    return jsonify({"message": "User deleted"}), 200
+
+
+# ---------------------------------------------------------------------------
 # Steam Accounts
 # ---------------------------------------------------------------------------
 
@@ -119,11 +186,21 @@ def add_account():
     except json.JSONDecodeError:
         return jsonify({"error": "Invalid JSON in .mafile"}), 400
 
-    if "shared_secret" not in mafile_data or "account_name" not in mafile_data:
-        return jsonify({"error": "Invalid .mafile — missing shared_secret or account_name"}), 400
+    required_fields = ["shared_secret", "account_name", "identity_secret", "device_id"]
+    missing = [f for f in required_fields if not mafile_data.get(f)]
+    if missing:
+        return jsonify({
+            "error": f"Invalid .mafile — missing required fields: {', '.join(missing)}"
+        }), 400
+
+    session_data = mafile_data.get("Session")
+    if not session_data or not isinstance(session_data, dict):
+        return jsonify({
+            "error": "Invalid .mafile — missing Session object"
+        }), 400
 
     account_name = mafile_data["account_name"]
-    steam_id = mafile_data.get("Session", {}).get("SteamID", "")
+    steam_id = session_data.get("SteamID", "")
 
     if SteamAccount.query.filter_by(account_name=account_name).first():
         return jsonify({"error": f"Account '{account_name}' already exists"}), 409
@@ -184,6 +261,34 @@ def delete_account(account_id: int):
 # ---------------------------------------------------------------------------
 
 
+def _fetch_game_metadata(appid: int) -> dict | None:
+    """
+    Fetch metadata for a game from the Steam Store API.
+    Returns dict with description, header_image, genres or None on failure.
+    """
+    try:
+        resp = http_requests.get(
+            f"https://store.steampowered.com/api/appdetails?appids={appid}",
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        app_data = data.get(str(appid), {})
+        if not app_data.get("success"):
+            return None
+        details = app_data.get("data", {})
+        genres_list = details.get("genres", [])
+        genre_names = ", ".join(g.get("description", "") for g in genres_list)
+        return {
+            "description": details.get("short_description", ""),
+            "header_image": details.get("header_image", ""),
+            "genres": genre_names,
+        }
+    except Exception as e:
+        logger.warning("Failed to fetch metadata for appid %s: %s", appid, e)
+        return None
+
+
 def _sync_account_games(account: SteamAccount) -> dict:
     """
     Sync games for a single SteamAccount.
@@ -230,6 +335,13 @@ def _sync_account_games(account: SteamAccount) -> dict:
             db.session.add(game)
             db.session.flush()
             new_games += 1
+
+            # Fetch metadata from Steam Store API for new games
+            metadata = _fetch_game_metadata(g["appid"])
+            if metadata:
+                game.description = metadata.get("description")
+                game.header_image = metadata.get("header_image")
+                game.genres = metadata.get("genres")
         else:
             # Update name/icon if changed
             if game.name != g["name"]:
@@ -470,6 +582,52 @@ def list_orders():
         "per_page": pagination.per_page,
         "pages": pagination.pages,
     }), 200
+
+
+@admin_bp.route("/orders/<int:order_id>/revoke", methods=["POST"])
+@admin_required
+def revoke_access(order_id: int):
+    """Revoke a user's access to an assigned account."""
+    order = db.session.get(Order, order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    if not order.assignment:
+        return jsonify({"error": "No assignment on this order"}), 400
+
+    assignment = order.assignment
+    if assignment.is_revoked:
+        return jsonify({"error": "Already revoked"}), 409
+
+    assignment.is_revoked = True
+    assignment.revoked_at = datetime.now(timezone.utc)
+    order.status = "revoked"
+    db.session.commit()
+
+    return jsonify({"message": "Access revoked", "order_id": order_id}), 200
+
+
+@admin_bp.route("/orders/<int:order_id>/restore", methods=["POST"])
+@admin_required
+def restore_access(order_id: int):
+    """Restore a previously revoked access."""
+    order = db.session.get(Order, order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    if not order.assignment:
+        return jsonify({"error": "No assignment on this order"}), 400
+
+    assignment = order.assignment
+    if not assignment.is_revoked:
+        return jsonify({"error": "Not revoked"}), 409
+
+    assignment.is_revoked = False
+    assignment.revoked_at = None
+    order.status = "fulfilled"
+    db.session.commit()
+
+    return jsonify({"message": "Access restored", "order_id": order_id}), 200
 
 
 # ---------------------------------------------------------------------------

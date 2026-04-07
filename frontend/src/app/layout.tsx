@@ -21,7 +21,7 @@ import '@/app/globals.css'
 import '@assets/iconify-icons/generated-icons.css'
 
 export const metadata = {
-  title: 'SDA - Steam Game Sharing Platform',
+  title: 'Playfast - Instant Steam Game Access',
   description: 'Share and play Steam games with ease'
 }
 

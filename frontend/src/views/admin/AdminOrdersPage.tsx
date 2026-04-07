@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
@@ -15,12 +15,14 @@ import TableRow from '@mui/material/TableRow'
 import Skeleton from '@mui/material/Skeleton'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
+import Button from '@mui/material/Button'
 
 import { adminApi } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 const AdminOrdersPage = () => {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ['admin-orders'],
@@ -28,8 +30,24 @@ const AdminOrdersPage = () => {
     enabled: user?.role === 'admin'
   })
 
+  const revokeMutation = useMutation({
+    mutationFn: (orderId: number) => adminApi.revokeAccess(orderId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-orders'] })
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (orderId: number) => adminApi.restoreAccess(orderId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-orders'] })
+  })
+
   if (user?.role !== 'admin') {
     return <Alert severity='error'>Access denied</Alert>
+  }
+
+  const statusColor = (status: string) => {
+    if (status === 'revoked') return 'error'
+    if (status === 'fulfilled') return 'success'
+    return 'default'
   }
 
   return (
@@ -72,6 +90,7 @@ const AdminOrdersPage = () => {
                   <TableCell>Account</TableCell>
                   <TableCell>Date</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell align='right'>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -91,17 +110,17 @@ const AdminOrdersPage = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Box
                           component='img'
-                          src={`https://cdn.akamai.steamstatic.com/steam/apps/${order.game_appid}/capsule_sm_120.jpg`}
-                          alt={order.game_name}
+                          src={`https://cdn.akamai.steamstatic.com/steam/apps/${order.game?.appid}/capsule_sm_120.jpg`}
+                          alt={order.game?.name}
                           sx={{ width: 48, height: 18, borderRadius: 0.5, objectFit: 'cover' }}
                           onError={(e: any) => { e.target.style.display = 'none' }}
                         />
-                        <Typography variant='subtitle2'>{order.game_name}</Typography>
+                        <Typography variant='subtitle2'>{order.game?.name}</Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
                       <Typography variant='body2' sx={{ fontFamily: 'monospace' }}>
-                        {order.account_name}
+                        {order.credentials?.account_name || '-'}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -116,10 +135,33 @@ const AdminOrdersPage = () => {
                     <TableCell>
                       <Chip
                         size='small'
-                        label={order.status || 'Active'}
-                        color='success'
+                        label={order.status}
+                        color={statusColor(order.status)}
                         variant='tonal'
                       />
+                    </TableCell>
+                    <TableCell align='right'>
+                      {order.is_revoked ? (
+                        <Button
+                          size='small'
+                          variant='outlined'
+                          color='success'
+                          onClick={() => restoreMutation.mutate(order.id)}
+                          disabled={restoreMutation.isPending}
+                        >
+                          Restore
+                        </Button>
+                      ) : order.status === 'fulfilled' ? (
+                        <Button
+                          size='small'
+                          variant='outlined'
+                          color='error'
+                          onClick={() => revokeMutation.mutate(order.id)}
+                          disabled={revokeMutation.isPending}
+                        >
+                          Revoke
+                        </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -1,5 +1,9 @@
 """Store endpoints: public catalog, ordering, credentials, code generation."""
 
+import time
+import threading
+from collections import defaultdict
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import func
@@ -17,6 +21,27 @@ from app.models import (
 from app.steam.service import get_guard_code
 
 store_bp = Blueprint("store", __name__, url_prefix="/api/store")
+
+# ---------------------------------------------------------------------------
+# In-memory rate limiter for code generation (per-user, 10 req/min)
+# ---------------------------------------------------------------------------
+_code_rate_lock = threading.Lock()
+_code_rate_log: dict[int, list[float]] = defaultdict(list)
+_CODE_RATE_LIMIT = 10
+_CODE_RATE_WINDOW = 60  # seconds
+
+
+def _check_code_rate_limit(user_id: int) -> bool:
+    """Return True if the request is allowed, False if rate-limited."""
+    now = time.time()
+    with _code_rate_lock:
+        timestamps = _code_rate_log[user_id]
+        # Prune old entries outside the window
+        _code_rate_log[user_id] = [t for t in timestamps if now - t < _CODE_RATE_WINDOW]
+        if len(_code_rate_log[user_id]) >= _CODE_RATE_LIMIT:
+            return False
+        _code_rate_log[user_id].append(now)
+        return True
 
 DEFAULT_PLAY_INSTRUCTIONS = """## How to Play (Offline Mode)
 
@@ -40,29 +65,29 @@ def list_games():
     per_page = request.args.get("per_page", 20, type=int)
     per_page = min(per_page, 100)
 
-    query = Game.query.filter_by(is_enabled=True)
+    # Only show enabled games that have at least one active account
+    available_game_ids = (
+        db.session.query(GameAccount.game_id)
+        .join(SteamAccount)
+        .filter(SteamAccount.is_active == True)  # noqa: E712
+        .group_by(GameAccount.game_id)
+        .subquery()
+    )
+    query = Game.query.filter(
+        Game.is_enabled == True,  # noqa: E712
+        Game.id.in_(db.session.query(available_game_ids.c.game_id)),
+    )
 
     # Search by name
     q = request.args.get("q", "").strip()
     if q:
         query = query.filter(Game.name.ilike(f"%{q}%"))
 
-    # Filter by availability (at least one active account owns it)
-    available = request.args.get("available", "").lower()
-    if available == "true":
-        subq = (
-            db.session.query(GameAccount.game_id)
-            .join(SteamAccount)
-            .filter(SteamAccount.is_active == True)  # noqa: E712
-            .group_by(GameAccount.game_id)
-            .subquery()
-        )
-        query = query.filter(Game.id.in_(db.session.query(subq.c.game_id)))
-
     query = query.order_by(Game.name.asc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
-    games = [g.to_dict(include_availability=True) for g in pagination.items]
+    # User-facing: no availability/slot info
+    games = [g.to_dict() for g in pagination.items]
     return jsonify({
         "games": games,
         "total": pagination.total,
@@ -79,7 +104,7 @@ def game_detail(appid: int):
     if not game:
         return jsonify({"error": "Game not found"}), 404
 
-    return jsonify({"game": game.to_dict(include_availability=True)}), 200
+    return jsonify({"game": game.to_dict()}), 200
 
 
 @store_bp.route("/orders", methods=["POST"])
@@ -91,14 +116,37 @@ def create_order():
     """
     user_id = int(get_jwt_identity())
     data = request.get_json() or {}
+
+    # Accept either game_id or appid
     game_id = data.get("game_id")
+    appid = data.get("appid")
 
-    if not game_id:
-        return jsonify({"error": "game_id is required"}), 400
+    if not game_id and not appid:
+        return jsonify({"error": "game_id or appid is required"}), 400
 
-    game = db.session.get(Game, game_id)
+    if game_id:
+        game = db.session.get(Game, game_id)
+    else:
+        game = Game.query.filter_by(appid=appid).first()
+
     if not game or not game.is_enabled:
         return jsonify({"error": "Game not found or not available"}), 404
+
+    # Check if user already has an active (non-revoked) order for this game
+    existing_order = (
+        Order.query.join(Assignment, Order.assignment_id == Assignment.id)
+        .filter(
+            Order.user_id == user_id,
+            Order.game_id == game.id,
+            Order.status == "fulfilled",
+            Assignment.is_revoked == False,  # noqa: E712
+        )
+        .first()
+    )
+    if existing_order:
+        return jsonify({
+            "error": "You already have an active order for this game"
+        }), 409
 
     # Round-robin: find the account with the fewest active assignments for this game
     # Use FOR UPDATE to prevent race conditions
@@ -198,12 +246,21 @@ def order_detail(order_id: int):
 def generate_code(order_id: int):
     """Generate a Steam Guard code for the assigned account."""
     user_id = int(get_jwt_identity())
+
+    if not _check_code_rate_limit(user_id):
+        return jsonify({
+            "error": "Rate limit exceeded. Maximum 10 code requests per minute. Please wait before trying again."
+        }), 429
+
     order = Order.query.filter_by(id=order_id, user_id=user_id).first()
     if not order:
         return jsonify({"error": "Order not found"}), 404
 
     if not order.assignment:
         return jsonify({"error": "No account assigned to this order"}), 400
+
+    if order.assignment.is_revoked:
+        return jsonify({"error": "Access to this account has been revoked"}), 403
 
     steam_account = order.assignment.steam_account
     mafile_data = steam_account.mafile_data

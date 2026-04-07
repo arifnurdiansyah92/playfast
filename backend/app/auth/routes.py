@@ -1,5 +1,7 @@
 """Authentication endpoints: register, login, logout, current user."""
 
+import re
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     create_access_token,
@@ -26,6 +28,10 @@ def register():
 
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
+
+    # Basic email format validation
+    if "@" not in email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return jsonify({"error": "Invalid email format"}), 400
 
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters"}), 400
@@ -64,6 +70,9 @@ def login():
     user = User.query.filter_by(email=email).first()
     if not user or not user.check_password(password):
         return jsonify({"error": "Invalid email or password"}), 401
+
+    if not user.is_active:
+        return jsonify({"error": "Account has been deactivated"}), 403
 
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))

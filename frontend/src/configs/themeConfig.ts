@@ -50,9 +50,9 @@ export type Config = {
 }
 
 const themeConfig: Config = {
-  templateName: 'SDA',
+  templateName: 'Playfast',
   homePageUrl: '/store',
-  settingsCookieName: 'sda-settings',
+  settingsCookieName: 'playfast-settings',
   mode: 'dark', // 'system', 'light', 'dark'
   skin: 'default', // 'default', 'bordered'
   semiDark: false, // true, false

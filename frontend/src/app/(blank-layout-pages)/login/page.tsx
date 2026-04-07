@@ -3,8 +3,8 @@ import type { Metadata } from 'next'
 import LoginPage from '@views/LoginPage'
 
 export const metadata: Metadata = {
-  title: 'Login - SDA',
-  description: 'Login to your SDA account'
+  title: 'Login - Playfast',
+  description: 'Login to your Playfast account'
 }
 
 const LoginRoute = () => {

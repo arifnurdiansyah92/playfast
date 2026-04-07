@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for the SDA backend API server."""
+"""Entry point for the Playfast backend API server."""
 
 import os
 import sys

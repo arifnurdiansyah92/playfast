@@ -50,7 +50,7 @@ const AdminGamesPage = () => {
   })
 
   const updateGameMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Pick<Game, 'price' | 'enabled'>> }) =>
+    mutationFn: ({ id, data }: { id: number; data: Partial<{ price: number; is_enabled: boolean }> }) =>
       adminApi.updateGame(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-games'] })
@@ -75,7 +75,7 @@ const AdminGamesPage = () => {
   })
 
   const handleToggleEnabled = (game: Game) => {
-    updateGameMutation.mutate({ id: game.id, data: { enabled: !game.enabled } })
+    updateGameMutation.mutate({ id: game.id, data: { is_enabled: !game.is_enabled } })
   }
 
   const handleSavePrice = (id: number) => {
@@ -93,7 +93,7 @@ const AdminGamesPage = () => {
 
   const openInstructions = (game: Game) => {
     setInstructionsOpen(game)
-    setInstructionsText(game.instructions || '')
+    setInstructionsText('')
   }
 
   if (user?.role !== 'admin') {
@@ -206,16 +206,16 @@ const AdminGamesPage = () => {
                     </TableCell>
                     <TableCell>
                       <Switch
-                        checked={game.enabled}
+                        checked={game.is_enabled}
                         onChange={() => handleToggleEnabled(game)}
                         size='small'
                       />
                     </TableCell>
                     <TableCell>
-                      <Chip size='small' label={game.account_count ?? 0} variant='tonal' color='info' />
+                      <Chip size='small' label={game.accounts?.length ?? 0} variant='tonal' color='info' />
                     </TableCell>
                     <TableCell>
-                      <Chip size='small' label={game.order_count ?? 0} variant='tonal' color='success' />
+                      <Chip size='small' label={game.available_accounts ?? 0} variant='tonal' color='success' />
                     </TableCell>
                     <TableCell align='right'>
                       <Tooltip title='Edit Instructions'>

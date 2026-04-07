@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import GameDetailPage from '@views/game/GameDetailPage'
 
 export const metadata: Metadata = {
-  title: 'Game Detail - SDA',
+  title: 'Game Detail - Playfast',
   description: 'View game details'
 }
 

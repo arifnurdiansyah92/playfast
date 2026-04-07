@@ -179,7 +179,7 @@ const AdminAccountsPage = () => {
                   <TableRow key={account.id} hover>
                     <TableCell>
                       <Typography variant='subtitle2' sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                        {account.username}
+                        {account.account_name}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -193,8 +193,8 @@ const AdminAccountsPage = () => {
                     <TableCell>
                       <Chip
                         size='small'
-                        label={account.status || 'Active'}
-                        color={account.status === 'active' || !account.status ? 'success' : 'warning'}
+                        label={account.is_active ? 'Active' : 'Inactive'}
+                        color={account.is_active ? 'success' : 'warning'}
                         variant='tonal'
                       />
                     </TableCell>

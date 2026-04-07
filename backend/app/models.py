@@ -1,4 +1,4 @@
-"""All SQLAlchemy models for the SDA platform."""
+"""All SQLAlchemy models for the Playfast platform."""
 
 from datetime import datetime, timezone
 
@@ -14,6 +14,7 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -37,6 +38,8 @@ class User(db.Model):
             "id": self.id,
             "email": self.email,
             "is_admin": self.is_admin,
+            "is_active": self.is_active,
+            "role": "admin" if self.is_admin else "user",
             "created_at": self.created_at.isoformat(),
         }
 
@@ -87,6 +90,9 @@ class Game(db.Model):
     appid = db.Column(db.Integer, unique=True, nullable=False, index=True)
     name = db.Column(db.String(500), nullable=False)
     icon = db.Column(db.String(500), nullable=True, default="")
+    description = db.Column(db.Text, nullable=True)
+    header_image = db.Column(db.String(500), nullable=True)
+    genres = db.Column(db.String(500), nullable=True)  # comma-separated genre names
     price = db.Column(db.Integer, default=50000, nullable=False)  # in smallest currency unit
     is_enabled = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(
@@ -120,6 +126,9 @@ class Game(db.Model):
             "appid": self.appid,
             "name": self.name,
             "icon": self.icon,
+            "description": self.description,
+            "header_image": self.header_image,
+            "genres": self.genres,
             "price": self.price,
             "is_enabled": self.is_enabled,
             "created_at": self.created_at.isoformat(),
@@ -180,10 +189,11 @@ class Order(db.Model):
             "game_id": self.game_id,
             "game": self.game.to_dict() if self.game else None,
             "status": self.status,
+            "is_revoked": self.assignment.is_revoked if self.assignment else False,
             "created_at": self.created_at.isoformat(),
             "assignment_id": self.assignment_id,
         }
-        if include_credentials and self.assignment:
+        if include_credentials and self.assignment and not self.assignment.is_revoked:
             result["credentials"] = {
                 "account_name": self.assignment.steam_account.account_name,
                 "password": self.assignment.steam_account.password,
@@ -207,6 +217,8 @@ class Assignment(db.Model):
     game_id = db.Column(
         db.Integer, db.ForeignKey("games.id"), nullable=False
     )
+    is_revoked = db.Column(db.Boolean, default=False, nullable=False)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

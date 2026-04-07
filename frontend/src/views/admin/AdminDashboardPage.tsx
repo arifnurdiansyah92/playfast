@@ -9,14 +9,8 @@ import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import Grid from '@mui/material/Grid'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableContainer from '@mui/material/TableContainer'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
+import Button from '@mui/material/Button'
 import Skeleton from '@mui/material/Skeleton'
-import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
 
 import { adminApi } from '@/lib/api'
@@ -122,50 +116,18 @@ const AdminDashboardPage = () => {
           <Typography variant='h6' sx={{ mb: 3 }}>
             Recent Orders
           </Typography>
-          {data?.recent_orders && data.recent_orders.length > 0 ? (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>User</TableCell>
-                    <TableCell>Game</TableCell>
-                    <TableCell>Account</TableCell>
-                    <TableCell>Date</TableCell>
-                    <TableCell>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {data.recent_orders.map(order => (
-                    <TableRow key={order.id} hover sx={{ cursor: 'pointer' }} onClick={() => router.push('/admin/orders')}>
-                      <TableCell>#{order.id}</TableCell>
-                      <TableCell>{order.user_email || `User #${order.user_id}`}</TableCell>
-                      <TableCell>{order.game_name}</TableCell>
-                      <TableCell>
-                        <Typography variant='body2' sx={{ fontFamily: 'monospace' }}>
-                          {order.account_name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(order.created_at).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <Chip size='small' label={order.status || 'Active'} color='success' variant='tonal' />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+          {data?.total_orders && data.total_orders > 0 ? (
+            <Box sx={{ textAlign: 'center', py: 2 }}>
+              <Typography color='text.secondary' sx={{ mb: 2 }}>
+                {data.fulfilled_orders} fulfilled / {data.total_orders} total orders
+              </Typography>
+              <Button variant='outlined' onClick={() => router.push('/admin/orders')}>
+                View All Orders
+              </Button>
+            </Box>
           ) : (
             <Typography color='text.secondary' sx={{ textAlign: 'center', py: 4 }}>
-              No recent orders
+              No orders yet
             </Typography>
           )}
         </CardContent>

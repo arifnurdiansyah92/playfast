@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import AdminGamesPage from '@views/admin/AdminGamesPage'
 
 export const metadata: Metadata = {
-  title: 'Games Catalog - SDA Admin',
+  title: 'Games Catalog - Playfast Admin',
   description: 'Manage game catalog'
 }
 

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
@@ -23,6 +24,8 @@ const LoginPage = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
+  const searchParams = useSearchParams()
+  const redirect = searchParams.get('redirect')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,7 +48,7 @@ const LoginPage = () => {
           <Box sx={{ mb: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <i className='tabler-brand-steam' style={{ fontSize: 40, marginRight: 12, color: 'var(--mui-palette-primary-main)' }} />
             <Typography variant='h4' sx={{ fontWeight: 700 }}>
-              SDA
+              Playfast
             </Typography>
           </Box>
           <Box sx={{ mb: 6 }}>
@@ -94,7 +97,7 @@ const LoginPage = () => {
             </Button>
             <div className='flex justify-center items-center flex-wrap gap-2'>
               <Typography>New here?</Typography>
-              <Typography component={Link} href='/register' color='primary.main'>
+              <Typography component={Link} href={redirect ? `/register?redirect=${encodeURIComponent(redirect)}` : '/register'} color='primary.main'>
                 Create an account
               </Typography>
             </div>

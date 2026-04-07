@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import PlayPage from '@views/play/PlayPage'
 
 export const metadata: Metadata = {
-  title: 'Play - SDA',
+  title: 'Play - Playfast',
   description: 'Access your game credentials'
 }
 
