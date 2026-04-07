@@ -3,8 +3,8 @@ import type { Metadata } from 'next'
 import LandingPage from '@/views/LandingPage'
 
 export const metadata: Metadata = {
-  title: 'Playfast - Instant Steam Game Access',
-  description: 'Get instant access to thousands of Steam games. Pay once, play forever. Instant Steam Guard codes.'
+  title: 'Playfast - Akses Game Steam Instan',
+  description: 'Akses ribuan game Steam secara instan. Kode Steam Guard otomatis.'
 }
 
 export default function Home() {

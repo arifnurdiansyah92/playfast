@@ -54,22 +54,22 @@ const ProfilePage = () => {
 
   const handleChangePassword = async () => {
     if (!currentPassword) {
-      setSnackbar({ open: true, message: 'Current password is required', severity: 'error' })
+      setSnackbar({ open: true, message: 'Password saat ini wajib diisi', severity: 'error' })
       return
     }
 
     if (!newPassword) {
-      setSnackbar({ open: true, message: 'New password is required', severity: 'error' })
+      setSnackbar({ open: true, message: 'Password baru wajib diisi', severity: 'error' })
       return
     }
 
     if (newPassword.length < 6) {
-      setSnackbar({ open: true, message: 'New password must be at least 6 characters', severity: 'error' })
+      setSnackbar({ open: true, message: 'Password baru minimal 6 karakter', severity: 'error' })
       return
     }
 
     if (newPassword !== confirmPassword) {
-      setSnackbar({ open: true, message: 'New passwords do not match', severity: 'error' })
+      setSnackbar({ open: true, message: 'Password baru tidak cocok', severity: 'error' })
       return
     }
 
@@ -77,13 +77,13 @@ const ProfilePage = () => {
 
     try {
       await authApi.updateProfile({ current_password: currentPassword, password: newPassword })
-      setSnackbar({ open: true, message: 'Password updated successfully', severity: 'success' })
+      setSnackbar({ open: true, message: 'Password berhasil diperbarui', severity: 'success' })
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
       await refreshUser()
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to update password'
+      const message = err instanceof ApiError ? err.message : 'Gagal memperbarui password'
       setSnackbar({ open: true, message, severity: 'error' })
     } finally {
       setLoading(false)
@@ -91,7 +91,7 @@ const ProfilePage = () => {
   }
 
   const memberSince = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString('en-US', {
+    ? new Date(user.created_at).toLocaleDateString('id-ID', {
         day: 'numeric',
         month: 'long',
         year: 'numeric'
@@ -102,9 +102,9 @@ const ProfilePage = () => {
     <div className='flex flex-col gap-6'>
       <Box>
         <Typography variant='h4' sx={{ fontWeight: 700, mb: 0.5 }}>
-          Profile
+          Profil
         </Typography>
-        <Typography color='text.secondary'>Manage your account settings</Typography>
+        <Typography color='text.secondary'>Kelola pengaturan akun kamu</Typography>
       </Box>
 
       <Grid container spacing={3}>
@@ -112,7 +112,7 @@ const ProfilePage = () => {
         <Grid size={{ xs: 12, md: 4 }}>
           <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
             <CardHeader
-              title='Account Info'
+              title='Informasi Akun'
               titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
               avatar={<i className='tabler-user-circle' style={{ fontSize: 24 }} />}
             />
@@ -128,7 +128,7 @@ const ProfilePage = () => {
               </Box>
               <Box>
                 <Typography variant='caption' color='text.secondary' sx={{ mb: 0.5, display: 'block' }}>
-                  Role
+                  Peran
                 </Typography>
                 <Chip
                   label={user?.role === 'admin' ? 'Admin' : 'User'}
@@ -139,7 +139,7 @@ const ProfilePage = () => {
               </Box>
               <Box>
                 <Typography variant='caption' color='text.secondary' sx={{ mb: 0.5, display: 'block' }}>
-                  Member Since
+                  Bergabung Sejak
                 </Typography>
                 <Typography variant='body1' sx={{ fontWeight: 500 }}>
                   {memberSince}
@@ -153,24 +153,24 @@ const ProfilePage = () => {
         <Grid size={{ xs: 12, md: 4 }}>
           <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
             <CardHeader
-              title='My Orders'
+              title='Pesanan Saya'
               titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
               avatar={<i className='tabler-receipt' style={{ fontSize: 24 }} />}
             />
             <Divider />
             <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography color='text.secondary'>Total Orders</Typography>
+                <Typography color='text.secondary'>Total Pesanan</Typography>
                 <Typography variant='h5' sx={{ fontWeight: 700 }}>
                   {totalOrders}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography color='text.secondary'>Active</Typography>
+                <Typography color='text.secondary'>Aktif</Typography>
                 <Chip label={activeOrders} color='success' size='small' sx={{ fontWeight: 600 }} />
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography color='text.secondary'>Revoked</Typography>
+                <Typography color='text.secondary'>Dicabut</Typography>
                 <Chip label={totalOrders - activeOrders} color={totalOrders - activeOrders > 0 ? 'error' : 'default'} size='small' sx={{ fontWeight: 600 }} />
               </Box>
               <Button
@@ -180,7 +180,7 @@ const ProfilePage = () => {
                 onClick={() => router.push('/my-games')}
                 sx={{ mt: 1, fontWeight: 600 }}
               >
-                View My Games
+                Lihat Game Saya
               </Button>
             </CardContent>
           </Card>
@@ -190,14 +190,14 @@ const ProfilePage = () => {
         <Grid size={{ xs: 12, md: 4 }}>
           <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
             <CardHeader
-              title='Change Password'
+              title='Ubah Password'
               titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
               avatar={<i className='tabler-lock' style={{ fontSize: 24 }} />}
             />
             <Divider />
             <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField
-                label='Current Password'
+                label='Password Saat Ini'
                 type={showCurrentPassword ? 'text' : 'password'}
                 size='small'
                 fullWidth
@@ -216,13 +216,13 @@ const ProfilePage = () => {
                 }}
               />
               <TextField
-                label='New Password'
+                label='Password Baru'
                 type={showNewPassword ? 'text' : 'password'}
                 size='small'
                 fullWidth
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
-                helperText='Minimum 6 characters'
+                helperText='Minimal 6 karakter'
                 slotProps={{
                   input: {
                     endAdornment: (
@@ -236,14 +236,14 @@ const ProfilePage = () => {
                 }}
               />
               <TextField
-                label='Confirm New Password'
+                label='Konfirmasi Password Baru'
                 type='password'
                 size='small'
                 fullWidth
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 error={confirmPassword.length > 0 && newPassword !== confirmPassword}
-                helperText={confirmPassword.length > 0 && newPassword !== confirmPassword ? 'Passwords do not match' : ''}
+                helperText={confirmPassword.length > 0 && newPassword !== confirmPassword ? 'Password tidak cocok' : ''}
               />
               <Button
                 variant='contained'
@@ -253,7 +253,7 @@ const ProfilePage = () => {
                 startIcon={<i className='tabler-check' />}
                 sx={{ mt: 1, fontWeight: 600 }}
               >
-                {loading ? 'Updating...' : 'Update Password'}
+                {loading ? 'Memperbarui...' : 'Perbarui Password'}
               </Button>
             </CardContent>
           </Card>

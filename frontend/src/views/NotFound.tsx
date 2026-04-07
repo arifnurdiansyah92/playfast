@@ -63,11 +63,11 @@ const NotFound = ({ mode }: { mode?: string }) => {
         </Typography>
 
         <Typography variant='h5' sx={{ mt: 1, mb: 1.5, fontWeight: 600 }}>
-          Page not found
+          Halaman tidak ditemukan
         </Typography>
 
         <Typography color='text.secondary' sx={{ mb: 5, maxWidth: 420, mx: 'auto', lineHeight: 1.6 }}>
-          The page you are looking for does not exist, has been moved, or is temporarily unavailable. Let us get you back on track.
+          Halaman yang kamu cari tidak ada atau sudah dipindahkan.
         </Typography>
 
         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -84,7 +84,7 @@ const NotFound = ({ mode }: { mode?: string }) => {
               '&:hover': { boxShadow: '0 6px 32px rgba(0,230,118,0.35)' },
             }}
           >
-            Browse Games
+            Cari Game
           </Button>
           <Button
             component={Link}
@@ -99,7 +99,7 @@ const NotFound = ({ mode }: { mode?: string }) => {
               '&:hover': { borderColor: '#00E676', bgcolor: 'rgba(0,230,118,0.04)' },
             }}
           >
-            Home
+            Beranda
           </Button>
         </Box>
       </Box>

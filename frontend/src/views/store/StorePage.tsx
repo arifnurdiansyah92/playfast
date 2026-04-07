@@ -28,11 +28,11 @@ import InputLabel from '@mui/material/InputLabel'
 import { storeApi, formatIDR } from '@/lib/api'
 
 const SORT_OPTIONS = [
-  { value: '', label: 'Relevance' },
-  { value: 'price_asc', label: 'Price: Low to High' },
-  { value: 'price_desc', label: 'Price: High to Low' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'popular', label: 'Most Popular' },
+  { value: '', label: 'Relevan' },
+  { value: 'price_asc', label: 'Harga: Termurah' },
+  { value: 'price_desc', label: 'Harga: Termahal' },
+  { value: 'newest', label: 'Terbaru' },
+  { value: 'popular', label: 'Terpopuler' },
 ] as const
 
 const StorePage = () => {
@@ -106,28 +106,28 @@ const StorePage = () => {
     if (isLoading) return null
 
     if (selectedGenre && debouncedSearch) {
-      return `${totalGames} game${totalGames !== 1 ? 's' : ''} in ${selectedGenre} matching "${debouncedSearch}"`
+      return `${totalGames} game dalam ${selectedGenre} untuk "${debouncedSearch}"`
     }
 
     if (selectedGenre) {
-      return `${totalGames} game${totalGames !== 1 ? 's' : ''} in ${selectedGenre}`
+      return `${totalGames} game dalam ${selectedGenre}`
     }
 
     if (debouncedSearch) {
-      return `${totalGames} result${totalGames !== 1 ? 's' : ''} for "${debouncedSearch}"`
+      return `${totalGames} hasil untuk "${debouncedSearch}"`
     }
 
-    return `Showing ${totalGames} game${totalGames !== 1 ? 's' : ''}`
+    return `Menampilkan ${totalGames} game`
   })()
 
   return (
     <div className='flex flex-col gap-6'>
       <Box>
         <Typography variant='h4' sx={{ fontWeight: 700, mb: 0.5 }}>
-          Game Store
+          Toko Game
         </Typography>
         <Typography color='text.secondary'>
-          Browse and get instant access to Steam games
+          Cari dan dapatkan akses ke game Steam
         </Typography>
       </Box>
 
@@ -142,7 +142,7 @@ const StorePage = () => {
         <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <TextField
-              placeholder='Search games by name...'
+              placeholder='Cari game...'
               value={search}
               onChange={e => handleSearchChange(e.target.value)}
               fullWidth
@@ -175,11 +175,11 @@ const StorePage = () => {
               }}
             />
             <FormControl sx={{ minWidth: 200 }} size='medium'>
-              <InputLabel id='sort-label'>Sort by</InputLabel>
+              <InputLabel id='sort-label'>Urutkan</InputLabel>
               <Select
                 labelId='sort-label'
                 value={sort}
-                label='Sort by'
+                label='Urutkan'
                 onChange={e => handleSortChange(e.target.value)}
               >
                 {SORT_OPTIONS.map(opt => (
@@ -205,7 +205,7 @@ const StorePage = () => {
               }}
             >
               <Chip
-                label='All'
+                label='Semua'
                 size='small'
                 variant={selectedGenre === '' ? 'filled' : 'outlined'}
                 color={selectedGenre === '' ? 'primary' : 'default'}
@@ -273,12 +273,12 @@ const StorePage = () => {
               <i className='tabler-search-off' style={{ fontSize: 48, opacity: 0.4 }} />
             </Box>
             <Typography variant='h5' sx={{ fontWeight: 600, mb: 1 }}>
-              No games found
+              Game tidak ditemukan
             </Typography>
             <Typography color='text.secondary' sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
               {search || selectedGenre
-                ? `We couldn't find any games${selectedGenre ? ` in ${selectedGenre}` : ''}${search ? ` matching "${search}"` : ''}. Try a different search term or browse all games.`
-                : 'No games are available right now. Please check back later!'}
+                ? `Kami tidak menemukan game${selectedGenre ? ` dalam ${selectedGenre}` : ''}${search ? ` untuk "${search}"` : ''}. Coba kata kunci lain atau hapus filter.`
+                : 'Belum ada game yang tersedia saat ini. Cek lagi nanti ya!'}
             </Typography>
             {(search || selectedGenre) && (
               <Button
@@ -289,7 +289,7 @@ const StorePage = () => {
                 }}
                 startIcon={<i className='tabler-x' />}
               >
-                Clear Filters
+                Hapus Filter
               </Button>
             )}
           </CardContent>

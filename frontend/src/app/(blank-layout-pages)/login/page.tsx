@@ -3,8 +3,8 @@ import type { Metadata } from 'next'
 import LoginPage from '@views/LoginPage'
 
 export const metadata: Metadata = {
-  title: 'Login - Playfast',
-  description: 'Login to your Playfast account'
+  title: 'Masuk - Playfast',
+  description: 'Masuk ke akun Playfast kamu'
 }
 
 const LoginRoute = () => {

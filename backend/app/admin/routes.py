@@ -26,19 +26,19 @@ logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
-DEFAULT_PLAY_INSTRUCTIONS = """## How to Play (Offline Mode)
+DEFAULT_PLAY_INSTRUCTIONS = """## Cara Main (Mode Offline)
 
-1. Open Steam and click "Login"
-2. Enter the username and password shown above
-3. When prompted for Steam Guard code, click "Get Code" on this page and enter it
-4. Once logged in, go to your Library and install/download the game
-5. After download completes, go to Steam menu → Go Offline
-6. Launch and play the game in offline mode
+1. Buka Steam dan klik "Login"
+2. Masukkan username dan password yang tertera di atas
+3. Saat diminta kode Steam Guard, klik "Buat Kode" di halaman ini dan masukkan kodenya
+4. Setelah login, buka Library dan install/download game-nya
+5. Setelah download selesai, klik menu Steam → Go Offline
+6. Jalankan dan mainkan game dalam mode offline
 
-**Important:**
-- Always play in OFFLINE mode to avoid conflicts with other users
-- Do not change the account password
-- Do not add friends or modify account settings"""
+**Penting:**
+- Selalu main dalam mode OFFLINE untuk menghindari konflik dengan pengguna lain
+- Jangan ubah password akun
+- Jangan tambah teman atau ubah pengaturan akun"""
 
 
 def admin_required(fn):

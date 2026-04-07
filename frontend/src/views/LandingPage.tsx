@@ -56,39 +56,39 @@ const LandingPage = () => {
   }, [loading, user, router])
 
   const features = [
-    { icon: 'tabler-bolt', title: 'Instant Access', desc: 'Get your Steam credentials and guard code immediately after purchase' },
-    { icon: 'tabler-shield-lock', title: 'Steam Guard Codes', desc: 'Auto-generated 2FA codes — no waiting for seller to respond' },
-    { icon: 'tabler-infinity', title: 'Play Forever', desc: 'Pay once, access forever. No subscriptions or rental timers' },
-    { icon: 'tabler-currency-dollar', title: 'Best Prices', desc: 'Starting from Rp 50.000 per game — fraction of the original price' },
+    { icon: 'tabler-bolt', title: 'Akses Instan', desc: 'Dapatkan kredensial Steam dan kode guard langsung setelah pembelian' },
+    { icon: 'tabler-shield-lock', title: 'Kode Steam Guard', desc: 'Kode 2FA otomatis — nggak perlu nunggu seller bales' },
+    { icon: 'tabler-infinity', title: 'Main Selamanya', desc: 'Bayar sekali, akses selamanya. Tanpa langganan atau batas waktu' },
+    { icon: 'tabler-currency-dollar', title: 'Harga Terjangkau', desc: 'Mulai dari Rp 50.000 per game — jauh lebih murah dari harga asli' },
   ]
 
   const steps = [
-    { num: '1', title: 'Browse Games', desc: 'Find the game you want from our catalog' },
-    { num: '2', title: 'Create Account & Pay', desc: 'Register and complete payment' },
-    { num: '3', title: 'Get Credentials', desc: 'Receive Steam username, password & guard code instantly' },
-    { num: '4', title: 'Play Offline', desc: 'Login, download, go offline, and enjoy' },
+    { num: '1', title: 'Cari Game', desc: 'Temukan game yang kamu mau dari katalog kami' },
+    { num: '2', title: 'Daftar & Bayar', desc: 'Buat akun dan selesaikan pembayaran' },
+    { num: '3', title: 'Dapat Akses Login', desc: 'Terima username, password & kode guard Steam secara instan' },
+    { num: '4', title: 'Main Offline', desc: 'Login, download, masuk offline mode, dan nikmati' },
   ]
 
   const faqs = [
     {
-      q: 'How does Playfast work?',
-      a: 'Playfast provides you with Steam account credentials that have the game you want already installed. After purchase, you receive a username, password, and auto-generated Steam Guard code. Simply log in to Steam, download the game, switch to offline mode, and play.'
+      q: 'Bagaimana cara kerja Playfast?',
+      a: 'Playfast menyediakan kredensial akun Steam yang sudah terinstall game yang kamu inginkan. Setelah pembelian, kamu akan menerima username, password, dan kode Steam Guard otomatis. Tinggal login ke Steam, download game-nya, masuk offline mode, dan langsung main.'
     },
     {
-      q: 'Is this a subscription or a one-time purchase?',
-      a: 'It is a one-time purchase. Once you buy access to a game, you can use the credentials and generate Steam Guard codes indefinitely. There are no recurring fees or rental timers.'
+      q: 'Ini langganan atau beli putus?',
+      a: 'Ini beli putus. Begitu kamu beli akses ke sebuah game, kamu bisa pakai kredensial dan generate kode Steam Guard tanpa batas waktu. Nggak ada biaya berulang atau timer sewa.'
     },
     {
-      q: 'What is a Steam Guard code and why do I need it?',
-      a: 'Steam Guard is Steam\'s two-factor authentication system. When you log in from a new device, Steam requires a verification code. Playfast automatically generates these codes for you so you never have to wait for a seller to provide one manually.'
+      q: 'Apa itu kode Steam Guard dan kenapa dibutuhkan?',
+      a: 'Steam Guard adalah sistem autentikasi dua faktor dari Steam. Saat kamu login dari perangkat baru, Steam meminta kode verifikasi. Playfast otomatis generate kode ini buat kamu jadi nggak perlu nunggu seller kirim manual.'
     },
     {
-      q: 'Can I play online multiplayer games?',
-      a: 'Playfast is designed primarily for offline/single-player gaming. Since accounts are shared, online play may be limited. We recommend using Playfast for story-driven and single-player games for the best experience.'
+      q: 'Bisa main game online multiplayer?',
+      a: 'Playfast dirancang utamanya untuk gaming offline/single-player. Karena akun digunakan bersama, main online mungkin terbatas. Kami sarankan pakai Playfast untuk game story-driven dan single-player supaya pengalaman mainnya maksimal.'
     },
     {
-      q: 'What happens if my access stops working?',
-      a: 'If you experience any issues with your access, you can generate a new Steam Guard code from your Play page at any time. If an account-level issue occurs, our system will notify you and we will work to resolve it promptly.'
+      q: 'Gimana kalau akses saya bermasalah?',
+      a: 'Kalau kamu mengalami masalah dengan akses, kamu bisa generate kode Steam Guard baru dari halaman Play kapan saja. Kalau ada masalah di level akun, sistem kami akan memberitahu kamu dan kami akan segera menyelesaikannya.'
     },
   ]
 
@@ -147,10 +147,10 @@ const LandingPage = () => {
           </Typography>
           <Box sx={{ display: 'flex', gap: 1.5 }}>
             <Button component={Link} href='/login' variant='text' sx={{ color: '#c7d5e0' }}>
-              Sign In
+              Masuk
             </Button>
             <Button component={Link} href='/register' variant='contained' size='small'>
-              Get Started
+              Daftar
             </Button>
           </Box>
         </Box>
@@ -176,7 +176,7 @@ const LandingPage = () => {
                 letterSpacing: '-0.02em',
               }}
             >
-              Play Any Steam Game,{' '}
+              Main Game Steam Apapun,{' '}
               <Box
                 component='span'
                 sx={{
@@ -186,7 +186,7 @@ const LandingPage = () => {
                   WebkitTextFillColor: 'transparent',
                 }}
               >
-                Instantly
+                Langsung Main!
               </Box>
             </Typography>
             <Typography
@@ -201,7 +201,7 @@ const LandingPage = () => {
                 fontSize: { xs: '1rem', md: '1.15rem' },
               }}
             >
-              Get instant access to thousands of Steam games. Auto-generated Steam Guard codes — no waiting, no hassle. Pay once, play forever.
+              Akses ribuan game Steam secara instan. Kode Steam Guard otomatis — tanpa ribet. Bayar sekali, main selamanya.
             </Typography>
 
             {/* Social proof */}
@@ -218,7 +218,7 @@ const LandingPage = () => {
               }}
             >
               <i className='tabler-users' style={{ fontSize: 18 }} />
-              Trusted by 500+ gamers across Indonesia
+              Dipercaya 500+ gamer di seluruh Indonesia
             </Typography>
 
             <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -239,7 +239,7 @@ const LandingPage = () => {
                   },
                 }}
               >
-                Browse Games
+                Cari Game
               </Button>
               <Button
                 component={Link}
@@ -256,7 +256,7 @@ const LandingPage = () => {
                   '&:hover': { borderColor: '#00E676', bgcolor: 'rgba(0,230,118,0.04)' },
                 }}
               >
-                Create Account
+                Buat Akun
               </Button>
             </Box>
           </Box>
@@ -273,9 +273,9 @@ const LandingPage = () => {
             }}
           >
             {[
-              { label: 'Starting from', value: 'Rp 50K' },
-              { label: 'Access Duration', value: 'Forever' },
-              { label: 'Guard Code', value: 'Instant' },
+              { label: 'Mulai dari', value: 'Rp 50K' },
+              { label: 'Durasi Akses', value: 'Selamanya' },
+              { label: 'Kode Guard', value: 'Instan' },
             ].map(s => (
               <Box key={s.label} sx={{ textAlign: 'center', minWidth: 100 }}>
                 <Typography
@@ -343,10 +343,10 @@ const LandingPage = () => {
         <Box sx={{ py: 10, bgcolor: 'rgba(0,0,0,0.15)' }}>
           <Container maxWidth='md'>
             <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>
-              How It Works
+              Cara Mainnya
             </Typography>
             <Typography variant='body1' sx={{ textAlign: 'center', color: '#8f98a0', mb: 6 }}>
-              Get playing in four simple steps
+              Mulai main dalam empat langkah mudah
             </Typography>
             <Grid container spacing={4}>
               {steps.map((s, idx) => (
@@ -394,10 +394,10 @@ const LandingPage = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
               <Box>
                 <Typography variant='h4' sx={{ fontWeight: 700 }}>
-                  Featured Games
+                  Game Pilihan
                 </Typography>
                 <Typography variant='body2' sx={{ color: '#8f98a0', mt: 0.5 }}>
-                  Popular titles available right now
+                  Judul populer yang tersedia sekarang
                 </Typography>
               </Box>
               <Button
@@ -407,7 +407,7 @@ const LandingPage = () => {
                 endIcon={<i className='tabler-arrow-right' />}
                 sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
               >
-                View All
+                Lihat Semua
               </Button>
             </Box>
             <Grid container spacing={3}>
@@ -458,7 +458,7 @@ const LandingPage = () => {
             </Grid>
             <Box sx={{ textAlign: 'center', mt: 4, display: { xs: 'block', sm: 'none' } }}>
               <Button component={Link} href='/store' variant='outlined' endIcon={<i className='tabler-arrow-right' />}>
-                View All Games
+                Lihat Semua Game
               </Button>
             </Box>
           </Container>
@@ -468,10 +468,10 @@ const LandingPage = () => {
         <Box sx={{ py: 10, bgcolor: 'rgba(0,0,0,0.15)' }}>
           <Container maxWidth='md'>
             <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>
-              Frequently Asked Questions
+              Pertanyaan yang Sering Ditanyakan
             </Typography>
             <Typography variant='body1' sx={{ textAlign: 'center', color: '#8f98a0', mb: 5 }}>
-              Everything you need to know about Playfast
+              Semua yang perlu kamu tahu tentang Playfast
             </Typography>
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -522,10 +522,10 @@ const LandingPage = () => {
           <Container maxWidth='sm'>
             <i className='tabler-rocket' style={{ fontSize: 48, color: '#00E676', marginBottom: 16 }} />
             <Typography variant='h4' sx={{ fontWeight: 700, mb: 2 }}>
-              Ready to Play?
+              Siap Main?
             </Typography>
             <Typography sx={{ color: '#8f98a0', mb: 4, lineHeight: 1.7 }}>
-              Create your free account and start playing in under a minute. No credit card required.
+              Buat akun gratis dan mulai main dalam hitungan menit.
             </Typography>
             <Button
               component={Link}
@@ -543,7 +543,7 @@ const LandingPage = () => {
                 },
               }}
             >
-              Get Started Free
+              Daftar Gratis
             </Button>
           </Container>
         </Box>
@@ -551,7 +551,7 @@ const LandingPage = () => {
         {/* Footer */}
         <Box sx={{ py: 4, textAlign: 'center', borderTop: '1px solid #1e2a3a' }}>
           <Typography variant='body2' sx={{ color: '#4a5568' }}>
-            Playfast {new Date().getFullYear()}. Not affiliated with Valve or Steam.
+            Playfast {new Date().getFullYear()}. Tidak berafiliasi dengan Valve atau Steam.
           </Typography>
         </Box>
       </Box>

@@ -28,10 +28,10 @@ const MyGamesPage = () => {
     <div className='flex flex-col gap-6'>
       <Box>
         <Typography variant='h4' sx={{ fontWeight: 700, mb: 0.5 }}>
-          My Games
+          Game Saya
         </Typography>
         <Typography color='text.secondary'>
-          Your purchased games and access credentials
+          Game yang sudah kamu beli
         </Typography>
       </Box>
 
@@ -70,10 +70,10 @@ const MyGamesPage = () => {
               <i className='tabler-device-gamepad-2' style={{ fontSize: 48, color: '#00E676', opacity: 0.6 }} />
             </Box>
             <Typography variant='h5' sx={{ fontWeight: 600, mb: 1 }}>
-              No games yet
+              Belum ada game
             </Typography>
             <Typography color='text.secondary' sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
-              You haven't purchased any games yet. Visit the store to browse our catalog and get your first game!
+              Cari game di toko untuk mulai bermain
             </Typography>
             <Button
               variant='contained'
@@ -82,7 +82,7 @@ const MyGamesPage = () => {
               startIcon={<i className='tabler-building-store' />}
               sx={{ fontWeight: 700 }}
             >
-              Browse Store
+              Cari di Toko
             </Button>
           </CardContent>
         </Card>
@@ -130,7 +130,7 @@ const MyGamesPage = () => {
                     <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.5 }}>
                       {isRevoked ? (
                         <Chip
-                          label='Revoked'
+                          label='Dicabut'
                           size='small'
                           color='error'
                           icon={<i className='tabler-ban' style={{ fontSize: 14 }} />}
@@ -143,7 +143,7 @@ const MyGamesPage = () => {
                         />
                       ) : (
                         <Chip
-                          label='Active'
+                          label='Aktif'
                           size='small'
                           color='success'
                           icon={<i className='tabler-check' style={{ fontSize: 14 }} />}
@@ -190,7 +190,7 @@ const MyGamesPage = () => {
                           onClick={() => router.push(`/play/${order.id}`)}
                           sx={{ fontWeight: 600 }}
                         >
-                          Get Code
+                          Ambil Kode
                         </Button>
                       )}
                       <Button
@@ -202,7 +202,7 @@ const MyGamesPage = () => {
                         sx={isRevoked ? { fontWeight: 600 } : { fontWeight: 600, minWidth: 0, px: 2 }}
                         disabled={isRevoked}
                       >
-                        {isRevoked ? 'Revoked' : 'Play'}
+                        {isRevoked ? 'Dicabut' : 'Main'}
                       </Button>
                     </Box>
                   </CardContent>

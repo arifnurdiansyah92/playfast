@@ -177,7 +177,7 @@ const PlayPage = ({ orderId }: Props) => {
         onClick={() => router.push('/my-games')}
         sx={{ alignSelf: 'flex-start' }}
       >
-        Back to My Games
+        Kembali ke Game Saya
       </Button>
 
       {/* Game Header with Image */}
@@ -210,7 +210,7 @@ const PlayPage = ({ orderId }: Props) => {
               {order.game?.name}
             </Typography>
             <Typography variant='body2' color='text.secondary'>
-              Account: <Box component='span' sx={{ fontFamily: 'monospace' }}>{order.credentials?.account_name}</Box>
+              Akun: <Box component='span' sx={{ fontFamily: 'monospace' }}>{order.credentials?.account_name}</Box>
             </Typography>
           </Box>
         </CardContent>
@@ -219,10 +219,10 @@ const PlayPage = ({ orderId }: Props) => {
       {order.is_revoked && (
         <Alert severity='error' sx={{ fontSize: '1rem' }}>
           <Typography variant='subtitle1' sx={{ fontWeight: 700 }}>
-            Access Revoked
+            Akses Dicabut
           </Typography>
           <Typography variant='body2'>
-            Your access to this game has been revoked by an administrator. You can no longer generate Steam Guard codes or use the credentials below.
+            Akses kamu ke game ini telah dicabut oleh administrator. Kamu tidak bisa lagi menghasilkan kode Steam Guard atau menggunakan kredensial di bawah.
           </Typography>
         </Alert>
       )}
@@ -232,7 +232,7 @@ const PlayPage = ({ orderId }: Props) => {
         <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
           <Typography variant='h6' sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <i className='tabler-key' style={{ fontSize: 22 }} />
-            Login Credentials
+            Kredensial Login
           </Typography>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -252,13 +252,13 @@ const PlayPage = ({ orderId }: Props) => {
             >
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant='caption' color='text.secondary'>
-                  Steam Username
+                  Username Steam
                 </Typography>
                 <Typography variant='h6' sx={{ fontFamily: 'monospace', fontWeight: 600 }} noWrap>
                   {order.credentials?.account_name || 'N/A'}
                 </Typography>
               </Box>
-              <Tooltip title={justCopied === 'Username' ? 'Copied!' : 'Copy username'}>
+              <Tooltip title={justCopied === 'Username' ? 'Disalin!' : 'Salin username'}>
                 <IconButton
                   onClick={() => copyToClipboard(order.credentials?.account_name || 'N/A', 'Username')}
                   color={justCopied === 'Username' ? 'success' : 'primary'}
@@ -285,14 +285,14 @@ const PlayPage = ({ orderId }: Props) => {
             >
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant='caption' color='text.secondary'>
-                  Steam Password
+                  Password Steam
                 </Typography>
                 <Typography variant='h6' sx={{ fontFamily: 'monospace', fontWeight: 600 }} noWrap>
                   {order.credentials?.password || '********'}
                 </Typography>
               </Box>
               {order.credentials?.password && (
-                <Tooltip title={justCopied === 'Password' ? 'Copied!' : 'Copy password'}>
+                <Tooltip title={justCopied === 'Password' ? 'Disalin!' : 'Salin password'}>
                   <IconButton
                     onClick={() => copyToClipboard(order.credentials!.password, 'Password')}
                     color={justCopied === 'Password' ? 'success' : 'primary'}
@@ -318,7 +318,7 @@ const PlayPage = ({ orderId }: Props) => {
         <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
           <Typography variant='h6' sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <i className='tabler-shield-lock' style={{ fontSize: 22 }} />
-            Steam Guard Code
+            Kode Steam Guard
           </Typography>
 
           {codeError && (
@@ -386,7 +386,7 @@ const PlayPage = ({ orderId }: Props) => {
                     }}
                   />
                   <Typography variant='caption' sx={{ color: '#8f98a0', fontSize: '0.65rem' }}>
-                    {justCopied === 'Steam Guard code' ? 'Copied!' : 'Click'}
+                    {justCopied === 'Steam Guard code' ? 'Disalin!' : 'Klik'}
                   </Typography>
                 </Box>
               </Box>
@@ -396,10 +396,10 @@ const PlayPage = ({ orderId }: Props) => {
                 <CountdownRing seconds={codeExpiresIn} total={30} />
                 <Box sx={{ textAlign: 'left' }}>
                   <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                    {codeExpiresIn > 0 ? `Expires in ${codeExpiresIn}s` : 'Refreshing...'}
+                    {codeExpiresIn > 0 ? `Kedaluwarsa dalam ${codeExpiresIn}d` : 'Memperbarui...'}
                   </Typography>
                   <Typography variant='caption' color='text.secondary'>
-                    Auto-refreshes when expired
+                    Otomatis diperbarui saat kedaluwarsa
                   </Typography>
                 </Box>
               </Box>
@@ -411,7 +411,7 @@ const PlayPage = ({ orderId }: Props) => {
                 startIcon={<i className='tabler-refresh' />}
                 size='small'
               >
-                Get New Code
+                Buat Kode Baru
               </Button>
             </Box>
           ) : (
@@ -433,10 +433,10 @@ const PlayPage = ({ orderId }: Props) => {
                 <i className='tabler-shield-lock' style={{ fontSize: 36, color: '#00E676' }} />
               </Box>
               <Typography variant='body1' sx={{ mb: 1, fontWeight: 500 }}>
-                Need a Steam Guard code?
+                Butuh kode Steam Guard?
               </Typography>
               <Typography color='text.secondary' sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
-                When Steam asks for a verification code during login, click the button below to generate one instantly.
+                Saat Steam meminta kode verifikasi waktu login, klik tombol di bawah untuk langsung generate.
               </Typography>
               <Button
                 variant='contained'
@@ -451,7 +451,7 @@ const PlayPage = ({ orderId }: Props) => {
                   boxShadow: '0 4px 16px rgba(102,192,244,0.2)',
                 }}
               >
-                {codeLoading ? 'Generating...' : 'Generate Steam Guard Code'}
+                {codeLoading ? 'Membuat...' : 'Buat Kode Steam Guard'}
               </Button>
             </Box>
           )}
@@ -464,7 +464,7 @@ const PlayPage = ({ orderId }: Props) => {
           <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
             <Typography variant='h6' sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
               <i className='tabler-book' style={{ fontSize: 22 }} />
-              How to Play
+              Cara Main
             </Typography>
             <Divider sx={{ mb: 2 }} />
             <Box

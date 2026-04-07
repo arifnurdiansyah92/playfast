@@ -69,34 +69,34 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
         renderExpandedMenuItemIcon={{ icon: <i className='tabler-circle text-xs' /> }}
         menuSectionStyles={menuSectionStyles(verticalNavOptions, theme)}
       >
-        <MenuSection label='Browse'>
+        <MenuSection label='Menu'>
           <MenuItem href='/store' icon={<i className='tabler-building-store' />}>
-            Store
+            Toko Game
           </MenuItem>
           <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
-            My Games
+            Game Saya
           </MenuItem>
         </MenuSection>
         {isAdmin && (
-          <MenuSection label='Administration'>
+          <MenuSection label='Admin'>
             <MenuItem href='/admin' icon={<i className='tabler-dashboard' />}>
               Dashboard
             </MenuItem>
-            <SubMenu label='Manage' icon={<i className='tabler-settings' />}>
+            <SubMenu label='Kelola' icon={<i className='tabler-settings' />}>
               <MenuItem href='/admin/accounts' icon={<i className='tabler-users' />}>
-                Accounts
+                Akun Steam
               </MenuItem>
               <MenuItem href='/admin/games' icon={<i className='tabler-device-gamepad' />}>
-                Games
+                Game
               </MenuItem>
               <MenuItem href='/admin/orders' icon={<i className='tabler-receipt' />}>
-                Orders
+                Pesanan
               </MenuItem>
               <MenuItem href='/admin/users' icon={<i className='tabler-users' />}>
-                Users
+                Pengguna
               </MenuItem>
               <MenuItem href='/admin/audit' icon={<i className='tabler-file-search' />}>
-                Audit Log
+                Log Audit
               </MenuItem>
             </SubMenu>
           </MenuSection>

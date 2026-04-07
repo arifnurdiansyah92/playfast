@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import MyGamesPage from '@views/my-games/MyGamesPage'
 
 export const metadata: Metadata = {
-  title: 'My Games - Playfast',
+  title: 'Game Saya - Playfast',
   description: 'View your purchased games'
 }
 

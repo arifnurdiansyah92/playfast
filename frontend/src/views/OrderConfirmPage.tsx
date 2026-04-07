@@ -56,10 +56,10 @@ const OrderConfirmPage = ({ orderId }: Props) => {
           <i className='tabler-check' style={{ fontSize: 36, color: 'var(--mui-palette-success-main)' }} />
         </Box>
         <Typography variant='h4' sx={{ fontWeight: 700, mb: 1 }}>
-          You're all set!
+          Selesai!
         </Typography>
         <Typography color='text.secondary'>
-          Your access has been granted. You can start playing now.
+          Akses kamu sudah aktif. Kamu bisa langsung main sekarang.
         </Typography>
       </Box>
 
@@ -76,7 +76,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
             />
             <Box>
               <Typography variant='h6' sx={{ fontWeight: 700 }}>{order.game?.name}</Typography>
-              <Typography variant='body2' color='text.secondary'>Order #{order.id}</Typography>
+              <Typography variant='body2' color='text.secondary'>Pesanan #{order.id}</Typography>
               <Typography variant='body2' color='text.secondary'>
                 {new Date(order.created_at).toLocaleDateString('id-ID', {
                   day: 'numeric', month: 'long', year: 'numeric',
@@ -90,19 +90,19 @@ const OrderConfirmPage = ({ orderId }: Props) => {
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
             <Typography color='text.secondary'>Status</Typography>
-            <Typography sx={{ fontWeight: 600, color: 'success.main' }}>Active</Typography>
+            <Typography sx={{ fontWeight: 600, color: 'success.main' }}>Aktif</Typography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-            <Typography color='text.secondary'>Price</Typography>
+            <Typography color='text.secondary'>Harga</Typography>
             <Typography sx={{ fontWeight: 600 }}>{formatIDR(order.game?.price ?? 0)}</Typography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-            <Typography color='text.secondary'>Access</Typography>
-            <Typography sx={{ fontWeight: 600 }}>Permanent</Typography>
+            <Typography color='text.secondary'>Akses</Typography>
+            <Typography sx={{ fontWeight: 600 }}>Selamanya</Typography>
           </Box>
           {order.credentials && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography color='text.secondary'>Account</Typography>
+              <Typography color='text.secondary'>Akun</Typography>
               <Typography sx={{ fontWeight: 600, fontFamily: 'monospace' }}>{order.credentials.account_name}</Typography>
             </Box>
           )}
@@ -114,12 +114,12 @@ const OrderConfirmPage = ({ orderId }: Props) => {
         <CardContent sx={{ p: 3 }}>
           <Typography variant='subtitle1' sx={{ fontWeight: 700, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
             <i className='tabler-info-circle' style={{ fontSize: 20 }} />
-            Next Steps
+            Langkah Selanjutnya
           </Typography>
           <Box component='ol' sx={{ pl: 2.5, m: 0, color: 'text.secondary', '& li': { mb: 0.5 } }}>
-            <li>Click "Start Playing" below to see your login credentials</li>
-            <li>Generate a Steam Guard code when prompted</li>
-            <li>Switch to offline mode after downloading the game</li>
+            <li>Klik "Mulai Main" di bawah untuk melihat kredensial login kamu</li>
+            <li>Generate kode Steam Guard saat diminta</li>
+            <li>Masuk ke offline mode setelah download game selesai</li>
           </Box>
         </CardContent>
       </Card>
@@ -134,7 +134,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
           onClick={() => router.push(`/play/${order.id}`)}
           sx={{ py: 1.5, fontWeight: 700 }}
         >
-          Start Playing
+          Mulai Main
         </Button>
         <Button
           variant='outlined'
@@ -143,7 +143,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
           href='/store'
           sx={{ minWidth: 140, py: 1.5, borderColor: '#3d5a80', color: '#c7d5e0' }}
         >
-          Browse More
+          Cari Game Lain
         </Button>
       </Box>
     </Box>

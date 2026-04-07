@@ -100,11 +100,11 @@ const GameDetailPage = ({ appid }: Props) => {
       <div className='flex flex-col gap-4'>
         <Breadcrumbs sx={{ color: 'text.secondary' }}>
           <Link href='/store' style={{ color: 'inherit', textDecoration: 'none' }}>
-            Store
+            Toko
           </Link>
-          <Typography color='text.primary'>Not Found</Typography>
+          <Typography color='text.primary'>Tidak Ditemukan</Typography>
         </Breadcrumbs>
-        <Alert severity='error'>Game not found</Alert>
+        <Alert severity='error'>Game tidak ditemukan</Alert>
       </div>
     )
   }
@@ -119,7 +119,7 @@ const GameDetailPage = ({ appid }: Props) => {
         separator={<i className='tabler-chevron-right' style={{ fontSize: 14, color: '#8f98a0' }} />}
         sx={{ '& a': { color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } } }}
       >
-        <Link href='/store'>Store</Link>
+        <Link href='/store'>Toko</Link>
         <Typography color='text.primary' sx={{ fontWeight: 600 }}>{game.name}</Typography>
       </Breadcrumbs>
 
@@ -206,7 +206,7 @@ const GameDetailPage = ({ appid }: Props) => {
               {existingOrder ? (
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Chip
-                    label='Already Owned'
+                    label='Sudah Dimiliki'
                     color='info'
                     variant='tonal'
                     icon={<i className='tabler-check' style={{ fontSize: 16 }} />}
@@ -217,7 +217,7 @@ const GameDetailPage = ({ appid }: Props) => {
                     startIcon={<i className='tabler-player-play' />}
                     onClick={() => router.push(`/play/${existingOrder.id}`)}
                   >
-                    Go to Play Page
+                    Buka Halaman Main
                   </Button>
                 </Box>
               ) : (
@@ -236,7 +236,7 @@ const GameDetailPage = ({ appid }: Props) => {
                     '&:hover': { boxShadow: '0 6px 24px rgba(0,230,118,0.3)' },
                   }}
                 >
-                  {buying ? 'Processing...' : user ? 'Get This Game' : 'Sign Up to Get This Game'}
+                  {buying ? 'Memproses...' : user ? 'Dapatkan Game Ini' : 'Daftar untuk Dapatkan Game Ini'}
                 </Button>
               )}
             </CardContent>
@@ -247,9 +247,9 @@ const GameDetailPage = ({ appid }: Props) => {
       {/* Features */}
       <Grid container spacing={2}>
         {[
-          { icon: 'tabler-bolt', title: 'Instant Access', desc: 'Get credentials immediately after purchase' },
-          { icon: 'tabler-shield-lock', title: 'Steam Guard', desc: 'Auto-generated 2FA codes on demand' },
-          { icon: 'tabler-infinity', title: 'Play Forever', desc: 'One-time purchase, lifetime access' },
+          { icon: 'tabler-bolt', title: 'Akses Instan', desc: 'Dapatkan kredensial langsung setelah pembelian' },
+          { icon: 'tabler-shield-lock', title: 'Steam Guard', desc: 'Kode 2FA otomatis, tanpa ribet' },
+          { icon: 'tabler-infinity', title: 'Main Selamanya', desc: 'Bayar sekali, akses selamanya' },
         ].map(f => (
           <Grid size={{ xs: 12, sm: 4 }} key={f.title}>
             <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>

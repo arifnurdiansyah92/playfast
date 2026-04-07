@@ -55,10 +55,10 @@ const LoginPage = () => {
           </Box>
           <Box sx={{ mb: 6 }}>
             <Typography variant='h5' sx={{ mb: 1.5 }}>
-              Welcome back!
+              Selamat datang!
             </Typography>
             <Typography color='text.secondary'>
-              Sign in to access your Steam games
+              Masuk untuk akses game Steam kamu
             </Typography>
           </Box>
           {error && (
@@ -78,7 +78,7 @@ const LoginPage = () => {
             <CustomTextField
               fullWidth
               label='Password'
-              placeholder='Enter your password'
+              placeholder='Masukkan password kamu'
               type={isPasswordShown ? 'text' : 'password'}
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -95,12 +95,12 @@ const LoginPage = () => {
               }}
             />
             <Button fullWidth variant='contained' type='submit' disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? 'Sedang masuk...' : 'Masuk'}
             </Button>
             <div className='flex justify-center items-center flex-wrap gap-2'>
-              <Typography>New here?</Typography>
+              <Typography>Belum punya akun?</Typography>
               <Typography component={Link} href={redirect ? `/register?redirect=${encodeURIComponent(redirect)}` : '/register'} color='primary.main'>
-                Create an account
+                Daftar sekarang
               </Typography>
             </div>
           </form>

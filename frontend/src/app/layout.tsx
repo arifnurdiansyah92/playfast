@@ -21,8 +21,8 @@ import '@/app/globals.css'
 import '@assets/iconify-icons/generated-icons.css'
 
 export const metadata = {
-  title: 'Playfast - Instant Steam Game Access',
-  description: 'Share and play Steam games with ease'
+  title: 'Playfast - Akses Game Steam Instan',
+  description: 'Main game Steam apapun secara instan. Kode Steam Guard otomatis.'
 }
 
 const RootLayout = async (props: ChildrenType) => {

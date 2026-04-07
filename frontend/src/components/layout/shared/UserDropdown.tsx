@@ -122,15 +122,15 @@ const UserDropdown = () => {
                   <Divider className='mlb-1' />
                   <MenuItem className='mli-2 gap-3' onClick={e => handleDropdownClose(e, '/profile')}>
                     <i className='tabler-user-circle' />
-                    <Typography color='text.primary'>Profile</Typography>
+                    <Typography color='text.primary'>Profil</Typography>
                   </MenuItem>
                   <MenuItem className='mli-2 gap-3' onClick={e => handleDropdownClose(e, '/store')}>
                     <i className='tabler-building-store' />
-                    <Typography color='text.primary'>Store</Typography>
+                    <Typography color='text.primary'>Toko Game</Typography>
                   </MenuItem>
                   <MenuItem className='mli-2 gap-3' onClick={e => handleDropdownClose(e, '/my-games')}>
                     <i className='tabler-device-gamepad-2' />
-                    <Typography color='text.primary'>My Games</Typography>
+                    <Typography color='text.primary'>Game Saya</Typography>
                   </MenuItem>
                   <div className='flex items-center plb-2 pli-3'>
                     <Button
@@ -142,7 +142,7 @@ const UserDropdown = () => {
                       onClick={handleUserLogout}
                       sx={{ '& .MuiButton-endIcon': { marginInlineStart: 1.5 } }}
                     >
-                      Logout
+                      Keluar
                     </Button>
                   </div>
                 </MenuList>

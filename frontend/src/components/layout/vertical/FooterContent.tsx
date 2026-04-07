@@ -17,11 +17,11 @@ const FooterContent = () => {
       className={classnames(verticalLayoutClasses.footerContent, 'flex items-center justify-between flex-wrap gap-4')}
     >
       <p>
-        <span className='text-textSecondary'>{`© ${new Date().getFullYear()} Playfast. All rights reserved.`}</span>
+        <span className='text-textSecondary'>{`© ${new Date().getFullYear()} Playfast. Hak cipta dilindungi.`}</span>
       </p>
       {!isBreakpointReached && (
         <div className='flex items-center gap-4'>
-          <span className='text-textSecondary text-sm'>Not affiliated with Valve or Steam.</span>
+          <span className='text-textSecondary text-sm'>Tidak berafiliasi dengan Valve atau Steam.</span>
         </div>
       )}
     </div>

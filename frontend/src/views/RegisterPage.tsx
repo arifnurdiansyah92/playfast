@@ -34,13 +34,13 @@ const RegisterPage = () => {
     setError('')
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      setError('Password tidak cocok')
 
       return
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters')
+      setError('Password minimal 6 karakter')
 
       return
     }
@@ -69,10 +69,10 @@ const RegisterPage = () => {
           </Box>
           <Box sx={{ mb: 6 }}>
             <Typography variant='h5' sx={{ mb: 1.5 }}>
-              Create Account
+              Buat Akun
             </Typography>
             <Typography color='text.secondary'>
-              Join Playfast to start playing Steam games
+              Bergabung di Playfast untuk mulai main game Steam
             </Typography>
           </Box>
           {error && (
@@ -92,7 +92,7 @@ const RegisterPage = () => {
             <CustomTextField
               fullWidth
               label='Password'
-              placeholder='Min. 6 characters'
+              placeholder='Min. 6 karakter'
               type={isPasswordShown ? 'text' : 'password'}
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -110,19 +110,19 @@ const RegisterPage = () => {
             />
             <CustomTextField
               fullWidth
-              label='Confirm Password'
-              placeholder='Re-enter your password'
+              label='Konfirmasi Password'
+              placeholder='Masukkan ulang password'
               type={isPasswordShown ? 'text' : 'password'}
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
             />
             <Button fullWidth variant='contained' type='submit' disabled={loading}>
-              {loading ? 'Creating account...' : 'Create Account'}
+              {loading ? 'Membuat akun...' : 'Buat Akun'}
             </Button>
             <div className='flex justify-center items-center flex-wrap gap-2'>
-              <Typography>Already have an account?</Typography>
+              <Typography>Sudah punya akun?</Typography>
               <Typography component={Link} href={redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : '/login'} color='primary.main'>
-                Sign in
+                Masuk
               </Typography>
             </div>
           </form>
