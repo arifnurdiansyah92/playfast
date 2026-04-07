@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 
+import { useRouter } from 'next/navigation'
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
@@ -33,6 +35,7 @@ import { useAuth } from '@/contexts/AuthContext'
 
 const AdminAccountsPage = () => {
   const { user } = useAuth()
+  const router = useRouter()
   const queryClient = useQueryClient()
 
   const [addOpen, setAddOpen] = useState(false)
@@ -167,7 +170,11 @@ const AdminAccountsPage = () => {
                 {accounts.map(account => (
                   <TableRow key={account.id} hover sx={{ opacity: account.is_active ? 1 : 0.5 }}>
                     <TableCell>
-                      <Typography variant='subtitle2' sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+                      <Typography
+                        variant='subtitle2'
+                        sx={{ fontWeight: 600, fontFamily: 'monospace', cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
+                        onClick={() => router.push(`/admin/accounts/${account.id}`)}
+                      >
                         {account.account_name}
                       </Typography>
                     </TableCell>

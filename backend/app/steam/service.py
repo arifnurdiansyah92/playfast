@@ -13,7 +13,7 @@ _project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from steam_guard import generate_steam_guard_code, code_time_remaining
+from steam_guard import generate_steam_guard_code, code_time_remaining, build_confirmation_params
 from steam_client import steam_login
 
 # Steam API base
@@ -133,3 +133,70 @@ def fetch_owned_games(access_token: str, steam_id: str) -> list[dict]:
             }
         )
     return games
+
+
+# ---------------------------------------------------------------------------
+# Steam Account Actions (confirmations, login, etc.)
+# ---------------------------------------------------------------------------
+
+CONF_URL = "https://steamcommunity.com/mobileconf"
+
+
+def _build_session(mafile_data: dict) -> requests.Session:
+    """Build an authenticated requests.Session from mafile data."""
+    session_data = mafile_data.get("Session", {})
+    s = requests.Session()
+    s.cookies.set("steamLoginSecure", session_data.get("SteamLoginSecure", ""), domain="steamcommunity.com")
+    s.cookies.set("sessionid", session_data.get("SessionID", ""), domain="steamcommunity.com")
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Linux; U; Android 13; en-us) AppleWebKit/999+ (KHTML, like Gecko) Steam/3.8.5",
+        "Accept": "application/json",
+    })
+    return s
+
+
+def fetch_confirmations(mafile_data: dict) -> list[dict]:
+    """Fetch pending trade/market confirmations for a Steam account."""
+    identity_secret = mafile_data.get("identity_secret", "")
+    device_id = mafile_data.get("device_id", "")
+    steam_id = mafile_data.get("Session", {}).get("SteamID", "")
+
+    if not identity_secret or not device_id or not steam_id:
+        return []
+
+    params = build_confirmation_params(identity_secret, device_id, steam_id, "getlist")
+    sess = _build_session(mafile_data)
+    resp = sess.get(f"{CONF_URL}/getlist", params=params, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    if not data.get("success"):
+        return []
+
+    return data.get("conf", [])
+
+
+def act_on_confirmation(mafile_data: dict, conf_id: str, conf_key: str, action: str) -> bool:
+    """Accept or deny a single confirmation. action = 'allow' or 'cancel'."""
+    identity_secret = mafile_data.get("identity_secret", "")
+    device_id = mafile_data.get("device_id", "")
+    steam_id = mafile_data.get("Session", {}).get("SteamID", "")
+
+    tag = "allow" if action == "allow" else "cancel"
+    params = build_confirmation_params(identity_secret, device_id, steam_id, tag)
+    params["op"] = tag
+    params["cid"] = conf_id
+    params["ck"] = conf_key
+
+    sess = _build_session(mafile_data)
+    resp = sess.get(f"{CONF_URL}/ajaxop", params=params, timeout=15)
+    resp.raise_for_status()
+    return resp.json().get("success", False)
+
+
+def steam_account_login(mafile_data: dict, password: str) -> dict:
+    """Perform full Steam login. Returns updated session data."""
+    account_name = mafile_data.get("account_name", "")
+    shared_secret = mafile_data.get("shared_secret", "")
+    new_session = steam_login(account_name, password, shared_secret)
+    return new_session

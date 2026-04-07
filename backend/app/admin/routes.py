@@ -20,7 +20,14 @@ from app.models import (
     SteamAccount,
     User,
 )
-from app.steam.service import ensure_valid_token, fetch_owned_games
+from app.steam.service import (
+    ensure_valid_token,
+    fetch_owned_games,
+    get_guard_code,
+    fetch_confirmations,
+    act_on_confirmation,
+    steam_account_login,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -284,6 +291,100 @@ def delete_account(account_id: int):
     db.session.delete(account)
     db.session.commit()
     return jsonify({"message": "Account deleted"}), 200
+
+
+# ---------------------------------------------------------------------------
+# Account Actions (Steam Guard, Confirmations, Login)
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/accounts/<int:account_id>/code", methods=["POST"])
+@admin_required
+def admin_get_code(account_id: int):
+    """Generate a Steam Guard code for an account."""
+    account = db.session.get(SteamAccount, account_id)
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+
+    shared_secret = account.mafile_data.get("shared_secret", "")
+    if not shared_secret:
+        return jsonify({"error": "No shared_secret in mafile"}), 400
+
+    result = get_guard_code(shared_secret)
+    return jsonify(result), 200
+
+
+@admin_bp.route("/accounts/<int:account_id>/login", methods=["POST"])
+@admin_required
+def admin_login_account(account_id: int):
+    """Force a fresh Steam login to refresh tokens."""
+    account = db.session.get(SteamAccount, account_id)
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+
+    try:
+        new_session = steam_account_login(account.mafile_data, account.password)
+        # Update tokens in DB
+        mafile = account.mafile_data.copy()
+        session = mafile.get("Session", {})
+        session["SteamID"] = new_session["SteamID"]
+        session["AccessToken"] = new_session["AccessToken"]
+        session["RefreshToken"] = new_session["RefreshToken"]
+        session["SteamLoginSecure"] = f"{new_session['SteamID']}%7C%7C{new_session['AccessToken']}"
+        mafile["Session"] = session
+        account.mafile_data = mafile
+        account.steam_id = new_session["SteamID"]
+        db.session.commit()
+        return jsonify({"message": "Login successful, tokens updated"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Login failed: {str(e)}"}), 400
+
+
+@admin_bp.route("/accounts/<int:account_id>/confirmations", methods=["GET"])
+@admin_required
+def admin_get_confirmations(account_id: int):
+    """Fetch pending trade/market confirmations."""
+    account = db.session.get(SteamAccount, account_id)
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+
+    # Ensure valid token first
+    mafile = account.mafile_data.copy()
+    ensure_valid_token(mafile, account.password)
+    if mafile != account.mafile_data:
+        account.mafile_data = mafile
+        db.session.commit()
+
+    try:
+        confs = fetch_confirmations(account.mafile_data)
+        return jsonify({"confirmations": confs}), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch confirmations: {str(e)}"}), 502
+
+
+@admin_bp.route("/accounts/<int:account_id>/confirmations/<conf_id>", methods=["POST"])
+@admin_required
+def admin_act_confirmation(account_id: int, conf_id: str):
+    """Accept or deny a confirmation. Body: {"action": "allow"|"cancel", "nonce": "..."}"""
+    account = db.session.get(SteamAccount, account_id)
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+
+    data = request.get_json() or {}
+    action = data.get("action", "allow")
+    nonce = data.get("nonce", "")
+
+    if not nonce:
+        return jsonify({"error": "nonce is required"}), 400
+
+    try:
+        ok = act_on_confirmation(account.mafile_data, conf_id, nonce, action)
+        return jsonify({
+            "success": ok,
+            "message": "Confirmation accepted" if action == "allow" else "Confirmation denied"
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
 
 
 # ---------------------------------------------------------------------------

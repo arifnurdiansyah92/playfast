@@ -305,6 +305,21 @@ export const adminApi = {
   syncAccount(id: number) {
     return request<{ success: boolean; total_games?: number; error?: string }>(`/api/admin/accounts/${id}/sync`, { method: 'POST' })
   },
+  getAccountCode(id: number) {
+    return request<{ code: string; remaining: number }>(`/api/admin/accounts/${id}/code`, { method: 'POST' })
+  },
+  loginAccount(id: number) {
+    return request<{ message: string }>(`/api/admin/accounts/${id}/login`, { method: 'POST' })
+  },
+  getConfirmations(id: number) {
+    return request<{ confirmations: any[] }>(`/api/admin/accounts/${id}/confirmations`)
+  },
+  actOnConfirmation(accountId: number, confId: string, nonce: string, action: 'allow' | 'cancel') {
+    return request<{ success: boolean; message: string }>(`/api/admin/accounts/${accountId}/confirmations/${confId}`, {
+      method: 'POST',
+      body: JSON.stringify({ action, nonce })
+    })
+  },
   syncGames() {
     return request<{ message: string }>('/api/admin/accounts/sync-games', { method: 'POST' })
   },
