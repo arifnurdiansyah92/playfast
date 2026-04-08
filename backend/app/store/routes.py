@@ -607,12 +607,15 @@ def my_games():
             gd["assignment_id"] = a.id
             games_result.append(gd)
 
-        # All OTHER games on the same account = bonus
+        # All OTHER games on the same account = bonus (skip free games)
         bonus_links = (
             GameAccount.query
             .filter_by(steam_account_id=a.steam_account_id)
             .join(Game)
-            .filter(Game.is_enabled == True)  # noqa: E712
+            .filter(
+                Game.is_enabled == True,  # noqa: E712
+                Game.price > 0,
+            )
             .all()
         )
         for link in bonus_links:
