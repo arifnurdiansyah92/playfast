@@ -2,8 +2,10 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import wraps
+
+from sqlalchemy import func, cast, Date
 
 import requests as http_requests
 from flask import Blueprint, request, jsonify
@@ -107,6 +109,45 @@ def dashboard():
             "created_at": c.created_at.isoformat(),
         })
 
+    # Top 10 most ordered games
+    top_games_query = (
+        db.session.query(Game.name, Game.appid, func.count(Order.id).label("order_count"))
+        .join(Order, Order.game_id == Game.id)
+        .filter(Order.status == "fulfilled")
+        .group_by(Game.id, Game.name, Game.appid)
+        .order_by(func.count(Order.id).desc())
+        .limit(10)
+        .all()
+    )
+    top_games_data = [
+        {"name": row.name, "appid": row.appid, "order_count": row.order_count}
+        for row in top_games_query
+    ]
+
+    # Orders per day for last 14 days
+    fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
+    trend_query = (
+        db.session.query(
+            cast(Order.created_at, Date).label("date"),
+            func.count(Order.id).label("count"),
+        )
+        .filter(Order.created_at >= fourteen_days_ago)
+        .group_by(cast(Order.created_at, Date))
+        .order_by(cast(Order.created_at, Date).asc())
+        .all()
+    )
+    order_trend_data = [
+        {"date": str(row.date), "count": row.count}
+        for row in trend_query
+    ]
+
+    # Total revenue from fulfilled orders
+    revenue_total = (
+        db.session.query(func.coalesce(func.sum(Order.amount), 0))
+        .filter(Order.status == "fulfilled")
+        .scalar()
+    )
+
     return jsonify({
         "total_accounts": total_accounts,
         "active_accounts": active_accounts,
@@ -119,6 +160,9 @@ def dashboard():
         "total_users": total_users,
         "recent_orders": recent_orders_data,
         "recent_codes": recent_codes_data,
+        "top_games": top_games_data,
+        "order_trend": order_trend_data,
+        "revenue_total": revenue_total,
     }), 200
 
 

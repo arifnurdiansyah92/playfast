@@ -20,7 +20,7 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 
-import { adminApi } from '@/lib/api'
+import { adminApi, formatIDR } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface StatCardProps {
@@ -140,6 +140,126 @@ const AdminDashboardPage = () => {
             color='warning'
             onClick={() => router.push('/admin/users')}
           />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <StatCard
+            title='Total Revenue'
+            value={formatIDR(data?.revenue_total ?? 0)}
+            subtitle='From fulfilled orders'
+            icon='tabler-currency-dollar'
+            color='success'
+          />
+        </Grid>
+      </Grid>
+
+      {/* Top Games & Order Trend */}
+      <Grid container spacing={3}>
+        {/* Top Games */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant='h6' sx={{ mb: 2 }}>Top Games</Typography>
+              {data?.top_games && data.top_games.length > 0 ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {(() => {
+                    const maxCount = Math.max(...data.top_games.map(g => g.order_count))
+                    return data.top_games.map((game, i) => (
+                      <Box key={game.appid} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <Typography variant='caption' color='text.secondary' sx={{ minWidth: 18, textAlign: 'right' }}>
+                          {i + 1}.
+                        </Typography>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant='body2' noWrap sx={{ mb: 0.5 }}>{game.name}</Typography>
+                          <Box sx={{ width: '100%', bgcolor: 'action.hover', borderRadius: 1, height: 8, overflow: 'hidden' }}>
+                            <Box
+                              sx={{
+                                width: `${(game.order_count / maxCount) * 100}%`,
+                                height: '100%',
+                                bgcolor: 'primary.main',
+                                borderRadius: 1,
+                                transition: 'width 0.5s ease',
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                        <Typography variant='body2' sx={{ fontWeight: 600, minWidth: 28, textAlign: 'right' }}>
+                          {game.order_count}
+                        </Typography>
+                      </Box>
+                    ))
+                  })()}
+                </Box>
+              ) : (
+                <Typography color='text.secondary' sx={{ textAlign: 'center', py: 4 }}>No order data yet</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Order Trend */}
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant='h6' sx={{ mb: 2 }}>Order Trend (14 days)</Typography>
+              {data?.order_trend && data.order_trend.length > 0 ? (
+                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: 160, pt: 2 }}>
+                  {(() => {
+                    const maxCount = Math.max(...data.order_trend.map(d => d.count), 1)
+                    return data.order_trend.map(day => {
+                      const barHeight = Math.max((day.count / maxCount) * 120, 4)
+                      const dateObj = new Date(day.date)
+                      const label = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                      return (
+                        <Box
+                          key={day.date}
+                          sx={{
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            height: '100%',
+                          }}
+                        >
+                          <Typography variant='caption' sx={{ fontWeight: 600, mb: 0.5, fontSize: '0.65rem' }}>
+                            {day.count}
+                          </Typography>
+                          <Box
+                            sx={{
+                              width: '100%',
+                              maxWidth: 36,
+                              height: barHeight,
+                              bgcolor: 'primary.main',
+                              borderRadius: '4px 4px 0 0',
+                              transition: 'height 0.5s ease',
+                              opacity: 0.85,
+                              '&:hover': { opacity: 1 },
+                            }}
+                          />
+                          <Typography
+                            variant='caption'
+                            color='text.secondary'
+                            sx={{
+                              mt: 0.5,
+                              fontSize: '0.6rem',
+                              writingMode: 'vertical-rl',
+                              textOrientation: 'mixed',
+                              height: 36,
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {label}
+                          </Typography>
+                        </Box>
+                      )
+                    })
+                  })()}
+                </Box>
+              ) : (
+                <Typography color='text.secondary' sx={{ textAlign: 'center', py: 4 }}>No order data yet</Typography>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
 

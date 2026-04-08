@@ -279,6 +279,9 @@ export interface DashboardStats {
   total_users: number
   recent_orders: Order[]
   recent_codes: AuditEntry[]
+  top_games: { name: string; appid: number; order_count: number }[]
+  order_trend: { date: string; count: number }[]
+  revenue_total: number
 }
 
 export interface AuditEntry {
