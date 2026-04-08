@@ -563,6 +563,74 @@ def list_orders():
     }), 200
 
 
+@store_bp.route("/my-games", methods=["GET"])
+@jwt_required()
+def my_games():
+    """
+    List all games the user has access to, including bonus games.
+    For each fulfilled order with an assigned account, find ALL games
+    that account owns and return them — purchased ones marked as 'purchased',
+    others as 'bonus'.
+    """
+    user_id = int(get_jwt_identity())
+
+    # Get all active (non-revoked) assignments for this user
+    assignments = (
+        Assignment.query
+        .filter_by(user_id=user_id, is_revoked=False)
+        .join(Order, Assignment.order_id == Order.id)
+        .filter(Order.status == "fulfilled")
+        .all()
+    )
+
+    # Track purchased game IDs and which account serves them
+    purchased_game_ids = {}  # game_id -> assignment
+    account_ids = set()
+
+    for a in assignments:
+        purchased_game_ids[a.game_id] = a
+        account_ids.add(a.steam_account_id)
+
+    # For each assigned account, find ALL games it owns
+    games_result = []
+    seen_game_ids = set()
+
+    for a in assignments:
+        # The purchased game itself
+        game = db.session.get(Game, a.game_id)
+        if game and game.id not in seen_game_ids:
+            seen_game_ids.add(game.id)
+            gd = game.to_dict()
+            gd["type"] = "purchased"
+            gd["order_id"] = a.order_id
+            gd["account_name"] = a.steam_account.account_name if a.steam_account else None
+            gd["assignment_id"] = a.id
+            games_result.append(gd)
+
+        # All OTHER games on the same account = bonus
+        bonus_links = (
+            GameAccount.query
+            .filter_by(steam_account_id=a.steam_account_id)
+            .join(Game)
+            .filter(Game.is_enabled == True)  # noqa: E712
+            .all()
+        )
+        for link in bonus_links:
+            if link.game_id not in seen_game_ids and link.game_id not in purchased_game_ids:
+                seen_game_ids.add(link.game_id)
+                bg = link.game.to_dict()
+                bg["type"] = "bonus"
+                bg["order_id"] = a.order_id  # from the purchase that gave access to this account
+                bg["account_name"] = a.steam_account.account_name if a.steam_account else None
+                bg["assignment_id"] = a.id
+                games_result.append(bg)
+
+    # Sort: purchased first, then bonus, alphabetical within each group
+    games_result.sort(key=lambda g: (0 if g["type"] == "purchased" else 1, g["name"].lower()))
+
+    return jsonify({"games": games_result}), 200
+
+
 @store_bp.route("/orders/<int:order_id>", methods=["GET"])
 @jwt_required()
 def order_detail(order_id: int):

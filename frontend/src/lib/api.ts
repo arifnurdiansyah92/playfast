@@ -224,6 +224,10 @@ export const storeApi = {
     })
     return res
   },
+  async getMyGames() {
+    const res = await request<{ games: (Game & { type: 'purchased' | 'bonus'; order_id: number; account_name: string; assignment_id: number })[] }>('/api/store/my-games')
+    return res.games
+  },
   getOrderStatus(orderId: number | string) {
     return request<{ status: string; payment_type?: string; paid_at?: string }>(`/api/store/orders/${orderId}/status`)
   },
