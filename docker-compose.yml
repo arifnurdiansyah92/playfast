@@ -29,6 +29,9 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production-please}
       FLASK_ENV: production
       FRONTEND_URL: https://playfast.andev.web.id
+      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:-SB-Mid-server-7Fp0W-6BPItzBeHc4WmVz0rh}
+      MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY:-SB-Mid-client-VNwEU_8NEdo5N3og}
+      MIDTRANS_IS_PRODUCTION: ${MIDTRANS_IS_PRODUCTION:-false}
     networks:
       - playfast
     expose:
