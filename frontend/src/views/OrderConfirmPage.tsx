@@ -15,8 +15,59 @@ import Skeleton from '@mui/material/Skeleton'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
 
+import { useQuery } from '@tanstack/react-query'
+
 import { storeApi, formatIDR } from '@/lib/api'
 import type { Order } from '@/lib/api'
+
+const ManualPaymentSection = ({ orderId, amount, gameName }: { orderId: number; amount: number; gameName: string }) => {
+  const { data: config } = useQuery({
+    queryKey: ['payment-config'],
+    queryFn: () => storeApi.getPaymentConfig()
+  })
+
+  if (!config || config.payment_mode !== 'manual') return null
+
+  const waNumber = config.whatsapp_number || ''
+  const waMessage = encodeURIComponent(`Halo admin, saya sudah transfer untuk pesanan #${orderId} - ${gameName} (${formatIDR(amount)}). Mohon dikonfirmasi.`)
+
+  return (
+    <Box sx={{ mt: 3, textAlign: 'left' }}>
+      {config.instructions && (
+        <Typography color='text.secondary' sx={{ mb: 2, textAlign: 'center' }}>
+          {config.instructions}
+        </Typography>
+      )}
+      {config.qris_image_url && (
+        <Box sx={{ textAlign: 'center', mb: 3 }}>
+          <Box
+            component='img'
+            src={config.qris_image_url}
+            alt='QRIS'
+            sx={{ maxWidth: 280, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
+          />
+        </Box>
+      )}
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+        <Typography variant='h5' sx={{ fontWeight: 700 }}>{formatIDR(amount)}</Typography>
+      </Box>
+      {waNumber && (
+        <Box sx={{ textAlign: 'center' }}>
+          <Button
+            variant='contained'
+            size='large'
+            href={`https://wa.me/${waNumber}?text=${waMessage}`}
+            target='_blank'
+            startIcon={<i className='tabler-brand-whatsapp' />}
+            sx={{ bgcolor: '#25D366', '&:hover': { bgcolor: '#1da851' }, fontWeight: 700, px: 4 }}
+          >
+            Konfirmasi via WhatsApp
+          </Button>
+        </Box>
+      )}
+    </Box>
+  )
+}
 
 interface Props {
   orderId: string
@@ -81,7 +132,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
             <Typography color='text.secondary'>
               Selesaikan pembayaran untuk mendapatkan akses game.
             </Typography>
-            {order.snap_token && (
+            {order.snap_token ? (
               <Button
                 variant='contained'
                 size='large'
@@ -99,6 +150,8 @@ const OrderConfirmPage = ({ orderId }: Props) => {
               >
                 Bayar Sekarang
               </Button>
+            ) : (
+              <ManualPaymentSection orderId={order.id} amount={order.amount ?? order.game?.price ?? 0} gameName={order.game?.name ?? ''} />
             )}
           </>
         )}

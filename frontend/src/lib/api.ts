@@ -217,12 +217,19 @@ export const storeApi = {
     const res = await request<{ game: Game }>(`/api/store/games/${appid}`)
     return res.game
   },
+  getPaymentConfig() {
+    return request<{ payment_mode: string; client_key?: string; snap_url?: string; qris_image_url?: string; whatsapp_number?: string; instructions?: string }>('/api/store/payment-config')
+  },
   async createOrder(appid: number | string) {
-    const res = await request<{ order: Order; snap_token: string }>('/api/store/orders', {
+    return request<{
+      order: Order
+      payment_mode: string
+      snap_token?: string
+      manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
+    }>('/api/store/orders', {
       method: 'POST',
       body: JSON.stringify({ appid: Number(appid) })
     })
-    return res
   },
   async getMyGames() {
     const res = await request<{ games: (Game & { type: 'purchased' | 'bonus'; order_id: number; account_name: string; assignment_id: number })[] }>('/api/store/my-games')
@@ -373,6 +380,18 @@ export const adminApi = {
   },
   deleteUser(id: number) {
     return request<{ message: string }>(`/api/admin/users/${id}`, { method: 'DELETE' })
+  },
+  getSettings() {
+    return request<{ settings: Record<string, string> }>('/api/admin/settings').then(r => r.settings)
+  },
+  updateSettings(data: Record<string, string>) {
+    return request<{ settings: Record<string, string> }>('/api/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }).then(r => r.settings)
+  },
+  confirmManualPayment(orderId: number) {
+    return request<{ message: string }>(`/api/admin/orders/${orderId}/confirm-manual`, { method: 'POST' })
   },
   async getAuditCodes() {
     const res = await request<{ logs: AuditEntry[] }>('/api/admin/audit/codes')

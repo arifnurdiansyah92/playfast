@@ -50,6 +50,11 @@ const AdminOrdersPage = () => {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-orders'] }); setSnackMsg('Access restored') }
   })
 
+  const confirmMutation = useMutation({
+    mutationFn: (orderId: number) => adminApi.confirmManualPayment(orderId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-orders'] }); setSnackMsg('Payment confirmed & order fulfilled') }
+  })
+
   const filtered = useMemo(() => {
     if (!orders) return []
     let result = orders
@@ -69,16 +74,19 @@ const AdminOrdersPage = () => {
   if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
 
   const statusColor = (status: string) => {
-    if (status === 'revoked') return 'error' as const
+    if (status === 'revoked' || status === 'cancelled') return 'error' as const
     if (status === 'fulfilled') return 'success' as const
+    if (status === 'pending_payment') return 'warning' as const
     return 'default' as const
   }
 
+  const pendingCount = orders?.filter(o => o.status === 'pending_payment').length ?? 0
   const fulfilledCount = orders?.filter(o => o.status === 'fulfilled').length ?? 0
   const revokedCount = orders?.filter(o => o.status === 'revoked').length ?? 0
 
   const statuses = [
     { label: 'All', value: '', count: orders?.length ?? 0 },
+    { label: 'Pending', value: 'pending_payment', count: pendingCount },
     { label: 'Fulfilled', value: 'fulfilled', count: fulfilledCount },
     { label: 'Revoked', value: 'revoked', count: revokedCount },
   ]
@@ -159,7 +167,11 @@ const AdminOrdersPage = () => {
                     <TableCell>{new Date(order.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
                     <TableCell><Chip size='small' label={order.status} color={statusColor(order.status)} variant='tonal' /></TableCell>
                     <TableCell align='right'>
-                      {order.is_revoked ? (
+                      {order.status === 'pending_payment' ? (
+                        <Button size='small' variant='contained' color='success' onClick={() => confirmMutation.mutate(order.id)} disabled={confirmMutation.isPending}>
+                          Confirm Payment
+                        </Button>
+                      ) : order.is_revoked ? (
                         <Button size='small' variant='outlined' color='success' onClick={() => restoreMutation.mutate(order.id)} disabled={restoreMutation.isPending}>Restore</Button>
                       ) : order.status === 'fulfilled' ? (
                         <Button size='small' variant='outlined' color='error' onClick={() => revokeMutation.mutate(order.id)} disabled={revokeMutation.isPending}>Revoke</Button>

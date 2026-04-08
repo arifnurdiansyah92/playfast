@@ -59,26 +59,19 @@ const GameDetailPage = ({ appid }: Props) => {
     setBuying(true)
 
     try {
-      const { order, snap_token } = await storeApi.createOrder(appid)
+      const result = await storeApi.createOrder(appid)
+      const { order, payment_mode, snap_token } = result
 
-      // Open Midtrans Snap payment popup
-      if (snap_token && typeof window !== 'undefined' && (window as any).snap) {
+      if (payment_mode === 'midtrans' && snap_token && typeof window !== 'undefined' && (window as any).snap) {
+        // Midtrans Snap popup
         (window as any).snap.pay(snap_token, {
-          onSuccess: () => {
-            router.push(`/order/${order.id}`)
-          },
-          onPending: () => {
-            router.push(`/order/${order.id}`)
-          },
-          onError: () => {
-            setError('Pembayaran gagal. Silakan coba lagi.')
-          },
-          onClose: () => {
-            setBuying(false)
-          }
+          onSuccess: () => router.push(`/order/${order.id}`),
+          onPending: () => router.push(`/order/${order.id}`),
+          onError: () => setError('Pembayaran gagal. Silakan coba lagi.'),
+          onClose: () => setBuying(false)
         })
       } else {
-        // Fallback: redirect to order page (will show pending payment)
+        // Manual mode or fallback — go to order page
         router.push(`/order/${order.id}`)
       }
     } catch (err) {

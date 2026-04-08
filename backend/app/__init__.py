@@ -90,9 +90,12 @@ def create_app(config_name: str | None = None) -> Flask:
             "database": "connected" if db_ok else "unreachable",
         }), code
 
-    # ---------- Schema migrations (add new columns if missing) ----------
+    # ---------- Schema migrations ----------
     with app.app_context():
         _run_schema_upgrades()
+        # Create site_settings table if it doesn't exist
+        from app.models import SiteSetting
+        SiteSetting.__table__.create(db.engine, checkfirst=True)
 
     return app
 

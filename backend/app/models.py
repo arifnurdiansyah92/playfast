@@ -307,3 +307,55 @@ class PlayInstruction(db.Model):
             "is_custom": self.is_custom,
             "updated_at": self.updated_at.isoformat(),
         }
+
+
+class SiteSetting(db.Model):
+    """Key-value store for site-wide settings."""
+    __tablename__ = "site_settings"
+
+    key = db.Column(db.String(100), primary_key=True)
+    value = db.Column(db.Text, nullable=False, default="")
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    # Default settings
+    DEFAULTS = {
+        "payment_mode": "midtrans_sandbox",  # midtrans_sandbox | midtrans_production | manual
+        "midtrans_sandbox_server_key": "SB-Mid-server-7Fp0W-6BPItzBeHc4WmVz0rh",
+        "midtrans_sandbox_client_key": "SB-Mid-client-VNwEU_8NEdo5N3og",
+        "midtrans_production_server_key": "",
+        "midtrans_production_client_key": "",
+        "midtrans_merchant_id": "G048936526",
+        "manual_qris_image_url": "",
+        "manual_whatsapp_number": "6282240708329",
+        "manual_payment_instructions": "Scan QRIS di bawah ini, lalu kirim bukti transfer via WhatsApp.",
+    }
+
+    @classmethod
+    def get(cls, key: str) -> str:
+        setting = cls.query.get(key)
+        if setting:
+            return setting.value
+        return cls.DEFAULTS.get(key, "")
+
+    @classmethod
+    def set(cls, key: str, value: str):
+        from app.extensions import db as _db
+        setting = cls.query.get(key)
+        if setting:
+            setting.value = value
+        else:
+            setting = cls(key=key, value=value)
+            _db.session.add(setting)
+
+    @classmethod
+    def get_all(cls) -> dict:
+        """Return all settings with defaults filled in."""
+        stored = {s.key: s.value for s in cls.query.all()}
+        result = dict(cls.DEFAULTS)
+        result.update(stored)
+        return result

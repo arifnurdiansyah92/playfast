@@ -23,6 +23,7 @@ from app.models import (
     GameAccount,
     Order,
     PlayInstruction,
+    SiteSetting,
     SteamAccount,
     User,
 )
@@ -35,11 +36,38 @@ store_bp = Blueprint("store", __name__, url_prefix="/api/store")
 # ---------------------------------------------------------------------------
 
 def _get_snap():
+    """Create Midtrans Snap client using settings from DB."""
+    payment_mode = SiteSetting.get("payment_mode")
+    if payment_mode == "midtrans_production":
+        server_key = SiteSetting.get("midtrans_production_server_key")
+        client_key = SiteSetting.get("midtrans_production_client_key")
+        is_production = True
+    else:
+        server_key = SiteSetting.get("midtrans_sandbox_server_key")
+        client_key = SiteSetting.get("midtrans_sandbox_client_key")
+        is_production = False
+
+    # Fall back to env vars if DB settings are empty
+    if not server_key:
+        server_key = os.getenv("MIDTRANS_SERVER_KEY", "")
+    if not client_key:
+        client_key = os.getenv("MIDTRANS_CLIENT_KEY", "")
+
     return midtransclient.Snap(
-        is_production=os.getenv("MIDTRANS_IS_PRODUCTION", "false").lower() == "true",
-        server_key=os.getenv("MIDTRANS_SERVER_KEY", "SB-Mid-server-7Fp0W-6BPItzBeHc4WmVz0rh"),
-        client_key=os.getenv("MIDTRANS_CLIENT_KEY", "SB-Mid-client-VNwEU_8NEdo5N3og"),
+        is_production=is_production,
+        server_key=server_key,
+        client_key=client_key,
     )
+
+
+def _get_midtrans_server_key():
+    """Get current Midtrans server key for webhook verification."""
+    payment_mode = SiteSetting.get("payment_mode")
+    if payment_mode == "midtrans_production":
+        key = SiteSetting.get("midtrans_production_server_key")
+    else:
+        key = SiteSetting.get("midtrans_sandbox_server_key")
+    return key or os.getenv("MIDTRANS_SERVER_KEY", "")
 
 # ---------------------------------------------------------------------------
 # In-memory rate limiter for code generation (per-user, 10 req/min)
@@ -75,6 +103,25 @@ DEFAULT_PLAY_INSTRUCTIONS = """## Cara Main (Mode Offline)
 - Selalu main dalam mode OFFLINE untuk menghindari konflik dengan pengguna lain
 - Jangan ubah password akun
 - Jangan tambah teman atau ubah pengaturan akun"""
+
+
+@store_bp.route("/payment-config", methods=["GET"])
+def payment_config():
+    """Public endpoint: returns payment mode and Midtrans client key for frontend."""
+    mode = SiteSetting.get("payment_mode")
+    result = {"payment_mode": mode}
+    if mode != "manual":
+        if mode == "midtrans_production":
+            result["client_key"] = SiteSetting.get("midtrans_production_client_key")
+            result["snap_url"] = "https://app.midtrans.com/snap/snap.js"
+        else:
+            result["client_key"] = SiteSetting.get("midtrans_sandbox_client_key")
+            result["snap_url"] = "https://app.sandbox.midtrans.com/snap/snap.js"
+    else:
+        result["qris_image_url"] = SiteSetting.get("manual_qris_image_url")
+        result["whatsapp_number"] = SiteSetting.get("manual_whatsapp_number")
+        result["instructions"] = SiteSetting.get("manual_payment_instructions")
+    return jsonify(result), 200
 
 
 @store_bp.route("/games", methods=["GET"])
@@ -368,45 +415,57 @@ def create_order():
         amount=game.price,
     )
     db.session.add(order)
-    db.session.flush()  # get order.id
+    db.session.flush()
 
-    # Create Midtrans transaction
-    try:
-        snap = _get_snap()
-        transaction = snap.create_transaction({
-            "transaction_details": {
-                "order_id": midtrans_order_id,
-                "gross_amount": game.price,
-            },
-            "item_details": [{
-                "id": str(game.id),
-                "price": game.price,
-                "quantity": 1,
-                "name": game.name[:50],  # Midtrans limits item name length
-            }],
-            "customer_details": {
-                "email": user.email if user else "",
-            },
-        })
-        snap_token = transaction["token"]
-        order.snap_token = snap_token
+    payment_mode = SiteSetting.get("payment_mode")
+
+    if payment_mode == "manual":
+        # Manual mode: return order with QRIS/WA instructions, admin confirms later
         db.session.commit()
-
-        logger.info(
-            "Order %s created with Midtrans order ID %s for user %s",
-            order.id, midtrans_order_id, user_id,
-        )
-
         return jsonify({
-            "message": "Order created, awaiting payment",
+            "message": "Order created, awaiting manual payment",
             "order": order.to_dict(),
-            "snap_token": snap_token,
+            "payment_mode": "manual",
+            "manual_info": {
+                "qris_image_url": SiteSetting.get("manual_qris_image_url"),
+                "whatsapp_number": SiteSetting.get("manual_whatsapp_number"),
+                "instructions": SiteSetting.get("manual_payment_instructions"),
+            },
         }), 201
+    else:
+        # Midtrans mode (sandbox or production)
+        try:
+            snap = _get_snap()
+            transaction = snap.create_transaction({
+                "transaction_details": {
+                    "order_id": midtrans_order_id,
+                    "gross_amount": game.price,
+                },
+                "item_details": [{
+                    "id": str(game.id),
+                    "price": game.price,
+                    "quantity": 1,
+                    "name": game.name[:50],
+                }],
+                "customer_details": {
+                    "email": user.email if user else "",
+                },
+            })
+            snap_token = transaction["token"]
+            order.snap_token = snap_token
+            db.session.commit()
 
-    except Exception as e:
-        db.session.rollback()
-        logger.exception("Failed to create Midtrans transaction: %s", e)
-        return jsonify({"error": "Payment service unavailable, please try again later"}), 502
+            return jsonify({
+                "message": "Order created, awaiting payment",
+                "order": order.to_dict(),
+                "payment_mode": "midtrans",
+                "snap_token": snap_token,
+            }), 201
+
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("Failed to create Midtrans transaction: %s", e)
+            return jsonify({"error": "Payment service unavailable, please try again later"}), 502
 
 
 # ---------------------------------------------------------------------------
@@ -431,7 +490,7 @@ def midtrans_webhook():
     signature_key = notification.get("signature_key", "")
 
     # Verify signature: SHA512(order_id + status_code + gross_amount + server_key)
-    server_key = os.getenv("MIDTRANS_SERVER_KEY", "")
+    server_key = _get_midtrans_server_key()
     raw = order_id + status_code + gross_amount + server_key
     expected_signature = hashlib.sha512(raw.encode("utf-8")).hexdigest()
 

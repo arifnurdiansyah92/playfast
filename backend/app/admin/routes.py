@@ -17,6 +17,7 @@ from app.models import (
     GameAccount,
     Order,
     PlayInstruction,
+    SiteSetting,
     SteamAccount,
     User,
 )
@@ -805,4 +806,60 @@ def audit_codes():
         "page": pagination.page,
         "per_page": pagination.per_page,
         "pages": pagination.pages,
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# Site Settings
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/settings", methods=["GET"])
+@admin_required
+def get_settings():
+    """Return all site settings."""
+    return jsonify({"settings": SiteSetting.get_all()}), 200
+
+
+@admin_bp.route("/settings", methods=["PUT"])
+@admin_required
+def update_settings():
+    """Update site settings. Body: {"key": "value", ...}"""
+    data = request.get_json() or {}
+
+    valid_keys = set(SiteSetting.DEFAULTS.keys())
+    for key, value in data.items():
+        if key not in valid_keys:
+            continue
+        SiteSetting.set(key, str(value))
+
+    db.session.commit()
+    return jsonify({"message": "Settings updated", "settings": SiteSetting.get_all()}), 200
+
+
+@admin_bp.route("/orders/<int:order_id>/confirm-manual", methods=["POST"])
+@admin_required
+def confirm_manual_payment(order_id: int):
+    """Admin manually confirms payment for an order (manual payment mode)."""
+    order = db.session.get(Order, order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    if order.status != "pending_payment":
+        return jsonify({"error": "Order is not pending payment"}), 400
+
+    order.payment_type = "manual"
+    order.paid_at = datetime.now(timezone.utc)
+    db.session.flush()
+
+    from app.store.routes import _fulfill_order
+    success = _fulfill_order(order)
+
+    if not success:
+        order.status = "fulfilled"
+        db.session.commit()
+
+    return jsonify({
+        "message": "Payment confirmed and order fulfilled",
+        "order": order.to_dict(include_credentials=True),
     }), 200
