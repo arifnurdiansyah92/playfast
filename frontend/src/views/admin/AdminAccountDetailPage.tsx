@@ -58,6 +58,12 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
     refetchInterval: 30000,
   })
 
+  const { data: assignments, isLoading: assignmentsLoading } = useQuery({
+    queryKey: ['account-assignments', accountId],
+    queryFn: () => adminApi.getAccountAssignments(Number(accountId)),
+    enabled: user?.role === 'admin' && !!account,
+  })
+
   const loginMutation = useMutation({
     mutationFn: () => adminApi.loginAccount(Number(accountId)),
     onSuccess: (data) => {
@@ -307,6 +313,57 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
                           </IconButton>
                         </Tooltip>
                       </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Card>
+
+      {/* Assigned Users */}
+      <Card>
+        <CardHeader
+          title={`Assigned Users (${assignments?.length ?? 0})`}
+          avatar={<i className='tabler-users' style={{ fontSize: 24 }} />}
+        />
+        <Divider />
+        {assignmentsLoading ? (
+          <CardContent>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={50} sx={{ mb: 1 }} />)}</CardContent>
+        ) : !assignments || assignments.length === 0 ? (
+          <CardContent sx={{ textAlign: 'center', py: 6 }}>
+            <i className='tabler-users' style={{ fontSize: 40, opacity: 0.4 }} />
+            <Typography variant='body1' color='text.secondary' sx={{ mt: 1 }}>
+              No users assigned to this account
+            </Typography>
+          </CardContent>
+        ) : (
+          <TableContainer>
+            <Table size='small'>
+              <TableHead>
+                <TableRow>
+                  <TableCell>User Email</TableCell>
+                  <TableCell>Game</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Assigned Date</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {assignments.map(a => (
+                  <TableRow key={a.id} hover>
+                    <TableCell>{a.user_email}</TableCell>
+                    <TableCell>{a.game_name}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size='small'
+                        label={a.is_revoked ? 'Revoked' : 'Active'}
+                        color={a.is_revoked ? 'error' : 'success'}
+                        variant='tonal'
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {new Date(a.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
                   </TableRow>
                 ))}

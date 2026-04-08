@@ -338,6 +338,10 @@ export const adminApi = {
       body: JSON.stringify({ action, nonce })
     })
   },
+  async getAccountAssignments(id: number) {
+    const res = await request<{ assignments: { id: number; user_email: string; user_id: number; game_name: string; game_appid: number; is_revoked: boolean; created_at: string }[] }>(`/api/admin/accounts/${id}/assignments`)
+    return res.assignments
+  },
   syncGames() {
     return request<{ message: string }>('/api/admin/accounts/sync-games', { method: 'POST' })
   },

@@ -299,6 +299,38 @@ def delete_account(account_id: int):
 # ---------------------------------------------------------------------------
 
 
+@admin_bp.route("/accounts/<int:account_id>/assignments", methods=["GET"])
+@admin_required
+def account_assignments(account_id: int):
+    """Return all assignments for a given Steam account with user/game info."""
+    account = db.session.get(SteamAccount, account_id)
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+
+    assignments = (
+        Assignment.query
+        .filter_by(steam_account_id=account_id)
+        .join(User, Assignment.user_id == User.id)
+        .join(Game, Assignment.game_id == Game.id)
+        .order_by(Assignment.created_at.desc())
+        .all()
+    )
+
+    result = []
+    for a in assignments:
+        result.append({
+            "id": a.id,
+            "user_email": a.user.email if a.user else None,
+            "user_id": a.user_id,
+            "game_name": a.game.name if a.game else None,
+            "game_appid": a.game.appid if a.game else None,
+            "is_revoked": a.is_revoked,
+            "created_at": a.created_at.isoformat(),
+        })
+
+    return jsonify({"assignments": result}), 200
+
+
 @admin_bp.route("/accounts/<int:account_id>/code", methods=["POST"])
 @admin_required
 def admin_get_code(account_id: int):
