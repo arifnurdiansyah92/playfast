@@ -15,7 +15,7 @@ RUN npm ci --legacy-peer-deps
 # Build Next.js
 ENV INTERNAL_API_URL=http://backend:5000
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS="--max-old-space-size=1024"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 RUN npm run build
 
 # --- Production ---
