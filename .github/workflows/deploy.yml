@@ -21,13 +21,28 @@ jobs:
             # Backup database BEFORE any changes
             ./backup.sh
 
-            # Pull and rebuild
+            # Pull latest
             git pull origin master
+
+            # Free RAM: stop non-playfast containers during build
+            OTHER_CONTAINERS=$(docker ps -q --filter "name=bpd-" --filter "name=nginapsini-" --filter "name=ielts-" 2>/dev/null)
+            if [ -n "$OTHER_CONTAINERS" ]; then
+              echo "Stopping other containers to free RAM..."
+              docker stop $OTHER_CONTAINERS 2>/dev/null || true
+            fi
+
+            # Build
             docker compose build
 
             # Restart WITHOUT -v (preserves data)
             docker compose down
             docker compose up -d
+
+            # Restart other containers
+            if [ -n "$OTHER_CONTAINERS" ]; then
+              echo "Restarting other containers..."
+              docker start $OTHER_CONTAINERS 2>/dev/null || true
+            fi
 
             # Wait for DB
             sleep 8
