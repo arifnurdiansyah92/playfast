@@ -120,7 +120,10 @@ const GameDetailPage = ({ appid }: Props) => {
           </Link>
           <Typography color='text.primary'>Tidak Ditemukan</Typography>
         </Breadcrumbs>
-        <Alert severity='error'>Game tidak ditemukan</Alert>
+        <Alert severity='error' sx={{ mb: 2 }}>Game tidak ditemukan atau sudah dihapus</Alert>
+        <Button component={Link} href='/store' variant='contained' startIcon={<i className='tabler-building-store' />}>
+          Kembali ke Toko
+        </Button>
       </div>
     )
   }

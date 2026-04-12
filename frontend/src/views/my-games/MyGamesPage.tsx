@@ -207,28 +207,17 @@ const MyGamesPage = () => {
                         </Typography>
                       )}
 
-                      {/* Action buttons */}
-                      <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                        <Button
-                          variant='contained'
-                          size='small'
-                          fullWidth
-                          startIcon={<i className='tabler-shield-lock' />}
-                          onClick={() => router.push(`/play/${game.order_id}`)}
-                          sx={{ fontWeight: 600 }}
-                        >
-                          Ambil Kode
-                        </Button>
-                        <Button
-                          variant='outlined'
-                          size='small'
-                          onClick={() => router.push(`/play/${game.order_id}`)}
-                          startIcon={<i className='tabler-player-play' />}
-                          sx={{ fontWeight: 600, minWidth: 0, px: 2 }}
-                        >
-                          Main
-                        </Button>
-                      </Box>
+                      {/* Action button */}
+                      <Button
+                        variant='contained'
+                        size='small'
+                        fullWidth
+                        startIcon={<i className='tabler-player-play' />}
+                        onClick={() => router.push(`/play/${game.order_id}`)}
+                        sx={{ fontWeight: 600, mt: 2 }}
+                      >
+                        Main & Ambil Kode
+                      </Button>
                     </CardContent>
                   </Card>
                 </Grid>
