@@ -17,12 +17,17 @@ import Skeleton from '@mui/material/Skeleton'
 import Chip from '@mui/material/Chip'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
 
 import { storeApi } from '@/lib/api'
 
 const MyGamesPage = () => {
   const router = useRouter()
   const [tab, setTab] = useState(0) // 0 = all, 1 = purchased, 2 = bonus
+  const [bonusInfoOpen, setBonusInfoOpen] = useState(false)
 
   const { data: games, isLoading } = useQuery({
     queryKey: ['my-games'],
@@ -45,7 +50,7 @@ const MyGamesPage = () => {
           Game Saya
         </Typography>
         <Typography color='text.secondary'>
-          {purchasedCount} game dibeli{bonusCount > 0 ? ` + ${bonusCount} bonus` : ''}
+          {purchasedCount} game dibeli{bonusCount > 0 ? ` · ${bonusCount} bonus tersedia` : ''}
         </Typography>
       </Box>
 
@@ -88,11 +93,30 @@ const MyGamesPage = () => {
         <>
           {/* Tabs filter */}
           {bonusCount > 0 && (
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-              <Tab label={`Semua (${games.length})`} />
-              <Tab label={`Dibeli (${purchasedCount})`} />
-              <Tab label={`Bonus (${bonusCount})`} />
-            </Tabs>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+                <Tab label={`Semua (${games.length})`} />
+                <Tab label={`Dibeli (${purchasedCount})`} />
+                <Tab label={`Bonus (${bonusCount})`} />
+              </Tabs>
+              <Typography
+                variant='body2'
+                onClick={() => setBonusInfoOpen(true)}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  color: 'text.secondary',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  '&:hover': { color: 'primary.main' },
+                  transition: 'color 0.2s ease',
+                }}
+              >
+                Apa itu game bonus?
+                <i className='tabler-info-circle' style={{ fontSize: 16 }} />
+              </Typography>
+            </Box>
           )}
 
           <Grid container spacing={3}>
@@ -173,7 +197,7 @@ const MyGamesPage = () => {
 
                       {isBonus && (
                         <Typography variant='caption' sx={{ color: 'primary.main', fontWeight: 600, mb: 'auto' }}>
-                          Gratis dari akun yang sama
+                          Bonus · Selama akun tersedia
                         </Typography>
                       )}
 
@@ -213,6 +237,55 @@ const MyGamesPage = () => {
           </Grid>
         </>
       )}
+      {/* Bonus info dialog */}
+      <Dialog open={bonusInfoOpen} onClose={() => setBonusInfoOpen(false)} maxWidth='sm' fullWidth>
+        <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}>
+          <i className='tabler-gift' style={{ fontSize: 24, color: '#00E676' }} />
+          Apa itu Game Bonus?
+        </DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: '8px !important' }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,230,118,0.08)', flexShrink: 0, mt: 0.5 }}>
+              <i className='tabler-gift' style={{ fontSize: 20, color: '#00E676' }} />
+            </Box>
+            <Box>
+              <Typography variant='subtitle2' sx={{ fontWeight: 700, mb: 0.5 }}>Apa itu bonus?</Typography>
+              <Typography variant='body2' color='text.secondary'>
+                Game bonus adalah game tambahan yang kebetulan tersedia di akun Steam yang sama dengan game yang kamu beli. Selama akun tersebut aktif, kamu bisa memainkan game bonus secara gratis.
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(255,152,0,0.08)', flexShrink: 0, mt: 0.5 }}>
+              <i className='tabler-refresh' style={{ fontSize: 20, color: '#ff9800' }} />
+            </Box>
+            <Box>
+              <Typography variant='subtitle2' sx={{ fontWeight: 700, mb: 0.5 }}>Bonus bisa berubah</Typography>
+              <Typography variant='body2' color='text.secondary'>
+                Akun Steam yang kamu gunakan bisa diganti sewaktu-waktu. Jika akun diganti, game bonus dari akun sebelumnya tidak akan tersedia lagi. Game bonus baru mungkin muncul dari akun pengganti.
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(102,192,244,0.08)', flexShrink: 0, mt: 0.5 }}>
+              <i className='tabler-shield-check' style={{ fontSize: 20, color: '#66c0f4' }} />
+            </Box>
+            <Box>
+              <Typography variant='subtitle2' sx={{ fontWeight: 700, mb: 0.5 }}>Game yang kamu beli tetap aman</Typography>
+              <Typography variant='body2' color='text.secondary'>
+                Jika terjadi sesuatu pada akun (banned, masalah teknis, dll), kami akan mengganti akun kamu agar tetap bisa memainkan game yang kamu beli. Game bonus tidak termasuk dalam jaminan ini.
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button variant='contained' onClick={() => setBonusInfoOpen(false)} sx={{ fontWeight: 600 }}>
+            Mengerti
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   )
 }
