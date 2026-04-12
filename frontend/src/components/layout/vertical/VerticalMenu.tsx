@@ -76,6 +76,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
           <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
             Game Saya
           </MenuItem>
+          <MenuItem href='/orders' icon={<i className='tabler-receipt' />}>
+            Riwayat Pesanan
+          </MenuItem>
         </MenuSection>
         {isAdmin && (
           <MenuSection label='Administrasi'>
