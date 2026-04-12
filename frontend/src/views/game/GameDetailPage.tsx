@@ -239,13 +239,13 @@ const GameDetailPage = ({ appid }: Props) => {
                     Buka Halaman Main
                   </Button>
                 </Box>
-              ) : (
+              ) : user ? (
                 <Button
                   variant='contained'
                   size='large'
                   disabled={buying}
-                  onClick={() => user ? setConfirmOpen(true) : handleBuy()}
-                  startIcon={<i className={user ? 'tabler-shopping-cart' : 'tabler-user-plus'} />}
+                  onClick={() => setConfirmOpen(true)}
+                  startIcon={<i className='tabler-shopping-cart' />}
                   sx={{
                     minWidth: 220,
                     py: 1.5,
@@ -255,8 +255,37 @@ const GameDetailPage = ({ appid }: Props) => {
                     '&:hover': { boxShadow: '0 6px 24px rgba(201,168,76,0.3)' },
                   }}
                 >
-                  {buying ? 'Memproses...' : user ? 'Dapatkan Game Ini' : 'Daftar untuk Dapatkan Game Ini'}
+                  {buying ? 'Memproses...' : 'Dapatkan Game Ini'}
                 </Button>
+              ) : (
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Button
+                    component={Link}
+                    href={`/login?redirect=/game/${appid}`}
+                    variant='contained'
+                    size='large'
+                    startIcon={<i className='tabler-login' />}
+                    sx={{
+                      py: 1.5,
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                      boxShadow: '0 4px 16px rgba(201,168,76,0.2)',
+                      '&:hover': { boxShadow: '0 6px 24px rgba(201,168,76,0.3)' },
+                    }}
+                  >
+                    Masuk untuk Beli
+                  </Button>
+                  <Button
+                    component={Link}
+                    href={`/register?redirect=/game/${appid}`}
+                    variant='outlined'
+                    size='large'
+                    startIcon={<i className='tabler-user-plus' />}
+                    sx={{ py: 1.5, fontSize: '1rem', fontWeight: 700 }}
+                  >
+                    Daftar
+                  </Button>
+                </Box>
               )}
             </CardContent>
           </Grid>

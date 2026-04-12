@@ -7,6 +7,14 @@ import PerfectScrollbar from 'react-perfect-scrollbar'
 // Type Imports
 import type { VerticalMenuContextProps } from '@menu/components/vertical-menu/Menu'
 
+// Next Imports
+import Link from 'next/link'
+
+// MUI Imports
+import Button from '@mui/material/Button'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+
 // Component Imports
 import { Menu, MenuItem, SubMenu, MenuSection } from '@menu/vertical-menu'
 
@@ -73,13 +81,29 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
           <MenuItem href='/store' icon={<i className='tabler-building-store' />}>
             Toko
           </MenuItem>
-          <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
-            Game Saya
-          </MenuItem>
-          <MenuItem href='/orders' icon={<i className='tabler-receipt' />}>
-            Riwayat Pesanan
-          </MenuItem>
+          {user && (
+            <>
+              <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
+                Game Saya
+              </MenuItem>
+              <MenuItem href='/orders' icon={<i className='tabler-receipt' />}>
+                Riwayat Pesanan
+              </MenuItem>
+            </>
+          )}
         </MenuSection>
+        {!user && (
+          <MenuSection label='Akun'>
+            <Box sx={{ px: 4, py: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Button component={Link} href='/login' variant='outlined' fullWidth size='small' startIcon={<i className='tabler-login' />}>
+                Masuk
+              </Button>
+              <Button component={Link} href='/register' variant='contained' fullWidth size='small' startIcon={<i className='tabler-user-plus' />}>
+                Daftar
+              </Button>
+            </Box>
+          </MenuSection>
+        )}
         {isAdmin && (
           <MenuSection label='Administrasi'>
             <MenuItem href='/admin' icon={<i className='tabler-dashboard' />}>
