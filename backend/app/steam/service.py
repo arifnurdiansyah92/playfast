@@ -54,29 +54,40 @@ def _refresh_access_token(refresh_token: str, steam_id: str) -> str | None:
         return None
 
 
-def ensure_valid_token(mafile_data: dict, password: str) -> str | None:
-    """
-    Ensure we have a working access token for a Steam account.
+def _verify_token(access_token: str) -> bool:
+    """Quick check whether an access token is actually accepted by Steam.
 
-    Tries in order:
-    1. Use the existing access token if not expired
-    2. Refresh using the refresh token
-    3. Full login with password + shared_secret
-
-    Returns a valid access token or None on failure.
-    Updates mafile_data in-place with new tokens if refreshed/re-logged.
+    Uses a lightweight endpoint (GetSteamLevel) to avoid unnecessary overhead.
+    Steam may return 401 or 403 for server-side revoked tokens even if the
+    JWT exp hasn't passed yet (e.g. IP change).
     """
+    try:
+        # Decode steam_id from the JWT so we don't need it as a parameter
+        payload = access_token.split(".")[1]
+        payload += "=" * (4 - len(payload) % 4)
+        claims = json.loads(base64.b64decode(payload))
+        steam_id = claims.get("sub", "")
+        if not steam_id:
+            return False
+
+        resp = requests.get(
+            f"{STEAM_API}/IPlayerService/GetSteamLevel/v1",
+            params={"access_token": access_token, "steamid": steam_id},
+            timeout=10,
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def _force_new_token(mafile_data: dict, password: str) -> str | None:
+    """Skip the cached token and obtain a fresh one via refresh or re-login."""
     session = mafile_data.get("Session", {})
-    access_token = session.get("AccessToken", "")
     refresh_token = session.get("RefreshToken", "")
     steam_id = session.get("SteamID", "")
     shared_secret = mafile_data.get("shared_secret", "")
 
-    # 1. Check if current token is still valid
-    if access_token and _decode_jwt_exp(access_token) > time.time() + 60:
-        return access_token
-
-    # 2. Try refreshing
+    # 1. Try refreshing
     if refresh_token and steam_id:
         new_token = _refresh_access_token(refresh_token, steam_id)
         if new_token:
@@ -85,7 +96,7 @@ def ensure_valid_token(mafile_data: dict, password: str) -> str | None:
             mafile_data["Session"] = session
             return new_token
 
-    # 3. Full re-login
+    # 2. Full re-login
     if password and shared_secret:
         account_name = mafile_data.get("account_name", "")
         if account_name:
@@ -103,6 +114,32 @@ def ensure_valid_token(mafile_data: dict, password: str) -> str | None:
                 pass
 
     return None
+
+
+def ensure_valid_token(mafile_data: dict, password: str) -> str | None:
+    """
+    Ensure we have a working access token for a Steam account.
+
+    Tries in order:
+    1. Use the existing access token if not expired (verified with a live API call)
+    2. Refresh using the refresh token
+    3. Full login with password + shared_secret
+
+    Returns a valid access token or None on failure.
+    Updates mafile_data in-place with new tokens if refreshed/re-logged.
+    """
+    session = mafile_data.get("Session", {})
+    access_token = session.get("AccessToken", "")
+
+    # 1. If token looks valid by expiry, verify it actually works
+    if access_token and _decode_jwt_exp(access_token) > time.time() + 60:
+        if _verify_token(access_token):
+            return access_token
+        # Token was rejected server-side (IP change, revocation, etc.)
+        # Fall through to refresh/re-login
+
+    # 2. Refresh or re-login
+    return _force_new_token(mafile_data, password)
 
 
 def fetch_owned_games(access_token: str, steam_id: str) -> list[dict]:

@@ -30,6 +30,7 @@ from app.steam.service import (
     fetch_confirmations,
     act_on_confirmation,
     steam_account_login,
+    _force_new_token,
 )
 
 logger = logging.getLogger(__name__)
@@ -521,6 +522,34 @@ def _sync_account_games(account: SteamAccount) -> dict:
 
     try:
         games = fetch_owned_games(token, steam_id)
+    except http_requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 401:
+            # Token was rejected — force refresh/re-login and retry once
+            token = _force_new_token(mafile_data, account.password)
+            if token and mafile_data != account.mafile_data:
+                account.mafile_data = mafile_data
+                db.session.add(account)
+            if token:
+                try:
+                    games = fetch_owned_games(token, steam_id)
+                except Exception as retry_err:
+                    return {
+                        "account_name": account.account_name,
+                        "success": False,
+                        "error": str(retry_err),
+                    }
+            else:
+                return {
+                    "account_name": account.account_name,
+                    "success": False,
+                    "error": "401 Unauthorized — token refresh and re-login both failed",
+                }
+        else:
+            return {
+                "account_name": account.account_name,
+                "success": False,
+                "error": str(e),
+            }
     except Exception as e:
         return {
             "account_name": account.account_name,
