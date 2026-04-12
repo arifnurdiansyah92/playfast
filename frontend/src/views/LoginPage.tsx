@@ -31,6 +31,10 @@ const LoginPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (!email.trim()) { setError('Email harus diisi'); return }
+    if (!password) { setError('Password harus diisi'); return }
+
     setLoading(true)
 
     try {
@@ -97,6 +101,11 @@ const LoginPage = () => {
             <Button fullWidth variant='contained' type='submit' disabled={loading}>
               {loading ? 'Sedang masuk...' : 'Masuk'}
             </Button>
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <Typography component={Link} href='/bantuan' variant='body2' color='text.secondary' sx={{ textDecoration: 'none', '&:hover': { color: 'primary.main' } }}>
+                Lupa password?
+              </Typography>
+            </Box>
             <div className='flex justify-center items-center flex-wrap gap-2'>
               <Typography>Belum punya akun?</Typography>
               <Typography component={Link} href={redirect ? `/register?redirect=${encodeURIComponent(redirect)}` : '/register'} color='primary.main'>

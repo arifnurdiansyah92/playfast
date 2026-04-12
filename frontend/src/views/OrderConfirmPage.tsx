@@ -99,7 +99,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
           fetchOrder() // Refresh full order data
         }
       }).catch(() => {})
-    }, 3000)
+    }, 8000)
 
     return () => clearInterval(interval)
   }, [order?.status, orderId, fetchOrder])
@@ -237,7 +237,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
               <Typography color='text.secondary'>Akses</Typography>
               <Typography sx={{ fontWeight: 600 }}>Selamanya</Typography>
             </Box>
-            {order.credentials && (
+            {isFulfilled && order.credentials && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography color='text.secondary'>Akun</Typography>
                 <Typography sx={{ fontWeight: 600, fontFamily: 'monospace' }}>{order.credentials.account_name}</Typography>

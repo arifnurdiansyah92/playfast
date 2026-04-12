@@ -90,6 +90,7 @@ const PlayPage = ({ orderId }: Props) => {
   const [codeError, setCodeError] = useState('')
   const [copySnack, setCopySnack] = useState('')
   const [justCopied, setJustCopied] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const { data: order, isLoading: orderLoading } = useQuery({
@@ -288,20 +289,26 @@ const PlayPage = ({ orderId }: Props) => {
                   Password Steam
                 </Typography>
                 <Typography variant='h6' sx={{ fontFamily: 'monospace', fontWeight: 600 }} noWrap>
-                  {order.credentials?.password || '********'}
+                  {showPassword ? (order.credentials?.password || '********') : '••••••••'}
                 </Typography>
               </Box>
-              {order.credentials?.password && (
-                <Tooltip title={justCopied === 'Password' ? 'Disalin!' : 'Salin password'}>
-                  <IconButton
-                    onClick={() => copyToClipboard(order.credentials!.password, 'Password')}
-                    color={justCopied === 'Password' ? 'success' : 'primary'}
-                    sx={{ flexShrink: 0 }}
-                  >
-                    <i className={justCopied === 'Password' ? 'tabler-check' : 'tabler-copy'} />
+              <Box sx={{ display: 'flex', flexShrink: 0 }}>
+                <Tooltip title={showPassword ? 'Sembunyikan' : 'Tampilkan'}>
+                  <IconButton onClick={() => setShowPassword(!showPassword)}>
+                    <i className={showPassword ? 'tabler-eye-off' : 'tabler-eye'} />
                   </IconButton>
                 </Tooltip>
-              )}
+                {order.credentials?.password && (
+                  <Tooltip title={justCopied === 'Password' ? 'Disalin!' : 'Salin password'}>
+                    <IconButton
+                      onClick={() => copyToClipboard(order.credentials!.password, 'Password')}
+                      color={justCopied === 'Password' ? 'success' : 'primary'}
+                    >
+                      <i className={justCopied === 'Password' ? 'tabler-check' : 'tabler-copy'} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             </Box>
           </Box>
         </CardContent>
@@ -396,7 +403,7 @@ const PlayPage = ({ orderId }: Props) => {
                 <CountdownRing seconds={codeExpiresIn} total={30} />
                 <Box sx={{ textAlign: 'left' }}>
                   <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                    {codeExpiresIn > 0 ? `Kedaluwarsa dalam ${codeExpiresIn}d` : 'Memperbarui...'}
+                    {codeExpiresIn > 0 ? `Kedaluwarsa dalam ${codeExpiresIn} detik` : 'Memperbarui...'}
                   </Typography>
                   <Typography variant='caption' color='text.secondary'>
                     Otomatis diperbarui saat kedaluwarsa

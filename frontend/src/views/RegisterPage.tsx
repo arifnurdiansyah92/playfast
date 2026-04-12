@@ -33,17 +33,10 @@ const RegisterPage = () => {
     e.preventDefault()
     setError('')
 
-    if (password !== confirmPassword) {
-      setError('Password tidak cocok')
-
-      return
-    }
-
-    if (password.length < 6) {
-      setError('Password minimal 6 karakter')
-
-      return
-    }
+    if (!email.trim()) { setError('Email harus diisi'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Format email tidak valid'); return }
+    if (password.length < 6) { setError('Password minimal 6 karakter'); return }
+    if (password !== confirmPassword) { setError('Password tidak cocok'); return }
 
     setLoading(true)
 

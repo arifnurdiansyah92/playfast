@@ -384,7 +384,7 @@ const StorePage = () => {
               <Pagination
                 count={totalPages}
                 page={page}
-                onChange={(_, val) => setPage(val)}
+                onChange={(_, val) => { setPage(val); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
                 color='primary'
                 size='large'
               />

@@ -18,6 +18,10 @@ import Alert from '@mui/material/Alert'
 import Skeleton from '@mui/material/Skeleton'
 import Divider from '@mui/material/Divider'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
 import Grid from '@mui/material/Grid'
 
 import { storeApi, formatIDR } from '@/lib/api'
@@ -32,6 +36,7 @@ const GameDetailPage = ({ appid }: Props) => {
   const router = useRouter()
   const { user } = useAuth()
   const [buying, setBuying] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [error, setError] = useState('')
 
   const { data: game, isLoading } = useQuery({
@@ -236,7 +241,7 @@ const GameDetailPage = ({ appid }: Props) => {
                   variant='contained'
                   size='large'
                   disabled={buying}
-                  onClick={handleBuy}
+                  onClick={() => user ? setConfirmOpen(true) : handleBuy()}
                   startIcon={<i className={user ? 'tabler-shopping-cart' : 'tabler-user-plus'} />}
                   sx={{
                     minWidth: 220,
@@ -288,6 +293,41 @@ const GameDetailPage = ({ appid }: Props) => {
           </Grid>
         ))}
       </Grid>
+
+      {/* Purchase confirmation dialog */}
+      {game && (
+        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth='xs' fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>Konfirmasi Pembelian</DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <Box
+                component='img'
+                src={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/capsule_sm_120.jpg`}
+                alt={game.name}
+                sx={{ width: 80, height: 38, borderRadius: 0.5, objectFit: 'cover' }}
+              />
+              <Box>
+                <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>{game.name}</Typography>
+                <Typography variant='h6' color='primary.main' sx={{ fontWeight: 700 }}>{formatIDR(game.price)}</Typography>
+              </Box>
+            </Box>
+            <Typography variant='body2' color='text.secondary'>
+              Akses berlaku selamanya. Kode Steam Guard otomatis tersedia setelah pembayaran.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ p: 3, pt: 1 }}>
+            <Button onClick={() => setConfirmOpen(false)}>Batal</Button>
+            <Button
+              variant='contained'
+              disabled={buying}
+              onClick={() => { setConfirmOpen(false); handleBuy() }}
+              startIcon={<i className='tabler-shopping-cart' />}
+            >
+              {buying ? 'Memproses...' : 'Beli Sekarang'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </div>
   )
 }

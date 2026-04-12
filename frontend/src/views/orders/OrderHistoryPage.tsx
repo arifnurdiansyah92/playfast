@@ -34,6 +34,16 @@ const statusConfig: Record<string, { label: string; color: 'success' | 'warning'
   revoked: { label: 'Dicabut', color: 'error' },
 }
 
+const paymentTypeLabels: Record<string, string> = {
+  midtrans: 'Midtrans',
+  midtrans_snap: 'Midtrans',
+  manual: 'Transfer Manual',
+  bank_transfer: 'Transfer Bank',
+  gopay: 'GoPay',
+  shopeepay: 'ShopeePay',
+  qris: 'QRIS',
+}
+
 const tabFilters = [
   { label: 'Semua', value: '' },
   { label: 'Aktif', value: 'fulfilled' },
@@ -137,7 +147,7 @@ const OrderHistoryPage = () => {
                       <TableRow key={order.id} hover>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            {order.game && (
+                            {order.game ? (
                               <Box
                                 component='img'
                                 src={`https://cdn.akamai.steamstatic.com/steam/apps/${order.game.appid}/capsule_sm_120.jpg`}
@@ -145,6 +155,10 @@ const OrderHistoryPage = () => {
                                 sx={{ width: 64, height: 30, borderRadius: 0.5, objectFit: 'cover' }}
                                 onError={(e: any) => { e.target.style.display = 'none' }}
                               />
+                            ) : (
+                              <Box sx={{ width: 64, height: 30, borderRadius: 0.5, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <i className='tabler-device-gamepad' style={{ fontSize: 16, opacity: 0.4 }} />
+                              </Box>
                             )}
                             <Box>
                               <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>
@@ -165,8 +179,8 @@ const OrderHistoryPage = () => {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant='body2' sx={{ textTransform: 'capitalize' }}>
-                            {order.payment_type ?? '-'}
+                          <Typography variant='body2'>
+                            {order.payment_type ? (paymentTypeLabels[order.payment_type] ?? order.payment_type) : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
