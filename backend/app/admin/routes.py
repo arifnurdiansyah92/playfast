@@ -652,10 +652,33 @@ def list_games():
     per_page = request.args.get("per_page", 50, type=int)
     per_page = min(per_page, 200)
 
-    q = request.args.get("q", "").strip()
     query = Game.query
+
+    q = request.args.get("q", "").strip()
     if q:
         query = query.filter(Game.name.ilike(f"%{q}%"))
+
+    genre = request.args.get("genre", "").strip()
+    if genre:
+        query = query.filter(func.lower(Game.genres).contains(genre.lower()))
+
+    is_enabled = request.args.get("is_enabled", "").strip()
+    if is_enabled == "true":
+        query = query.filter(Game.is_enabled == True)  # noqa: E712
+    elif is_enabled == "false":
+        query = query.filter(Game.is_enabled == False)  # noqa: E712
+
+    is_featured = request.args.get("is_featured", "").strip()
+    if is_featured == "true":
+        query = query.filter(Game.is_featured == True)  # noqa: E712
+
+    year = request.args.get("year", "").strip()
+    if year and year.isdigit():
+        y = int(year)
+        query = query.filter(
+            Game.created_at >= datetime(y, 1, 1, tzinfo=timezone.utc),
+            Game.created_at < datetime(y + 1, 1, 1, tzinfo=timezone.utc),
+        )
 
     pagination = query.order_by(Game.name.asc()).paginate(
         page=page, per_page=per_page, error_out=False
@@ -680,12 +703,72 @@ def list_games():
         ]
         games.append(gd)
 
+    # Collect distinct years from games for filter UI
+    year_rows = (
+        db.session.query(func.distinct(func.extract("year", Game.created_at)))
+        .order_by(func.extract("year", Game.created_at).desc())
+        .all()
+    )
+    years = [int(r[0]) for r in year_rows if r[0]]
+
+    # Collect distinct genres for filter UI
+    genre_rows = (
+        db.session.query(Game.genres)
+        .filter(Game.genres.isnot(None), Game.genres != "")
+        .all()
+    )
+    genre_set: set[str] = set()
+    for (genres_str,) in genre_rows:
+        for g in genres_str.split(","):
+            stripped = g.strip()
+            if stripped:
+                genre_set.add(stripped)
+
     return jsonify({
         "games": games,
         "total": pagination.total,
         "page": pagination.page,
         "per_page": pagination.per_page,
         "pages": pagination.pages,
+        "genres": sorted(genre_set),
+        "years": years,
+    }), 200
+
+
+@admin_bp.route("/games/bulk-update", methods=["PUT"])
+@admin_required
+def bulk_update_games():
+    """Bulk update multiple games at once.
+
+    Body: {"ids": [1,2,3], "data": {"price": 50000, "is_enabled": true, ...}}
+    """
+    body = request.get_json() or {}
+    ids = body.get("ids", [])
+    data = body.get("data", {})
+
+    if not ids or not isinstance(ids, list):
+        return jsonify({"error": "ids must be a non-empty list"}), 400
+    if not data or not isinstance(data, dict):
+        return jsonify({"error": "data must be a non-empty object"}), 400
+
+    allowed_fields = {"price", "is_enabled", "is_featured"}
+    update_dict = {}
+    for key in allowed_fields:
+        if key in data:
+            if key == "price":
+                update_dict[key] = int(data[key])
+            else:
+                update_dict[key] = bool(data[key])
+
+    if not update_dict:
+        return jsonify({"error": "No valid fields to update"}), 400
+
+    count = Game.query.filter(Game.id.in_(ids)).update(update_dict)
+    db.session.commit()
+
+    return jsonify({
+        "message": f"{count} games updated",
+        "updated": count,
     }), 200
 
 

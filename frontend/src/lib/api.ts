@@ -348,9 +348,17 @@ export const adminApi = {
   syncGames() {
     return request<{ message: string }>('/api/admin/accounts/sync-games', { method: 'POST' })
   },
-  async getGames() {
-    const res = await request<{ games: Game[] }>('/api/admin/games')
-    return res.games
+  async getGames(params?: { q?: string; genre?: string; is_enabled?: string; is_featured?: string; year?: string; page?: number; per_page?: number }) {
+    const searchParams = new URLSearchParams()
+    if (params?.q) searchParams.set('q', params.q)
+    if (params?.genre) searchParams.set('genre', params.genre)
+    if (params?.is_enabled) searchParams.set('is_enabled', params.is_enabled)
+    if (params?.is_featured) searchParams.set('is_featured', params.is_featured)
+    if (params?.year) searchParams.set('year', params.year)
+    if (params?.page) searchParams.set('page', String(params.page))
+    if (params?.per_page) searchParams.set('per_page', String(params.per_page))
+    const qs = searchParams.toString()
+    return request<{ games: Game[]; total: number; page: number; per_page: number; pages: number; genres: string[]; years: number[] }>(`/api/admin/games${qs ? `?${qs}` : ''}`)
   },
   async updateGame(id: number, data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean }>) {
     const res = await request<{ game: Game }>(`/api/admin/games/${id}`, {
@@ -358,6 +366,12 @@ export const adminApi = {
       body: JSON.stringify(data)
     })
     return res.game
+  },
+  bulkUpdateGames(ids: number[], data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean }>) {
+    return request<{ message: string; updated: number }>('/api/admin/games/bulk-update', {
+      method: 'PUT',
+      body: JSON.stringify({ ids, data })
+    })
   },
   updateGameInstructions(id: number, instructions: string) {
     return request<{ message: string }>(`/api/admin/games/${id}/instructions`, {

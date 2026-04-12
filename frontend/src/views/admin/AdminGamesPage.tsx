@@ -28,7 +28,12 @@ import Snackbar from '@mui/material/Snackbar'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import InputAdornment from '@mui/material/InputAdornment'
-import Grid from '@mui/material/Grid'
+import Checkbox from '@mui/material/Checkbox'
+import MenuItem from '@mui/material/MenuItem'
+import Select from '@mui/material/Select'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import Pagination from '@mui/material/Pagination'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { adminApi, formatIDR } from '@/lib/api'
@@ -39,32 +44,51 @@ const AdminGamesPage = () => {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
+  // Filters
   const [search, setSearch] = useState('')
+  const [filterGenre, setFilterGenre] = useState('')
+  const [filterEnabled, setFilterEnabled] = useState('')
+  const [filterFeatured, setFilterFeatured] = useState('')
+  const [filterYear, setFilterYear] = useState('')
+  const [page, setPage] = useState(1)
+  const perPage = 50
+
+  // Inline edit
   const [editPriceId, setEditPriceId] = useState<number | null>(null)
   const [editPriceValue, setEditPriceValue] = useState('')
   const [instructionsOpen, setInstructionsOpen] = useState<Game | null>(null)
   const [instructionsText, setInstructionsText] = useState('')
-  const [snackMsg, setSnackMsg] = useState('')
-  const [filterFeatured, setFilterFeatured] = useState(false)
-  const [filterDisabled, setFilterDisabled] = useState(false)
 
-  const { data: games, isLoading } = useQuery({
-    queryKey: ['admin-games'],
-    queryFn: () => adminApi.getGames(),
+  // Selection
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+
+  // Bulk action dialog
+  const [bulkDialog, setBulkDialog] = useState<'price' | null>(null)
+  const [bulkPriceValue, setBulkPriceValue] = useState('')
+
+  const [snackMsg, setSnackMsg] = useState('')
+
+  const queryKey = ['admin-games', search, filterGenre, filterEnabled, filterFeatured, filterYear, page]
+
+  const { data, isLoading } = useQuery({
+    queryKey,
+    queryFn: () => adminApi.getGames({
+      q: search || undefined,
+      genre: filterGenre || undefined,
+      is_enabled: filterEnabled || undefined,
+      is_featured: filterFeatured || undefined,
+      year: filterYear || undefined,
+      page,
+      per_page: perPage,
+    }),
     enabled: user?.role === 'admin'
   })
 
-  const filteredGames = useMemo(() => {
-    if (!games) return []
-    let result = games
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter(g => g.name.toLowerCase().includes(q) || String(g.appid).includes(q))
-    }
-    if (filterFeatured) result = result.filter(g => g.is_featured)
-    if (filterDisabled) result = result.filter(g => !g.is_enabled)
-    return result
-  }, [games, search, filterFeatured, filterDisabled])
+  const games = data?.games ?? []
+  const total = data?.total ?? 0
+  const totalPages = data?.pages ?? 1
+  const genres = data?.genres ?? []
+  const years = data?.years ?? []
 
   const updateGameMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean }> }) =>
@@ -74,6 +98,18 @@ const AdminGamesPage = () => {
       setSnackMsg('Game updated')
     },
     onError: (err: any) => setSnackMsg(`Update failed: ${err.message}`)
+  })
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: ({ ids, data }: { ids: number[]; data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean }> }) =>
+      adminApi.bulkUpdateGames(ids, data),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-games'] })
+      setSelected(new Set())
+      setBulkDialog(null)
+      setSnackMsg(res.message)
+    },
+    onError: (err: any) => setSnackMsg(`Bulk update failed: ${err.message}`)
   })
 
   const updateInstructionsMutation = useMutation({
@@ -94,11 +130,57 @@ const AdminGamesPage = () => {
     setEditPriceId(null)
   }
 
-  if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
+  // Selection helpers
+  const selectedIds = useMemo(() => [...selected], [selected])
+  const allOnPageSelected = games.length > 0 && games.every(g => selected.has(g.id))
+  const someOnPageSelected = games.some(g => selected.has(g.id))
 
-  const totalGames = games?.length ?? 0
-  const enabledCount = games?.filter(g => g.is_enabled).length ?? 0
-  const featuredCount = games?.filter(g => g.is_featured).length ?? 0
+  const toggleSelectAll = () => {
+    if (allOnPageSelected) {
+      const next = new Set(selected)
+      games.forEach(g => next.delete(g.id))
+      setSelected(next)
+    } else {
+      const next = new Set(selected)
+      games.forEach(g => next.add(g.id))
+      setSelected(next)
+    }
+  }
+
+  const toggleSelect = (id: number) => {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelected(next)
+  }
+
+  // Bulk actions
+  const handleBulkEnable = (enable: boolean) => {
+    bulkUpdateMutation.mutate({ ids: selectedIds, data: { is_enabled: enable } })
+  }
+
+  const handleBulkFeatured = (featured: boolean) => {
+    bulkUpdateMutation.mutate({ ids: selectedIds, data: { is_featured: featured } })
+  }
+
+  const handleBulkPrice = () => {
+    const price = parseInt(bulkPriceValue)
+    if (isNaN(price) || price < 0) { setSnackMsg('Invalid price'); return }
+    bulkUpdateMutation.mutate({ ids: selectedIds, data: { price } })
+  }
+
+  const clearFilters = () => {
+    setSearch('')
+    setFilterGenre('')
+    setFilterEnabled('')
+    setFilterFeatured('')
+    setFilterYear('')
+    setPage(1)
+  }
+
+  const hasActiveFilters = !!(search || filterGenre || filterEnabled || filterFeatured || filterYear)
+
+  if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
 
   return (
     <div className='flex flex-col gap-6'>
@@ -106,67 +188,105 @@ const AdminGamesPage = () => {
         <Box>
           <Typography variant='h4' sx={{ mb: 1 }}>Game Catalog</Typography>
           <Typography color='text.secondary'>
-            {totalGames} games &middot; {enabledCount} enabled &middot; {featuredCount} featured
+            {total} games{hasActiveFilters ? ' (filtered)' : ''}
           </Typography>
         </Box>
       </Box>
 
-      {/* Stats row */}
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 6, md: 3 }}>
-          <Card sx={{ cursor: 'pointer', border: filterFeatured ? '2px solid' : '1px solid', borderColor: filterFeatured ? 'warning.main' : 'divider' }} onClick={() => setFilterFeatured(!filterFeatured)}>
-            <CardContent sx={{ py: 2, px: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-              <i className='tabler-star' style={{ fontSize: 24, color: filterFeatured ? '#e5c07b' : '#8f98a0' }} />
-              <Box>
-                <Typography variant='h6' sx={{ fontWeight: 700 }}>{featuredCount}</Typography>
-                <Typography variant='caption' color='text.secondary'>Featured</Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 6, md: 3 }}>
-          <Card sx={{ cursor: 'pointer', border: filterDisabled ? '2px solid' : '1px solid', borderColor: filterDisabled ? 'error.main' : 'divider' }} onClick={() => setFilterDisabled(!filterDisabled)}>
-            <CardContent sx={{ py: 2, px: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-              <i className='tabler-eye-off' style={{ fontSize: 24, color: filterDisabled ? '#c44' : '#8f98a0' }} />
-              <Box>
-                <Typography variant='h6' sx={{ fontWeight: 700 }}>{totalGames - enabledCount}</Typography>
-                <Typography variant='caption' color='text.secondary'>Disabled</Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      {/* Filters */}
+      <Card>
+        <CardContent sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+          <TextField
+            placeholder='Search by name or app ID...'
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            size='small'
+            sx={{ minWidth: 240, flex: 1 }}
+            slotProps={{
+              input: {
+                startAdornment: <InputAdornment position='start'><i className='tabler-search' /></InputAdornment>,
+                endAdornment: search ? (
+                  <InputAdornment position='end'>
+                    <IconButton size='small' onClick={() => { setSearch(''); setPage(1) }}><i className='tabler-x' /></IconButton>
+                  </InputAdornment>
+                ) : null,
+              }
+            }}
+          />
+          <FormControl size='small' sx={{ minWidth: 160 }}>
+            <InputLabel>Genre</InputLabel>
+            <Select value={filterGenre} label='Genre' onChange={e => { setFilterGenre(e.target.value); setPage(1) }}>
+              <MenuItem value=''>All Genres</MenuItem>
+              {genres.map(g => <MenuItem key={g} value={g}>{g}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <FormControl size='small' sx={{ minWidth: 130 }}>
+            <InputLabel>Status</InputLabel>
+            <Select value={filterEnabled} label='Status' onChange={e => { setFilterEnabled(e.target.value); setPage(1) }}>
+              <MenuItem value=''>All</MenuItem>
+              <MenuItem value='true'>Enabled</MenuItem>
+              <MenuItem value='false'>Disabled</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size='small' sx={{ minWidth: 130 }}>
+            <InputLabel>Featured</InputLabel>
+            <Select value={filterFeatured} label='Featured' onChange={e => { setFilterFeatured(e.target.value); setPage(1) }}>
+              <MenuItem value=''>All</MenuItem>
+              <MenuItem value='true'>Featured</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size='small' sx={{ minWidth: 120 }}>
+            <InputLabel>Year</InputLabel>
+            <Select value={filterYear} label='Year' onChange={e => { setFilterYear(e.target.value); setPage(1) }}>
+              <MenuItem value=''>All Years</MenuItem>
+              {years.map(y => <MenuItem key={y} value={String(y)}>{y}</MenuItem>)}
+            </Select>
+          </FormControl>
+          {hasActiveFilters && (
+            <Button size='small' variant='text' color='secondary' onClick={clearFilters} startIcon={<i className='tabler-x' />}>
+              Clear
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Search */}
-      <TextField
-        fullWidth
-        placeholder='Search games by name or app ID...'
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        size='small'
-        slotProps={{
-          input: {
-            startAdornment: <InputAdornment position='start'><i className='tabler-search' /></InputAdornment>,
-            endAdornment: search ? (
-              <InputAdornment position='end'>
-                <IconButton size='small' onClick={() => setSearch('')}><i className='tabler-x' /></IconButton>
-              </InputAdornment>
-            ) : null,
-          }
-        }}
-      />
+      {/* Bulk Action Bar */}
+      {selected.size > 0 && (
+        <Card sx={{ border: '1px solid', borderColor: 'primary.main' }}>
+          <CardContent sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', py: '12px !important' }}>
+            <Chip label={`${selected.size} selected`} color='primary' variant='tonal' onDelete={() => setSelected(new Set())} />
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button size='small' variant='outlined' color='success' onClick={() => handleBulkEnable(true)} disabled={bulkUpdateMutation.isPending}>
+                Enable
+              </Button>
+              <Button size='small' variant='outlined' color='error' onClick={() => handleBulkEnable(false)} disabled={bulkUpdateMutation.isPending}>
+                Disable
+              </Button>
+              <Button size='small' variant='outlined' color='warning' onClick={() => handleBulkFeatured(true)} disabled={bulkUpdateMutation.isPending}>
+                Feature
+              </Button>
+              <Button size='small' variant='outlined' onClick={() => handleBulkFeatured(false)} disabled={bulkUpdateMutation.isPending}>
+                Unfeature
+              </Button>
+              <Button size='small' variant='contained' onClick={() => { setBulkDialog('price'); setBulkPriceValue('') }} disabled={bulkUpdateMutation.isPending}>
+                Set Price
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <Card><CardContent>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</CardContent></Card>
-      ) : filteredGames.length === 0 ? (
+      ) : games.length === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
             <i className='tabler-device-gamepad' style={{ fontSize: 48, opacity: 0.5 }} />
             <Typography variant='h6' sx={{ mt: 2 }}>
-              {games?.length === 0 ? 'No games in catalog' : 'No games match your filter'}
+              {!hasActiveFilters ? 'No games in catalog' : 'No games match your filters'}
             </Typography>
             <Typography color='text.secondary'>
-              {games?.length === 0 ? 'Add Steam accounts and sync games to populate the catalog' : 'Try a different search or clear filters'}
+              {!hasActiveFilters ? 'Add Steam accounts and sync games to populate the catalog' : 'Try different filters or clear them'}
             </Typography>
           </CardContent>
         </Card>
@@ -176,6 +296,13 @@ const AdminGamesPage = () => {
             <Table size='small'>
               <TableHead>
                 <TableRow>
+                  <TableCell padding='checkbox'>
+                    <Checkbox
+                      checked={allOnPageSelected}
+                      indeterminate={someOnPageSelected && !allOnPageSelected}
+                      onChange={toggleSelectAll}
+                    />
+                  </TableCell>
                   <TableCell>Game</TableCell>
                   <TableCell>Price</TableCell>
                   <TableCell align='center'>Enabled</TableCell>
@@ -185,8 +312,11 @@ const AdminGamesPage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredGames.map(game => (
-                  <TableRow key={game.id} hover sx={{ opacity: game.is_enabled ? 1 : 0.5 }}>
+                {games.map(game => (
+                  <TableRow key={game.id} hover sx={{ opacity: game.is_enabled ? 1 : 0.5 }} selected={selected.has(game.id)}>
+                    <TableCell padding='checkbox'>
+                      <Checkbox checked={selected.has(game.id)} onChange={() => toggleSelect(game.id)} />
+                    </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Box
@@ -199,6 +329,11 @@ const AdminGamesPage = () => {
                         <Box>
                           <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>{game.name}</Typography>
                           <Typography variant='caption' color='text.secondary'>{game.appid}</Typography>
+                          {game.genres && (
+                            <Typography variant='caption' color='text.disabled' sx={{ display: 'block', fontSize: '0.7rem' }}>
+                              {game.genres}
+                            </Typography>
+                          )}
                         </Box>
                       </Box>
                     </TableCell>
@@ -263,8 +398,33 @@ const AdminGamesPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          {totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color='primary' />
+            </Box>
+          )}
         </Card>
       )}
+
+      {/* Bulk Set Price Dialog */}
+      <Dialog open={bulkDialog === 'price'} onClose={() => setBulkDialog(null)} maxWidth='xs' fullWidth>
+        <DialogTitle>Set Price for {selected.size} Games</DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth type='number' label='Price (IDR)' value={bulkPriceValue}
+            onChange={e => setBulkPriceValue(e.target.value)}
+            sx={{ mt: 2 }}
+            onKeyDown={e => { if (e.key === 'Enter') handleBulkPrice() }}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setBulkDialog(null)}>Cancel</Button>
+          <Button variant='contained' onClick={handleBulkPrice} disabled={bulkUpdateMutation.isPending}>
+            {bulkUpdateMutation.isPending ? 'Updating...' : 'Apply'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Instructions Dialog */}
       <Dialog open={instructionsOpen !== null} onClose={() => setInstructionsOpen(null)} maxWidth='md' fullWidth>
