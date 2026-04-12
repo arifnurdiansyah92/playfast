@@ -75,10 +75,10 @@ const MyGamesPage = () => {
               sx={{
                 width: 96, height: 96, borderRadius: '50%', mx: 'auto', mb: 3,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                bgcolor: 'rgba(0,230,118,0.08)', border: '1px solid rgba(0,230,118,0.15)',
+                bgcolor: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.15)',
               }}
             >
-              <i className='tabler-device-gamepad-2' style={{ fontSize: 48, color: '#00E676', opacity: 0.6 }} />
+              <i className='tabler-device-gamepad-2' style={{ fontSize: 48, color: '#c9a84c', opacity: 0.6 }} />
             </Box>
             <Typography variant='h5' sx={{ fontWeight: 600, mb: 1 }}>Belum ada game</Typography>
             <Typography color='text.secondary' sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}>
@@ -132,7 +132,7 @@ const MyGamesPage = () => {
                       display: 'flex',
                       flexDirection: 'column',
                       border: '1px solid',
-                      borderColor: isBonus ? 'rgba(0,230,118,0.3)' : 'divider',
+                      borderColor: isBonus ? 'rgba(201,168,76,0.3)' : 'divider',
                       transition: 'all 0.25s ease',
                       '&:hover': {
                         transform: 'translateY(-3px)',
@@ -160,7 +160,7 @@ const MyGamesPage = () => {
                             sx={{
                               fontWeight: 700,
                               fontSize: '0.7rem',
-                              bgcolor: 'rgba(0,230,118,0.9)',
+                              bgcolor: 'rgba(201,168,76,0.9)',
                               color: '#0a0e17',
                               backdropFilter: 'blur(4px)',
                             }}
@@ -240,13 +240,13 @@ const MyGamesPage = () => {
       {/* Bonus info dialog */}
       <Dialog open={bonusInfoOpen} onClose={() => setBonusInfoOpen(false)} maxWidth='sm' fullWidth>
         <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}>
-          <i className='tabler-gift' style={{ fontSize: 24, color: '#00E676' }} />
+          <i className='tabler-gift' style={{ fontSize: 24, color: '#c9a84c' }} />
           Apa itu Game Bonus?
         </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: '8px !important' }}>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Box sx={{ width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(0,230,118,0.08)', flexShrink: 0, mt: 0.5 }}>
-              <i className='tabler-gift' style={{ fontSize: 20, color: '#00E676' }} />
+            <Box sx={{ width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'rgba(201,168,76,0.08)', flexShrink: 0, mt: 0.5 }}>
+              <i className='tabler-gift' style={{ fontSize: 20, color: '#c9a84c' }} />
             </Box>
             <Box>
               <Typography variant='subtitle2' sx={{ fontWeight: 700, mb: 0.5 }}>Apa itu bonus?</Typography>

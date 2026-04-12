@@ -32,18 +32,15 @@ const NotFound = ({ mode }: { mode?: string }) => {
           width: '600px',
           height: '600px',
           borderRadius: '50%',
-          background: 'radial-gradient(ellipse, rgba(0,230,118,0.06) 0%, transparent 70%)',
+          background: 'radial-gradient(ellipse, rgba(201,168,76,0.06) 0%, transparent 70%)',
           pointerEvents: 'none',
         }}
       />
 
       <Box sx={{ position: 'relative', zIndex: 1 }}>
         {/* Branding */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 5 }}>
-          <i className='tabler-brand-steam' style={{ fontSize: 32, color: '#00E676' }} />
-          <Typography variant='h5' sx={{ fontWeight: 800, letterSpacing: '-0.01em' }}>
-            Playfast
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 5 }}>
+          <Box component='img' src='/images/brand/wordmark.png' alt='Playfast' sx={{ height: 34 }} />
         </Box>
 
         {/* 404 display */}
@@ -53,7 +50,7 @@ const NotFound = ({ mode }: { mode?: string }) => {
             fontWeight: 800,
             fontSize: { xs: '5rem', md: '8rem' },
             lineHeight: 1,
-            background: 'linear-gradient(135deg, #00E676 0%, #00C853 50%, #00E676 100%)',
+            background: 'linear-gradient(135deg, #c9a84c 0%, #b0923f 50%, #c9a84c 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             mb: 2,
@@ -80,8 +77,8 @@ const NotFound = ({ mode }: { mode?: string }) => {
             sx={{
               px: 4,
               fontWeight: 700,
-              boxShadow: '0 4px 24px rgba(0,230,118,0.25)',
-              '&:hover': { boxShadow: '0 6px 32px rgba(0,230,118,0.35)' },
+              boxShadow: '0 4px 24px rgba(201,168,76,0.25)',
+              '&:hover': { boxShadow: '0 6px 32px rgba(201,168,76,0.35)' },
             }}
           >
             Cari Game
@@ -96,7 +93,7 @@ const NotFound = ({ mode }: { mode?: string }) => {
               fontWeight: 700,
               borderColor: '#3d5a80',
               color: '#c7d5e0',
-              '&:hover': { borderColor: '#00E676', bgcolor: 'rgba(0,230,118,0.04)' },
+              '&:hover': { borderColor: '#c9a84c', bgcolor: 'rgba(201,168,76,0.04)' },
             }}
           >
             Beranda

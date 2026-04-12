@@ -68,7 +68,7 @@ const Logo = ({ color }: { color?: CSSProperties['color'] }) => {
 
   return (
     <div className='flex items-center'>
-      <i className='tabler-brand-steam text-2xl text-primary' />
+      <img src='/images/brand/icon.png' alt='' style={{ width: 28, height: 'auto' }} />
       <LogoText
         color={color}
         ref={logoTextRef}

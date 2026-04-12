@@ -15,6 +15,7 @@ import Collapse from '@mui/material/Collapse'
 import Container from '@mui/material/Container'
 import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
+import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 
 import { storeApi, formatIDR } from '@/lib/api'
@@ -385,14 +386,34 @@ const LandingPage = () => {
                   <Grid size={{ xs: 12, sm: 6, md: 3 }} key={game.id}>
                     <Card sx={{ ...cardSx, '&:hover': { ...cardSx['&:hover'], borderColor: gold } }}>
                       <CardActionArea onClick={() => router.push(`/game/${game.appid}`)}>
-                        <CardMedia
-                          component='img' height={130}
-                          image={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`}
-                          alt={game.name} sx={{ objectFit: 'cover' }}
-                        />
+                        <Box sx={{ position: 'relative' }}>
+                          <CardMedia
+                            component='img' height={130}
+                            image={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`}
+                            alt={game.name} sx={{ objectFit: 'cover' }}
+                          />
+                          <Chip
+                            label='Lifetime Access'
+                            size='small'
+                            sx={{
+                              position: 'absolute', top: 8, right: 8,
+                              bgcolor: 'rgba(0,0,0,0.7)', color: gold,
+                              fontWeight: 600, fontSize: '0.65rem', height: 22,
+                              backdropFilter: 'blur(4px)',
+                              border: `1px solid rgba(201,168,76,0.3)`,
+                            }}
+                            icon={<i className='tabler-infinity' style={{ fontSize: 13, color: gold, marginLeft: 6 }} />}
+                          />
+                        </Box>
                         <CardContent sx={{ p: 2 }}>
-                          <Typography variant='subtitle2' noWrap sx={{ fontWeight: 600, mb: 0.5 }}>{game.name}</Typography>
-                          <Typography variant='h6' sx={{ fontWeight: 700, color: gold }}>{formatIDR(game.price)}</Typography>
+                          <Typography variant='subtitle2' noWrap sx={{ fontWeight: 600, mb: 1 }}>{game.name}</Typography>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant='h6' sx={{ fontWeight: 700, color: gold }}>{formatIDR(game.price)}</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <i className='tabler-shield-lock' style={{ fontSize: 14, color: textSecondary }} />
+                              <Typography variant='caption' sx={{ color: textSecondary, fontSize: '0.65rem' }}>Instant Guard</Typography>
+                            </Box>
+                          </Box>
                         </CardContent>
                       </CardActionArea>
                     </Card>

@@ -38,7 +38,7 @@ const CountdownRing = ({ seconds, total }: { seconds: number; total: number }) =
   const isLow = seconds <= 5
   const isWarn = seconds <= 10 && !isLow
 
-  const color = isLow ? '#f44336' : isWarn ? '#ff9800' : '#00E676'
+  const color = isLow ? '#f44336' : isWarn ? '#ff9800' : '#c9a84c'
 
   return (
     <Box sx={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -203,7 +203,7 @@ const PlayPage = ({ orderId }: Props) => {
               flexShrink: 0,
             }}
           >
-            <i className='tabler-device-gamepad-2' style={{ fontSize: 24, color: '#00E676' }} />
+            <i className='tabler-device-gamepad-2' style={{ fontSize: 24, color: '#c9a84c' }} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant='h5' sx={{ fontWeight: 700 }} noWrap>
@@ -382,7 +382,7 @@ const PlayPage = ({ orderId }: Props) => {
                     className={justCopied === 'Steam Guard code' ? 'tabler-check' : 'tabler-copy'}
                     style={{
                       fontSize: 24,
-                      color: justCopied === 'Steam Guard code' ? '#4caf50' : '#00E676',
+                      color: justCopied === 'Steam Guard code' ? '#4caf50' : '#c9a84c',
                     }}
                   />
                   <Typography variant='caption' sx={{ color: '#8f98a0', fontSize: '0.65rem' }}>
@@ -430,7 +430,7 @@ const PlayPage = ({ orderId }: Props) => {
                   border: '1px solid rgba(102,192,244,0.15)',
                 }}
               >
-                <i className='tabler-shield-lock' style={{ fontSize: 36, color: '#00E676' }} />
+                <i className='tabler-shield-lock' style={{ fontSize: 36, color: '#c9a84c' }} />
               </Box>
               <Typography variant='body1' sx={{ mb: 1, fontWeight: 500 }}>
                 Butuh kode Steam Guard?
@@ -481,7 +481,7 @@ const PlayPage = ({ orderId }: Props) => {
                 '& h2': { fontSize: '1.3rem' },
                 '& h3': { fontSize: '1.15rem' },
                 '& p': { mb: 1.5 },
-                '& a': { color: '#00E676', textDecoration: 'underline' },
+                '& a': { color: '#c9a84c', textDecoration: 'underline' },
                 '& code': {
                   fontFamily: 'monospace',
                   bgcolor: 'rgba(102,192,244,0.1)',
@@ -507,7 +507,7 @@ const PlayPage = ({ orderId }: Props) => {
                 '& li': { mb: 0.5 },
                 '& blockquote': {
                   borderLeft: '3px solid',
-                  borderColor: '#00E676',
+                  borderColor: '#c9a84c',
                   pl: 2,
                   ml: 0,
                   color: '#8f98a0',

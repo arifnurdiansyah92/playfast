@@ -249,7 +249,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
 
       {/* Next steps (only for fulfilled) */}
       {isFulfilled && (
-        <Card sx={{ mb: 3, bgcolor: 'rgba(0,230,118,0.05)', border: '1px solid rgba(0,230,118,0.2)' }}>
+        <Card sx={{ mb: 3, bgcolor: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.2)' }}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant='subtitle1' sx={{ fontWeight: 700, mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
               <i className='tabler-info-circle' style={{ fontSize: 20 }} />

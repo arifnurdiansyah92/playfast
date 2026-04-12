@@ -16,23 +16,9 @@ const TermsPage = () => {
       <Container maxWidth='md' sx={{ py: 6 }}>
         {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Typography
-            component={Link}
-            href='/'
-            variant='h5'
-            sx={{
-              fontWeight: 800,
-              textDecoration: 'none',
-              color: 'inherit',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 1,
-              mb: 2,
-            }}
-          >
-            <i className='tabler-brand-steam' style={{ fontSize: 28, color: 'var(--mui-palette-primary-main)' }} />
-            Playfast
-          </Typography>
+          <Link href='/'>
+            <Box component='img' src='/images/brand/wordmark.png' alt='Playfast' sx={{ height: 34 }} />
+          </Link>
         </Box>
 
         <Card sx={{ bgcolor: 'rgba(30,42,58,0.7)', border: '1px solid rgba(42,63,85,0.6)' }}>
@@ -134,13 +120,13 @@ const TermsPage = () => {
               <Box component='ul' sx={{ pl: 3, '& li': { mb: 1 } }}>
                 <li>
                   WhatsApp:{' '}
-                  <a href='https://wa.me/6282240708329' target='_blank' rel='noopener noreferrer' style={{ color: '#00E676' }}>
+                  <a href='https://wa.me/6282240708329' target='_blank' rel='noopener noreferrer' style={{ color: '#c9a84c' }}>
                     +62 822-4070-8329
                   </a>
                 </li>
                 <li>
                   Email:{' '}
-                  <a href='mailto:support@playfast.id' style={{ color: '#00E676' }}>
+                  <a href='mailto:support@playfast.id' style={{ color: '#c9a84c' }}>
                     support@playfast.id
                   </a>
                 </li>

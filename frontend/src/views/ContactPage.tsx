@@ -64,23 +64,9 @@ const ContactPage = () => {
       <Container maxWidth='md' sx={{ py: 6 }}>
         {/* Header */}
         <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Typography
-            component={Link}
-            href='/'
-            variant='h5'
-            sx={{
-              fontWeight: 800,
-              textDecoration: 'none',
-              color: 'inherit',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 1,
-              mb: 2,
-            }}
-          >
-            <i className='tabler-brand-steam' style={{ fontSize: 28, color: 'var(--mui-palette-primary-main)' }} />
-            Playfast
-          </Typography>
+          <Link href='/'>
+            <Box component='img' src='/images/brand/wordmark.png' alt='Playfast' sx={{ height: 34 }} />
+          </Link>
         </Box>
 
         {/* Page Title */}
@@ -154,7 +140,7 @@ const ContactPage = () => {
                 border: '1px solid rgba(42,63,85,0.6)',
                 height: '100%',
                 transition: 'all 0.3s ease',
-                '&:hover': { borderColor: 'rgba(0,230,118,0.3)', transform: 'translateY(-2px)' },
+                '&:hover': { borderColor: 'rgba(201,168,76,0.3)', transform: 'translateY(-2px)' },
               }}
             >
               <CardContent sx={{ textAlign: 'center', py: 4, px: 3 }}>
@@ -168,11 +154,11 @@ const ContactPage = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'linear-gradient(135deg, rgba(0,230,118,0.12) 0%, rgba(0,230,118,0.04) 100%)',
-                    border: '1px solid rgba(0,230,118,0.2)',
+                    background: 'linear-gradient(135deg, rgba(201,168,76,0.12) 0%, rgba(201,168,76,0.04) 100%)',
+                    border: '1px solid rgba(201,168,76,0.2)',
                   }}
                 >
-                  <i className='tabler-mail' style={{ fontSize: 32, color: '#00E676' }} />
+                  <i className='tabler-mail' style={{ fontSize: 32, color: '#c9a84c' }} />
                 </Box>
                 <Typography variant='h6' sx={{ fontWeight: 700, mb: 1 }}>
                   Email
@@ -185,9 +171,9 @@ const ContactPage = () => {
                   href='mailto:support@playfast.id'
                   variant='outlined'
                   sx={{
-                    borderColor: '#00E676',
-                    color: '#00E676',
-                    '&:hover': { bgcolor: 'rgba(0,230,118,0.08)', borderColor: '#00E676' },
+                    borderColor: '#c9a84c',
+                    color: '#c9a84c',
+                    '&:hover': { bgcolor: 'rgba(201,168,76,0.08)', borderColor: '#c9a84c' },
                     fontWeight: 600,
                   }}
                   startIcon={<i className='tabler-mail' />}
@@ -214,10 +200,10 @@ const ContactPage = () => {
               sx={{
                 bgcolor: 'rgba(30,42,58,0.5)',
                 border: '1px solid',
-                borderColor: openFaq === idx ? 'rgba(0,230,118,0.3)' : 'rgba(42,63,85,0.6)',
+                borderColor: openFaq === idx ? 'rgba(201,168,76,0.3)' : 'rgba(42,63,85,0.6)',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                '&:hover': { borderColor: 'rgba(0,230,118,0.2)' },
+                '&:hover': { borderColor: 'rgba(201,168,76,0.2)' },
               }}
               onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
             >

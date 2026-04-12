@@ -48,7 +48,7 @@ const LoginPage = () => {
       <Card sx={{ maxWidth: 440, width: '100%' }}>
         <CardContent sx={{ p: theme => `${theme.spacing(10, 9, 8)} !important` }}>
           <Box sx={{ mb: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <i className='tabler-brand-steam' style={{ fontSize: 40, marginRight: 12, color: 'var(--mui-palette-primary-main)' }} />
+            <Box component='img' src='/images/brand/icon.png' alt='Playfast' sx={{ width: 44, height: 'auto', mr: 1.5 }} />
             <Typography variant='h4' sx={{ fontWeight: 700 }}>
               Playfast
             </Typography>
