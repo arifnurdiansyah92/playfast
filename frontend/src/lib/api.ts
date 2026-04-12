@@ -128,6 +128,18 @@ export const authApi = {
       method: 'PUT',
       body: JSON.stringify(data)
     })
+  },
+  forgotPassword(email: string) {
+    return request<{ message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    })
+  },
+  resetPassword(token: string, password: string) {
+    return request<{ message: string }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password })
+    })
   }
 }
 

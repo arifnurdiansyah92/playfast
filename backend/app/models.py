@@ -1,6 +1,7 @@
 """All SQLAlchemy models for the Playfast platform."""
 
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timezone, timedelta
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -359,3 +360,40 @@ class SiteSetting(db.Model):
         result = dict(cls.DEFAULTS)
         result.update(stored)
         return result
+
+
+class PasswordResetToken(db.Model):
+    __tablename__ = "password_reset_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    token = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    is_used = db.Column(db.Boolean, default=False, nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = db.relationship("User", backref="reset_tokens")
+
+    @classmethod
+    def create_for_user(cls, user_id: int, hours: int = 24) -> "PasswordResetToken":
+        """Generate a new reset token for a user, invalidating previous ones."""
+        cls.query.filter_by(user_id=user_id, is_used=False).update({"is_used": True})
+        token = cls(
+            user_id=user_id,
+            token=secrets.token_urlsafe(48),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=hours),
+        )
+        db.session.add(token)
+        return token
+
+    @classmethod
+    def validate(cls, token_str: str) -> "PasswordResetToken | None":
+        """Find a valid, unused, non-expired token."""
+        t = cls.query.filter_by(token=token_str, is_used=False).first()
+        if t and t.expires_at > datetime.now(timezone.utc):
+            return t
+        return None

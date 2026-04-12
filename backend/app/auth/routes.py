@@ -14,7 +14,7 @@ from flask_jwt_extended import (
 )
 
 from app.extensions import db
-from app.models import User
+from app.models import PasswordResetToken, User
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -163,3 +163,60 @@ def update_profile():
 
     db.session.commit()
     return jsonify({"message": "Profile updated successfully", "user": user.to_dict()}), 200
+
+
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    """Request a password reset. Creates a token and returns instructions.
+
+    In production this would send an email. For now the admin can look up
+    the token via the admin panel and share the reset link with the user.
+    """
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Email harus diisi"}), 400
+
+    user = User.query.filter_by(email=email).first()
+
+    # Always return success to prevent email enumeration
+    if not user or not user.is_active:
+        return jsonify({
+            "message": "Jika email terdaftar, instruksi reset password akan dikirim."
+        }), 200
+
+    token = PasswordResetToken.create_for_user(user.id)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Jika email terdaftar, instruksi reset password akan dikirim.",
+        "reset_token": token.token,  # Returned so admin can share the link
+    }), 200
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password():
+    """Reset password using a valid token."""
+    data = request.get_json() or {}
+    token_str = (data.get("token") or "").strip()
+    new_password = data.get("password") or ""
+
+    if not token_str:
+        return jsonify({"error": "Token tidak valid"}), 400
+    if len(new_password) < 6:
+        return jsonify({"error": "Password minimal 6 karakter"}), 400
+
+    token = PasswordResetToken.validate(token_str)
+    if not token:
+        return jsonify({"error": "Token tidak valid atau sudah kedaluwarsa"}), 400
+
+    user = db.session.get(User, token.user_id)
+    if not user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
+
+    user.set_password(new_password)
+    token.is_used = True
+    db.session.commit()
+
+    return jsonify({"message": "Password berhasil direset. Silakan login."}), 200

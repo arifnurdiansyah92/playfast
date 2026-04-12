@@ -102,7 +102,7 @@ const LoginPage = () => {
               {loading ? 'Sedang masuk...' : 'Masuk'}
             </Button>
             <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-              <Typography component={Link} href='/bantuan' variant='body2' color='text.secondary' sx={{ textDecoration: 'none', '&:hover': { color: 'primary.main' } }}>
+              <Typography component={Link} href='/forgot-password' variant='body2' color='text.secondary' sx={{ textDecoration: 'none', '&:hover': { color: 'primary.main' } }}>
                 Lupa password?
               </Typography>
             </Box>

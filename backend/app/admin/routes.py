@@ -18,6 +18,7 @@ from app.models import (
     Game,
     GameAccount,
     Order,
+    PasswordResetToken,
     PlayInstruction,
     SiteSetting,
     SteamAccount,
@@ -228,6 +229,24 @@ def delete_user(user_id: int):
     db.session.delete(target)
     db.session.commit()
     return jsonify({"message": "User deleted"}), 200
+
+
+@admin_bp.route("/users/<int:user_id>/reset-password", methods=["POST"])
+@admin_required
+def admin_generate_reset(user_id: int):
+    """Generate a password reset link for a user."""
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    token = PasswordResetToken.create_for_user(target.id)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Reset link generated",
+        "token": token.token,
+        "expires_at": token.expires_at.isoformat(),
+    }), 200
 
 
 # ---------------------------------------------------------------------------
