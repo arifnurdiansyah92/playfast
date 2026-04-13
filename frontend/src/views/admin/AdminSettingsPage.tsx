@@ -196,6 +196,49 @@ const AdminSettingsPage = () => {
         </Card>
       )}
 
+      {/* Subscription Pricing */}
+      <Card>
+        <CardHeader
+          title='Subscription Pricing'
+          avatar={<i className='tabler-crown' style={{ fontSize: 24 }} />}
+        />
+        <Divider />
+        <CardContent>
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <CustomTextField
+                fullWidth
+                type='number'
+                label='Monthly Price (IDR)'
+                value={form.sub_price_monthly || ''}
+                onChange={e => handleChange('sub_price_monthly', e.target.value)}
+                placeholder='50000'
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <CustomTextField
+                fullWidth
+                type='number'
+                label='3-Month Price (IDR)'
+                value={form.sub_price_3monthly || ''}
+                onChange={e => handleChange('sub_price_3monthly', e.target.value)}
+                placeholder='120000'
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <CustomTextField
+                fullWidth
+                type='number'
+                label='Yearly Price (IDR)'
+                value={form.sub_price_yearly || ''}
+                onChange={e => handleChange('sub_price_yearly', e.target.value)}
+                placeholder='400000'
+              />
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
       <Snackbar open={!!snackMsg} autoHideDuration={3000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>
   )
