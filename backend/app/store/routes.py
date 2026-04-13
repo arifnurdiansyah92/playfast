@@ -555,6 +555,32 @@ def create_order():
     if not available:
         return jsonify({"error": "No accounts available for this game"}), 409
 
+    # Check if user has active subscription — auto-fulfill without payment
+    active_sub = _get_active_subscription(user_id)
+    if active_sub:
+        order = Order(
+            user_id=user_id,
+            game_id=game.id,
+            status="pending_payment",
+            type="subscription",
+            amount=0,
+        )
+        db.session.add(order)
+        db.session.flush()
+
+        order.payment_type = "subscription"
+        order.paid_at = datetime.now(timezone.utc)
+        success = _fulfill_order(order)
+        if not success:
+            order.status = "fulfilled"
+            db.session.commit()
+
+        return jsonify({
+            "message": "Game access granted via subscription",
+            "order": order.to_dict(),
+            "payment_mode": "subscription",
+        }), 201
+
     # Fetch user for Midtrans customer details
     user = db.session.get(User, user_id)
 
@@ -821,6 +847,8 @@ def my_games():
     others as 'bonus'.
     """
     user_id = int(get_jwt_identity())
+    # Trigger lazy expiry check for subscription
+    _get_active_subscription(user_id)
 
     # Get all active (non-revoked) assignments for this user
     assignments = (
@@ -849,7 +877,8 @@ def my_games():
         if game and game.id not in seen_game_ids:
             seen_game_ids.add(game.id)
             gd = game.to_dict()
-            gd["type"] = "purchased"
+            source_order = db.session.get(Order, a.order_id)
+            gd["type"] = "subscription" if (source_order and source_order.type == "subscription") else "purchased"
             gd["order_id"] = a.order_id
             gd["account_name"] = a.steam_account.account_name if a.steam_account else None
             gd["assignment_id"] = a.id
