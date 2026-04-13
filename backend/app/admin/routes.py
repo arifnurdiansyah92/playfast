@@ -631,6 +631,16 @@ def _sync_account_games(account: SteamAccount) -> dict:
             if g.get("icon") and game.icon != g["icon"]:
                 game.icon = g["icon"]
 
+            # Backfill metadata if missing screenshots/movies
+            if not game.screenshots:
+                metadata = _fetch_game_metadata(g["appid"])
+                if metadata:
+                    game.description = metadata.get("description") or game.description
+                    game.header_image = metadata.get("header_image") or game.header_image
+                    game.genres = metadata.get("genres") or game.genres
+                    game.screenshots = metadata.get("screenshots")
+                    game.movies = metadata.get("movies")
+
         # Upsert GameAccount link
         existing_link = GameAccount.query.filter_by(
             game_id=game.id, steam_account_id=account.id
