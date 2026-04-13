@@ -122,6 +122,7 @@ const MyGamesPage = () => {
           <Grid container spacing={3}>
             {filtered.map((game, idx) => {
               const isBonus = game.type === 'bonus'
+              const isSubscription = game.type === 'subscription'
               const headerImage = `https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`
 
               return (
@@ -154,27 +155,37 @@ const MyGamesPage = () => {
                       <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.5 }}>
                         {isBonus ? (
                           <Chip
-                            label='BONUS'
+                            label='Bonus'
                             size='small'
+                            color='info'
                             icon={<i className='tabler-gift' style={{ fontSize: 14 }} />}
                             sx={{
                               fontWeight: 700,
                               fontSize: '0.7rem',
-                              bgcolor: 'rgba(201,168,76,0.9)',
-                              color: '#0a0e17',
+                              backdropFilter: 'blur(4px)',
+                            }}
+                          />
+                        ) : isSubscription ? (
+                          <Chip
+                            label='Premium'
+                            size='small'
+                            color='warning'
+                            icon={<i className='tabler-crown' style={{ fontSize: 14 }} />}
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.7rem',
                               backdropFilter: 'blur(4px)',
                             }}
                           />
                         ) : (
                           <Chip
-                            label='Dibeli'
+                            label='Purchased'
                             size='small'
                             color='success'
                             icon={<i className='tabler-check' style={{ fontSize: 14 }} />}
                             sx={{
                               fontWeight: 600,
                               fontSize: '0.7rem',
-                              bgcolor: 'rgba(76,175,80,0.9)',
                               backdropFilter: 'blur(4px)',
                             }}
                           />
