@@ -66,6 +66,11 @@ const StorePage = () => {
     if (timer) clearTimeout(timer)
   }
 
+  const { data: featuredGames = [] } = useQuery({
+    queryKey: ['store-featured'],
+    queryFn: () => storeApi.getFeaturedGames()
+  })
+
   const { data: genres = [] } = useQuery({
     queryKey: ['store-genres'],
     queryFn: () => storeApi.getGenres()
@@ -234,6 +239,78 @@ const StorePage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Featured Games — always pinned on top */}
+      {featuredGames.length > 0 && (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <i className='tabler-star-filled' style={{ fontSize: 20, color: '#c9a84c' }} />
+            <Typography variant='h6' sx={{ fontWeight: 700 }}>Game Unggulan</Typography>
+          </Box>
+          <Grid container spacing={3}>
+            {featuredGames.map(game => (
+              <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={`featured-${game.id}`}>
+                <Card
+                  sx={{
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    border: '2px solid',
+                    borderColor: 'rgba(201,168,76,0.3)',
+                    transition: 'all 0.25s ease',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      borderColor: 'primary.main',
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(201,168,76,0.2)',
+                    },
+                  }}
+                >
+                  <CardActionArea
+                    onClick={() => router.push(`/game/${game.appid}`)}
+                    sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
+                  >
+                    <Box sx={{ position: 'relative', overflow: 'hidden' }}>
+                      <CardMedia
+                        component='img'
+                        height={140}
+                        image={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`}
+                        alt={game.name}
+                        sx={{
+                          objectFit: 'cover',
+                          transition: 'transform 0.3s ease',
+                          '.MuiCardActionArea-root:hover &': { transform: 'scale(1.05)' },
+                        }}
+                      />
+                      <Chip
+                        label='Unggulan'
+                        size='small'
+                        sx={{
+                          position: 'absolute',
+                          top: 8,
+                          right: 8,
+                          height: 22,
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          bgcolor: 'rgba(201,168,76,0.9)',
+                          color: '#000',
+                        }}
+                      />
+                    </Box>
+                    <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', p: 2.5 }}>
+                      <Typography variant='subtitle1' sx={{ fontWeight: 600, mb: 'auto', lineHeight: 1.3 }} noWrap>
+                        {game.name}
+                      </Typography>
+                      <Typography variant='h6' color='primary.main' sx={{ fontWeight: 700, mt: 1.5 }}>
+                        {formatIDR(game.price)}
+                      </Typography>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </>
+      )}
 
       {isLoading ? (
         <Grid container spacing={3}>
