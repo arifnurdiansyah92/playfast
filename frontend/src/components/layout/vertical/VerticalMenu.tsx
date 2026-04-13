@@ -81,6 +81,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
           <MenuItem href='/store' icon={<i className='tabler-building-store' />}>
             Toko
           </MenuItem>
+          <MenuItem href='/subscribe' icon={<i className='tabler-crown' />}>
+            Premium
+          </MenuItem>
           {user && (
             <>
               <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
@@ -118,6 +121,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
               </MenuItem>
               <MenuItem href='/admin/orders' icon={<i className='tabler-receipt' />}>
                 Pesanan
+              </MenuItem>
+              <MenuItem href='/admin/subscriptions' icon={<i className='tabler-crown' />}>
+                Langganan
               </MenuItem>
               <MenuItem href='/admin/users' icon={<i className='tabler-users' />}>
                 Pengguna
