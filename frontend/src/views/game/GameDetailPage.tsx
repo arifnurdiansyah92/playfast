@@ -51,6 +51,14 @@ const GameDetailPage = ({ appid }: Props) => {
     enabled: !!user
   })
 
+  const { data: subStatus } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => storeApi.getSubscriptionStatus(),
+    enabled: !!user,
+  })
+
+  const isSubscribed = subStatus?.is_subscribed ?? false
+
   const existingOrder = orders?.find(o => String(o.game?.appid) === String(appid))
 
   const handleBuy = async () => {
@@ -65,6 +73,12 @@ const GameDetailPage = ({ appid }: Props) => {
 
     try {
       const result = await storeApi.createOrder(appid)
+
+      if (result.payment_mode === 'subscription') {
+        router.push(`/play/${result.order.id}`)
+        return
+      }
+
       const { order, payment_mode, snap_token } = result
 
       if (payment_mode === 'midtrans' && snap_token && typeof window !== 'undefined' && (window as any).snap) {
@@ -239,6 +253,21 @@ const GameDetailPage = ({ appid }: Props) => {
                     Buka Halaman Main
                   </Button>
                 </Box>
+              ) : user && isSubscribed ? (
+                <Button
+                  variant='contained'
+                  size='large'
+                  disabled={buying}
+                  onClick={handleBuy}
+                  startIcon={<i className='tabler-player-play' />}
+                  sx={{
+                    minWidth: 220, py: 1.5, fontSize: '1rem', fontWeight: 700,
+                    boxShadow: '0 4px 16px rgba(201,168,76,0.2)',
+                    '&:hover': { boxShadow: '0 6px 24px rgba(201,168,76,0.3)' },
+                  }}
+                >
+                  {buying ? 'Memproses...' : 'Main Sekarang (Premium)'}
+                </Button>
               ) : user ? (
                 <Button
                   variant='contained'
@@ -247,10 +276,7 @@ const GameDetailPage = ({ appid }: Props) => {
                   onClick={() => setConfirmOpen(true)}
                   startIcon={<i className='tabler-shopping-cart' />}
                   sx={{
-                    minWidth: 220,
-                    py: 1.5,
-                    fontSize: '1rem',
-                    fontWeight: 700,
+                    minWidth: 220, py: 1.5, fontSize: '1rem', fontWeight: 700,
                     boxShadow: '0 4px 16px rgba(201,168,76,0.2)',
                     '&:hover': { boxShadow: '0 6px 24px rgba(201,168,76,0.3)' },
                   }}
@@ -266,9 +292,7 @@ const GameDetailPage = ({ appid }: Props) => {
                     size='large'
                     startIcon={<i className='tabler-login' />}
                     sx={{
-                      py: 1.5,
-                      fontSize: '1rem',
-                      fontWeight: 700,
+                      py: 1.5, fontSize: '1rem', fontWeight: 700,
                       boxShadow: '0 4px 16px rgba(201,168,76,0.2)',
                       '&:hover': { boxShadow: '0 6px 24px rgba(201,168,76,0.3)' },
                     }}
