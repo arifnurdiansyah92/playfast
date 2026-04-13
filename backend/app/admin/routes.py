@@ -22,6 +22,7 @@ from app.models import (
     PlayInstruction,
     SiteSetting,
     SteamAccount,
+    Subscription,
     User,
 )
 from app.steam.service import (
@@ -1017,6 +1018,64 @@ def audit_codes():
 
 # ---------------------------------------------------------------------------
 # Site Settings
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/subscriptions", methods=["GET"])
+@admin_required
+def list_subscriptions():
+    """List all subscriptions with optional status filter."""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 50, type=int)
+    per_page = min(per_page, 200)
+    status_filter = request.args.get("status", "").strip()
+
+    query = Subscription.query
+
+    if status_filter and status_filter != "all":
+        query = query.filter(Subscription.status == status_filter)
+
+    pagination = query.order_by(Subscription.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    subs = []
+    for sub in pagination.items:
+        sd = sub.to_dict()
+        user = db.session.get(User, sub.user_id)
+        sd["user_email"] = user.email if user else "Unknown"
+        subs.append(sd)
+
+    return jsonify({
+        "subscriptions": subs,
+        "total": pagination.total,
+        "page": pagination.page,
+        "pages": pagination.pages,
+    }), 200
+
+
+@admin_bp.route("/subscriptions/<int:sub_id>/confirm", methods=["POST"])
+@admin_required
+def confirm_subscription_payment(sub_id: int):
+    """Admin manually confirms payment for a subscription (manual payment mode)."""
+    sub = db.session.get(Subscription, sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+
+    if sub.status != "pending_payment":
+        return jsonify({"error": "Subscription is not pending payment"}), 400
+
+    sub.payment_type = "manual"
+    sub.paid_at = datetime.now(timezone.utc)
+    sub.activate()
+    db.session.commit()
+
+    return jsonify({
+        "message": "Subscription payment confirmed and activated",
+        "subscription": sub.to_dict(),
+    }), 200
+
+
 # ---------------------------------------------------------------------------
 
 
