@@ -175,6 +175,9 @@ class Order(db.Model):
     status = db.Column(
         db.String(30), default="pending_payment", nullable=False, index=True
     )  # pending_payment, fulfilled, cancelled, revoked, expired
+    type = db.Column(
+        db.String(20), default="purchase", nullable=False
+    )  # purchase, subscription
     snap_token = db.Column(db.String(255), nullable=True)
     midtrans_order_id = db.Column(db.String(100), nullable=True, unique=True, index=True)
     payment_type = db.Column(db.String(50), nullable=True)
@@ -197,6 +200,7 @@ class Order(db.Model):
             "game_id": self.game_id,
             "game": self.game.to_dict() if self.game else None,
             "status": self.status,
+            "type": self.type,
             "is_revoked": self.assignment.is_revoked if self.assignment else False,
             "snap_token": self.snap_token,
             "payment_type": self.payment_type,
@@ -334,6 +338,9 @@ class SiteSetting(db.Model):
         "manual_qris_image_url": "",
         "manual_whatsapp_number": "6282240708329",
         "manual_payment_instructions": "Scan QRIS di bawah ini, lalu kirim bukti transfer via WhatsApp.",
+        "sub_price_monthly": "50000",
+        "sub_price_3monthly": "120000",
+        "sub_price_yearly": "400000",
     }
 
     @classmethod
@@ -397,3 +404,75 @@ class PasswordResetToken(db.Model):
         if t and t.expires_at > datetime.now(timezone.utc):
             return t
         return None
+
+
+class Subscription(db.Model):
+    __tablename__ = "subscriptions"
+
+    PLAN_DURATIONS = {
+        "monthly": 30,
+        "3monthly": 90,
+        "yearly": 365,
+    }
+
+    PLAN_LABELS = {
+        "monthly": "Monthly",
+        "3monthly": "3 Months",
+        "yearly": "Yearly",
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    plan = db.Column(db.String(20), nullable=False)  # monthly, 3monthly, yearly
+    status = db.Column(
+        db.String(20), default="pending_payment", nullable=False, index=True
+    )  # pending_payment, active, expired, cancelled
+    amount = db.Column(db.Integer, nullable=False)
+    starts_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    midtrans_order_id = db.Column(
+        db.String(100), nullable=True, unique=True, index=True
+    )
+    snap_token = db.Column(db.String(255), nullable=True)
+    payment_type = db.Column(db.String(50), nullable=True)
+    paid_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = db.relationship("User", backref=db.backref("subscriptions", lazy="dynamic"))
+
+    def activate(self):
+        """Activate this subscription, setting start/expiry dates."""
+        now = datetime.now(timezone.utc)
+        duration_days = self.PLAN_DURATIONS.get(self.plan, 30)
+        self.status = "active"
+        self.starts_at = now
+        self.expires_at = now + timedelta(days=duration_days)
+
+    @property
+    def is_active(self):
+        return (
+            self.status == "active"
+            and self.expires_at is not None
+            and self.expires_at > datetime.now(timezone.utc)
+        )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "plan": self.plan,
+            "plan_label": self.PLAN_LABELS.get(self.plan, self.plan),
+            "status": self.status,
+            "amount": self.amount,
+            "starts_at": self.starts_at.isoformat() if self.starts_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "payment_type": self.payment_type,
+            "paid_at": self.paid_at.isoformat() if self.paid_at else None,
+            "created_at": self.created_at.isoformat(),
+        }

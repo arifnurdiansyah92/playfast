@@ -116,6 +116,8 @@ def _run_schema_upgrades():
         "ALTER TABLE orders ADD COLUMN payment_type VARCHAR(50)",
         "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP",
         "ALTER TABLE orders ADD COLUMN amount INTEGER",
+        # Order type column for subscription vs purchase
+        "ALTER TABLE orders ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'purchase'",
     ]
     for stmt in alter_statements:
         try:
@@ -123,3 +125,6 @@ def _run_schema_upgrades():
             db.session.commit()
         except Exception:
             db.session.rollback()
+
+    from app.models import Subscription
+    Subscription.__table__.create(db.engine, checkfirst=True)
