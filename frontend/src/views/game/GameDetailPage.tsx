@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -18,6 +18,7 @@ import Alert from '@mui/material/Alert'
 import Skeleton from '@mui/material/Skeleton'
 import Divider from '@mui/material/Divider'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
+import IconButton from '@mui/material/IconButton'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -38,6 +39,8 @@ const GameDetailPage = ({ appid }: Props) => {
   const [buying, setBuying] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [error, setError] = useState('')
+  const [selectedMedia, setSelectedMedia] = useState(0)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   const { data: game, isLoading } = useQuery({
     queryKey: ['game', appid],
@@ -316,6 +319,146 @@ const GameDetailPage = ({ appid }: Props) => {
           </Grid>
         </Grid>
       </Card>
+
+      {/* Media Gallery */}
+      {(() => {
+        const mediaItems: { type: 'video' | 'screenshot'; thumbnail: string; full: string; mp4?: string; name?: string }[] = []
+        for (const mv of game.movies ?? []) {
+          mediaItems.push({ type: 'video', thumbnail: mv.thumbnail, full: mv.thumbnail, mp4: mv.mp4_max || mv.mp4_480, name: mv.name })
+        }
+        for (const ss of game.screenshots ?? []) {
+          mediaItems.push({ type: 'screenshot', thumbnail: ss.thumbnail, full: ss.full })
+        }
+        if (mediaItems.length === 0) return null
+
+        const current = mediaItems[selectedMedia] || mediaItems[0]
+
+        return (
+          <Card sx={{ border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+            {/* Main viewer */}
+            <Box
+              sx={{ position: 'relative', bgcolor: '#000', cursor: 'pointer' }}
+              onClick={() => { if (current.type === 'screenshot') setLightboxOpen(true) }}
+            >
+              {current.type === 'video' && current.mp4 ? (
+                <video
+                  key={current.mp4}
+                  controls
+                  autoPlay
+                  style={{ width: '100%', maxHeight: 480, display: 'block' }}
+                  poster={current.thumbnail}
+                >
+                  <source src={current.mp4} type='video/mp4' />
+                </video>
+              ) : (
+                <Box
+                  component='img'
+                  src={current.full}
+                  alt={current.name || game.name}
+                  onError={handleImageError}
+                  sx={{ width: '100%', maxHeight: 480, objectFit: 'contain', display: 'block' }}
+                />
+              )}
+            </Box>
+
+            {/* Thumbnail strip */}
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 0.5,
+                p: 1,
+                overflowX: 'auto',
+                bgcolor: 'background.paper',
+                '&::-webkit-scrollbar': { height: 4 },
+                '&::-webkit-scrollbar-thumb': { bgcolor: 'divider', borderRadius: 2 },
+              }}
+            >
+              {mediaItems.map((item, idx) => (
+                <Box
+                  key={idx}
+                  onClick={() => setSelectedMedia(idx)}
+                  sx={{
+                    flexShrink: 0,
+                    width: 120,
+                    height: 68,
+                    borderRadius: 0.5,
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    border: '2px solid',
+                    borderColor: idx === selectedMedia ? 'primary.main' : 'transparent',
+                    opacity: idx === selectedMedia ? 1 : 0.6,
+                    transition: 'all 0.2s ease',
+                    '&:hover': { opacity: 1 },
+                    position: 'relative',
+                  }}
+                >
+                  <Box
+                    component='img'
+                    src={item.thumbnail}
+                    alt=''
+                    onError={handleImageError}
+                    sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                  {item.type === 'video' && (
+                    <Box sx={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      bgcolor: 'rgba(0,0,0,0.3)',
+                    }}>
+                      <i className='tabler-player-play-filled' style={{ fontSize: 20, color: '#fff' }} />
+                    </Box>
+                  )}
+                </Box>
+              ))}
+            </Box>
+          </Card>
+        )
+      })()}
+
+      {/* Screenshot lightbox */}
+      <Dialog open={lightboxOpen} onClose={() => setLightboxOpen(false)} maxWidth='xl' fullWidth
+        slotProps={{ paper: { sx: { bgcolor: '#000', backgroundImage: 'none' } } }}
+      >
+        {(() => {
+          const mediaItems: { type: 'video' | 'screenshot'; full: string }[] = []
+          for (const mv of game.movies ?? []) mediaItems.push({ type: 'video', full: mv.thumbnail })
+          for (const ss of game.screenshots ?? []) mediaItems.push({ type: 'screenshot', full: ss.full })
+          const current = mediaItems[selectedMedia]
+          if (!current) return null
+          return (
+            <Box sx={{ position: 'relative' }}>
+              <Box
+                component='img'
+                src={current.full}
+                alt=''
+                sx={{ width: '100%', maxHeight: '85vh', objectFit: 'contain', display: 'block' }}
+              />
+              <IconButton
+                onClick={() => setLightboxOpen(false)}
+                sx={{ position: 'absolute', top: 8, right: 8, color: '#fff', bgcolor: 'rgba(0,0,0,0.5)' }}
+              >
+                <i className='tabler-x' />
+              </IconButton>
+              {selectedMedia > 0 && (
+                <IconButton
+                  onClick={() => setSelectedMedia(selectedMedia - 1)}
+                  sx={{ position: 'absolute', top: '50%', left: 8, transform: 'translateY(-50%)', color: '#fff', bgcolor: 'rgba(0,0,0,0.5)' }}
+                >
+                  <i className='tabler-chevron-left' />
+                </IconButton>
+              )}
+              {selectedMedia < mediaItems.length - 1 && (
+                <IconButton
+                  onClick={() => setSelectedMedia(selectedMedia + 1)}
+                  sx={{ position: 'absolute', top: '50%', right: 8, transform: 'translateY(-50%)', color: '#fff', bgcolor: 'rgba(0,0,0,0.5)' }}
+                >
+                  <i className='tabler-chevron-right' />
+                </IconButton>
+              )}
+            </Box>
+          )
+        })()}
+      </Dialog>
 
       {/* Features */}
       <Grid container spacing={2}>

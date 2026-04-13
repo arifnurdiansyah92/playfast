@@ -493,7 +493,7 @@ def admin_act_confirmation(account_id: int, conf_id: str):
 def _fetch_game_metadata(appid: int) -> dict | None:
     """
     Fetch metadata for a game from the Steam Store API.
-    Returns dict with description, header_image, genres or None on failure.
+    Returns dict with description, header_image, genres, screenshots, movies or None on failure.
     """
     try:
         resp = http_requests.get(
@@ -508,10 +508,33 @@ def _fetch_game_metadata(appid: int) -> dict | None:
         details = app_data.get("data", {})
         genres_list = details.get("genres", [])
         genre_names = ", ".join(g.get("description", "") for g in genres_list)
+
+        # Screenshots
+        screenshots = []
+        for ss in details.get("screenshots", []):
+            screenshots.append({
+                "thumbnail": ss.get("path_thumbnail", ""),
+                "full": ss.get("path_full", ""),
+            })
+
+        # Movies / trailers
+        movies = []
+        for mv in details.get("movies", []):
+            mp4 = mv.get("mp4", {})
+            movies.append({
+                "id": mv.get("id"),
+                "name": mv.get("name", ""),
+                "thumbnail": mv.get("thumbnail", ""),
+                "mp4_480": mp4.get("480", ""),
+                "mp4_max": mp4.get("max", ""),
+            })
+
         return {
             "description": details.get("short_description", ""),
             "header_image": details.get("header_image", ""),
             "genres": genre_names,
+            "screenshots": screenshots,
+            "movies": movies,
         }
     except Exception as e:
         logger.warning("Failed to fetch metadata for appid %s: %s", appid, e)
@@ -599,6 +622,8 @@ def _sync_account_games(account: SteamAccount) -> dict:
                 game.description = metadata.get("description")
                 game.header_image = metadata.get("header_image")
                 game.genres = metadata.get("genres")
+                game.screenshots = metadata.get("screenshots")
+                game.movies = metadata.get("movies")
         else:
             # Update name/icon if changed
             if game.name != g["name"]:
@@ -657,6 +682,25 @@ def sync_single_account(account_id: int):
 
     status_code = 200 if result.get("success") else 502
     return jsonify(result), status_code
+
+
+@admin_bp.route("/games/refresh-metadata", methods=["POST"])
+@admin_required
+def refresh_game_metadata():
+    """Re-fetch metadata (screenshots, movies, description) for all games from Steam."""
+    games = Game.query.all()
+    updated = 0
+    for game in games:
+        metadata = _fetch_game_metadata(game.appid)
+        if metadata:
+            game.description = metadata.get("description") or game.description
+            game.header_image = metadata.get("header_image") or game.header_image
+            game.genres = metadata.get("genres") or game.genres
+            game.screenshots = metadata.get("screenshots")
+            game.movies = metadata.get("movies")
+            updated += 1
+    db.session.commit()
+    return jsonify({"message": f"Metadata refreshed for {updated}/{len(games)} games"}), 200
 
 
 # ---------------------------------------------------------------------------

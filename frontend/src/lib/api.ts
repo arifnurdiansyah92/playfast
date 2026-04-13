@@ -157,6 +157,19 @@ export const authApi = {
 
 // ─── Store ───────────────────────────────────────────────────────────────────
 
+export interface GameScreenshot {
+  thumbnail: string
+  full: string
+}
+
+export interface GameMovie {
+  id: number
+  name: string
+  thumbnail: string
+  mp4_480: string
+  mp4_max: string
+}
+
 export interface Game {
   id: number
   appid: number
@@ -168,8 +181,10 @@ export interface Game {
   description?: string
   header_image?: string
   genres?: string
+  screenshots?: GameScreenshot[]
+  movies?: GameMovie[]
   available_accounts?: number
-  accounts?: { id: number; account_name: string; is_active: boolean }[]
+  accounts?: { id: number; account_name: string }[]
   created_at: string
 }
 
@@ -411,6 +426,9 @@ export const adminApi = {
   },
   syncGames() {
     return request<{ message: string }>('/api/admin/accounts/sync-games', { method: 'POST' })
+  },
+  refreshGameMetadata() {
+    return request<{ message: string }>('/api/admin/games/refresh-metadata', { method: 'POST' })
   },
   async getGames(params?: { q?: string; genre?: string; is_enabled?: string; is_featured?: string; year?: string; page?: number; per_page?: number }) {
     const searchParams = new URLSearchParams()

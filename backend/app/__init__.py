@@ -120,6 +120,9 @@ def _run_schema_upgrades():
         "ALTER TABLE orders ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'purchase'",
         # User email verification
         "ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE",
+        # Game media columns
+        "ALTER TABLE games ADD COLUMN screenshots JSON",
+        "ALTER TABLE games ADD COLUMN movies JSON",
     ]
     for stmt in alter_statements:
         try:

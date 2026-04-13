@@ -96,6 +96,8 @@ class Game(db.Model):
     description = db.Column(db.Text, nullable=True)
     header_image = db.Column(db.String(500), nullable=True)
     genres = db.Column(db.String(500), nullable=True)  # comma-separated genre names
+    screenshots = db.Column(db.JSON, nullable=True)  # [{thumbnail, full}]
+    movies = db.Column(db.JSON, nullable=True)  # [{id, name, thumbnail, mp4_480, mp4_max}]
     price = db.Column(db.Integer, default=50000, nullable=False)  # in smallest currency unit
     is_enabled = db.Column(db.Boolean, default=True, nullable=False)
     is_featured = db.Column(db.Boolean, default=False, nullable=False)
@@ -133,6 +135,8 @@ class Game(db.Model):
             "description": self.description,
             "header_image": self.header_image,
             "genres": self.genres,
+            "screenshots": self.screenshots or [],
+            "movies": self.movies or [],
             "price": self.price,
             "is_enabled": self.is_enabled,
             "is_featured": self.is_featured,
