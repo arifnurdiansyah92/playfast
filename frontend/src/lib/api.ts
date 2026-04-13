@@ -284,7 +284,7 @@ export const storeApi = {
     })
   },
   async getMyGames() {
-    const res = await request<{ games: (Game & { type: 'purchased' | 'bonus'; order_id: number; account_name: string; assignment_id: number })[] }>('/api/store/my-games')
+    const res = await request<{ games: (Game & { type: 'purchased' | 'bonus' | 'subscription'; order_id: number; account_name: string; assignment_id: number })[] }>('/api/store/my-games')
     return res.games
   },
   getOrderStatus(orderId: number | string) {

@@ -31,8 +31,8 @@ jobs:
               docker stop $OTHER_CONTAINERS 2>/dev/null || true
             fi
 
-            # Build
-            docker compose build
+            # Build (abort deploy if build fails)
+            docker compose build || { echo "Build failed, aborting deploy"; exit 1; }
 
             # Restart WITHOUT -v (preserves data)
             docker compose down
