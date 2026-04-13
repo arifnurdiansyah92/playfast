@@ -18,7 +18,7 @@ import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 
-import { storeApi, formatIDR } from '@/lib/api'
+import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 import type { Game } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -389,8 +389,8 @@ const LandingPage = () => {
                         <Box sx={{ position: 'relative' }}>
                           <CardMedia
                             component='img' height={130}
-                            image={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`}
-                            alt={game.name} sx={{ objectFit: 'cover' }}
+                            image={gameHeaderImage(game.appid)}
+                            alt={game.name} onError={handleImageError} sx={{ objectFit: 'cover' }}
                           />
                           <Chip
                             label='Lifetime Access'

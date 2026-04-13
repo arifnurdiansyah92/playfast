@@ -21,7 +21,7 @@ import Snackbar from '@mui/material/Snackbar'
 
 import ReactMarkdown from 'react-markdown'
 
-import { storeApi } from '@/lib/api'
+import { storeApi, gameHeaderImage, handleImageError } from '@/lib/api'
 
 interface Props {
   orderId: string
@@ -167,7 +167,7 @@ const PlayPage = ({ orderId }: Props) => {
 
   const instructions = instructionsData?.instructions?.content
   const headerImage = order.game?.appid
-    ? `https://cdn.akamai.steamstatic.com/steam/apps/${order.game.appid}/header.jpg`
+    ? gameHeaderImage(order.game.appid)
     : null
 
   return (
@@ -188,6 +188,7 @@ const PlayPage = ({ orderId }: Props) => {
             component='img'
             image={headerImage}
             alt={order.game?.name || 'Game'}
+            onError={handleImageError}
             sx={{ height: { xs: 140, sm: 180 }, objectFit: 'cover' }}
           />
         )}

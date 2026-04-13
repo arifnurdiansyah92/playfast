@@ -22,7 +22,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 
-import { storeApi } from '@/lib/api'
+import { storeApi, gameHeaderImage, handleImageError } from '@/lib/api'
 
 const MyGamesPage = () => {
   const router = useRouter()
@@ -123,7 +123,7 @@ const MyGamesPage = () => {
             {filtered.map((game, idx) => {
               const isBonus = game.type === 'bonus'
               const isSubscription = game.type === 'subscription'
-              const headerImage = `https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`
+              const headerImage = gameHeaderImage(game.appid)
 
               return (
                 <Grid size={{ xs: 12, sm: 6, md: 4 }} key={`${game.id}-${idx}`}>
@@ -149,6 +149,7 @@ const MyGamesPage = () => {
                         height={140}
                         image={headerImage}
                         alt={game.name}
+                        onError={handleImageError}
                         sx={{ objectFit: 'cover' }}
                       />
                       {/* Badge */}

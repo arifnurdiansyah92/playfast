@@ -25,7 +25,7 @@ import MenuItem from '@mui/material/MenuItem'
 import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 
-import { storeApi, formatIDR } from '@/lib/api'
+import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 
 const SORT_OPTIONS = [
   { value: '', label: 'Relevan' },
@@ -273,8 +273,9 @@ const StorePage = () => {
                       <CardMedia
                         component='img'
                         height={140}
-                        image={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`}
+                        image={gameHeaderImage(game.appid)}
                         alt={game.name}
+                        onError={handleImageError}
                         sx={{
                           objectFit: 'cover',
                           transition: 'transform 0.3s ease',
@@ -399,8 +400,9 @@ const StorePage = () => {
                       <CardMedia
                         component='img'
                         height={140}
-                        image={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`}
+                        image={gameHeaderImage(game.appid)}
                         alt={game.name}
+                        onError={handleImageError}
                         sx={{
                           objectFit: 'cover',
                           transition: 'transform 0.3s ease',

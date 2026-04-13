@@ -26,7 +26,7 @@ import Tab from '@mui/material/Tab'
 import Divider from '@mui/material/Divider'
 import Pagination from '@mui/material/Pagination'
 
-import { storeApi, formatIDR } from '@/lib/api'
+import { storeApi, formatIDR, gameThumbnail, handleImageError } from '@/lib/api'
 import type { Order } from '@/lib/api'
 
 const statusConfig: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' | 'info' }> = {
@@ -75,10 +75,10 @@ const OrderCard = ({ order }: { order: Order }) => {
           {order.game ? (
             <Box
               component='img'
-              src={`https://cdn.akamai.steamstatic.com/steam/apps/${order.game.appid}/capsule_sm_120.jpg`}
+              src={gameThumbnail(order.game.appid)}
               alt={order.game.name}
               sx={{ width: 80, height: 38, borderRadius: 0.5, objectFit: 'cover', flexShrink: 0 }}
-              onError={(e: any) => { e.target.style.display = 'none' }}
+              onError={handleImageError}
             />
           ) : (
             <Box sx={{ width: 80, height: 38, borderRadius: 0.5, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -227,10 +227,10 @@ const OrderHistoryPage = () => {
                           {order.game ? (
                             <Box
                               component='img'
-                              src={`https://cdn.akamai.steamstatic.com/steam/apps/${order.game.appid}/capsule_sm_120.jpg`}
+                              src={gameThumbnail(order.game.appid)}
                               alt={order.game.name}
                               sx={{ width: 64, height: 30, borderRadius: 0.5, objectFit: 'cover' }}
-                              onError={(e: any) => { e.target.style.display = 'none' }}
+                              onError={handleImageError}
                             />
                           ) : (
                             <Box sx={{ width: 64, height: 30, borderRadius: 0.5, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

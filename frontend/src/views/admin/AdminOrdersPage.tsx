@@ -24,7 +24,7 @@ import IconButton from '@mui/material/IconButton'
 import Snackbar from '@mui/material/Snackbar'
 import Grid from '@mui/material/Grid'
 
-import { adminApi } from '@/lib/api'
+import { adminApi, gameThumbnail, handleImageError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 const AdminOrdersPage = () => {
@@ -159,7 +159,7 @@ const AdminOrdersPage = () => {
                     <TableCell><Typography variant='body2'>{order.user_email || `User #${order.user_id}`}</Typography></TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box component='img' src={`https://cdn.akamai.steamstatic.com/steam/apps/${order.game?.appid}/capsule_sm_120.jpg`} alt='' sx={{ width: 48, height: 18, borderRadius: 0.5, objectFit: 'cover' }} onError={(e: any) => { e.target.style.display = 'none' }} />
+                        <Box component='img' src={gameThumbnail(order.game?.appid)} alt='' sx={{ width: 48, height: 18, borderRadius: 0.5, objectFit: 'cover' }} onError={handleImageError} />
                         <Typography variant='subtitle2'>{order.game?.name}</Typography>
                       </Box>
                     </TableCell>

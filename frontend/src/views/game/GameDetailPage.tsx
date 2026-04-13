@@ -24,7 +24,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Grid from '@mui/material/Grid'
 
-import { storeApi, formatIDR } from '@/lib/api'
+import { storeApi, formatIDR, gameHeaderImage, gameThumbnail, handleImageError } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -142,7 +142,7 @@ const GameDetailPage = ({ appid }: Props) => {
     )
   }
 
-  const headerImage = `https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/header.jpg`
+  const headerImage = gameHeaderImage(game.appid)
   const genreList = game.genres ? game.genres.split(',').map(g => g.trim()).filter(Boolean) : []
 
   return (
@@ -165,6 +165,7 @@ const GameDetailPage = ({ appid }: Props) => {
               component='img'
               image={headerImage}
               alt={game.name}
+              onError={handleImageError}
               sx={{
                 height: { xs: 220, sm: 280, md: '100%' },
                 minHeight: { md: 320 },
@@ -358,8 +359,9 @@ const GameDetailPage = ({ appid }: Props) => {
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
               <Box
                 component='img'
-                src={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/capsule_sm_120.jpg`}
+                src={gameThumbnail(game.appid)}
                 alt={game.name}
+                onError={handleImageError}
                 sx={{ width: 80, height: 38, borderRadius: 0.5, objectFit: 'cover' }}
               />
               <Box>

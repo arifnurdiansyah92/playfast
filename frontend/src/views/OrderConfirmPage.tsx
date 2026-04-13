@@ -17,7 +17,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 
 import { useQuery } from '@tanstack/react-query'
 
-import { storeApi, formatIDR } from '@/lib/api'
+import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 import type { Order } from '@/lib/api'
 
 const ManualPaymentSection = ({ orderId, amount, gameName }: { orderId: number; amount: number; gameName: string }) => {
@@ -197,10 +197,10 @@ const OrderConfirmPage = ({ orderId }: Props) => {
           <Box sx={{ display: 'flex', gap: 3, alignItems: 'center', mb: 3 }}>
             <Box
               component='img'
-              src={`https://cdn.akamai.steamstatic.com/steam/apps/${order.game?.appid}/header.jpg`}
+              src={gameHeaderImage(order.game?.appid)}
               alt={order.game?.name}
               sx={{ width: 120, borderRadius: 1, objectFit: 'cover' }}
-              onError={(e: any) => { e.target.style.display = 'none' }}
+              onError={handleImageError}
             />
             <Box>
               <Typography variant='h6' sx={{ fontWeight: 700 }}>{order.game?.name}</Typography>

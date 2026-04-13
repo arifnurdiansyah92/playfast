@@ -36,7 +36,7 @@ import InputLabel from '@mui/material/InputLabel'
 import Pagination from '@mui/material/Pagination'
 
 import CustomTextField from '@core/components/mui/TextField'
-import { adminApi, formatIDR } from '@/lib/api'
+import { adminApi, formatIDR, gameThumbnail, handleImageError } from '@/lib/api'
 import type { Game } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -321,10 +321,10 @@ const AdminGamesPage = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Box
                           component='img'
-                          src={`https://cdn.akamai.steamstatic.com/steam/apps/${game.appid}/capsule_sm_120.jpg`}
+                          src={gameThumbnail(game.appid)}
                           alt={game.name}
                           sx={{ width: 64, height: 30, borderRadius: 0.5, objectFit: 'cover' }}
-                          onError={(e: any) => { e.target.style.display = 'none' }}
+                          onError={handleImageError}
                         />
                         <Box>
                           <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>{game.name}</Typography>

@@ -510,3 +510,24 @@ export function formatIDR(amount: number): string {
     maximumFractionDigits: 0
   }).format(amount)
 }
+
+const GAME_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="460" height="215" viewBox="0 0 460 215">' +
+  '<rect fill="#1a1a2e" width="460" height="215"/>' +
+  '<text x="230" y="100" text-anchor="middle" fill="#333" font-family="sans-serif" font-size="40">&#127918;</text>' +
+  '<text x="230" y="135" text-anchor="middle" fill="#555" font-family="sans-serif" font-size="14">Image not available</text>' +
+  '</svg>'
+)
+
+export function gameHeaderImage(appid: number | string): string {
+  return `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`
+}
+
+export function gameThumbnail(appid: number | string): string {
+  return `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/capsule_sm_120.jpg`
+}
+
+export function handleImageError(e: any) {
+  e.target.onerror = null
+  e.target.src = GAME_PLACEHOLDER
+}
