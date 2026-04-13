@@ -186,6 +186,7 @@ export interface Order {
     password: string
   }
   status: string
+  type?: 'purchase' | 'subscription'
   created_at: string
 }
 
@@ -202,6 +203,28 @@ export interface PlayInstructions {
     id?: number
     updated_at?: string
   }
+}
+
+export interface SubscriptionPlan {
+  plan: string
+  label: string
+  price: number
+  duration_days: number
+}
+
+export interface Subscription {
+  id: number
+  user_id: number
+  plan: string
+  plan_label: string
+  status: string
+  amount: number
+  starts_at: string | null
+  expires_at: string | null
+  payment_type: string | null
+  paid_at: string | null
+  created_at: string
+  user_email?: string
 }
 
 export const storeApi = {
@@ -231,6 +254,23 @@ export const storeApi = {
   },
   getPaymentConfig() {
     return request<{ payment_mode: string; client_key?: string; snap_url?: string; qris_image_url?: string; whatsapp_number?: string; instructions?: string }>('/api/store/payment-config')
+  },
+  getSubscriptionPlans() {
+    return request<{ plans: SubscriptionPlan[] }>('/api/store/subscription/plans')
+  },
+  subscribe(plan: string) {
+    return request<{
+      subscription: Subscription
+      payment_mode: string
+      snap_token?: string
+      manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
+    }>('/api/store/subscription/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ plan })
+    })
+  },
+  getSubscriptionStatus() {
+    return request<{ is_subscribed: boolean; subscription: Subscription | null }>('/api/store/subscription/status')
   },
   async createOrder(appid: number | string) {
     return request<{
@@ -429,7 +469,17 @@ export const adminApi = {
   async getAuditCodes() {
     const res = await request<{ logs: AuditEntry[] }>('/api/admin/audit/codes')
     return res.logs
-  }
+  },
+  async getSubscriptions(params?: { status?: string; page?: number }) {
+    const search = new URLSearchParams()
+    if (params?.status) search.set('status', params.status)
+    if (params?.page) search.set('page', String(params.page))
+    const qs = search.toString()
+    return request<{ subscriptions: Subscription[]; total: number; page: number; pages: number }>(`/api/admin/subscriptions${qs ? `?${qs}` : ''}`)
+  },
+  confirmSubscription(id: number) {
+    return request<{ message: string; subscription: Subscription }>(`/api/admin/subscriptions/${id}/confirm`, { method: 'POST' })
+  },
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
