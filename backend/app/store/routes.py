@@ -25,6 +25,7 @@ from app.models import (
     PlayInstruction,
     SiteSetting,
     SteamAccount,
+    Subscription,
     User,
 )
 from app.steam.service import get_guard_code
@@ -105,6 +106,27 @@ DEFAULT_PLAY_INSTRUCTIONS = """## Cara Main (Mode Offline)
 - Jangan tambah teman atau ubah pengaturan akun"""
 
 
+def _get_active_subscription(user_id: int):
+    """Return the user's active subscription, or None. Expires stale subscriptions."""
+    sub = (
+        Subscription.query
+        .filter_by(user_id=user_id, status="active")
+        .order_by(Subscription.expires_at.desc())
+        .first()
+    )
+    if sub and not sub.is_active:
+        sub.status = "expired"
+        # Revoke all subscription-type assignments for this user
+        sub_orders = Order.query.filter_by(user_id=user_id, type="subscription", status="fulfilled").all()
+        for order in sub_orders:
+            if order.assignment and not order.assignment.is_revoked:
+                order.assignment.is_revoked = True
+                order.assignment.revoked_at = datetime.now(timezone.utc)
+        db.session.commit()
+        return None
+    return sub
+
+
 @store_bp.route("/payment-config", methods=["GET"])
 def payment_config():
     """Public endpoint: returns payment mode and Midtrans client key for frontend."""
@@ -122,6 +144,140 @@ def payment_config():
         result["whatsapp_number"] = SiteSetting.get("manual_whatsapp_number")
         result["instructions"] = SiteSetting.get("manual_payment_instructions")
     return jsonify(result), 200
+
+
+@store_bp.route("/subscription/plans", methods=["GET"])
+def subscription_plans():
+    """Return available subscription plans with prices."""
+    plans = []
+    for plan_key, duration in Subscription.PLAN_DURATIONS.items():
+        price_str = SiteSetting.get(f"sub_price_{plan_key}")
+        price = int(price_str) if price_str else 0
+        if price > 0:
+            plans.append({
+                "plan": plan_key,
+                "label": Subscription.PLAN_LABELS.get(plan_key, plan_key),
+                "price": price,
+                "duration_days": duration,
+            })
+    return jsonify({"plans": plans}), 200
+
+
+@store_bp.route("/subscription/subscribe", methods=["POST"])
+@jwt_required()
+def subscribe():
+    """Create a new subscription with pending_payment status."""
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    plan = data.get("plan", "")
+
+    if plan not in Subscription.PLAN_DURATIONS:
+        return jsonify({"error": "Invalid plan. Choose: monthly, 3monthly, yearly"}), 400
+
+    # Check for existing active subscription
+    active_sub = _get_active_subscription(user_id)
+    if active_sub:
+        return jsonify({"error": "You already have an active subscription", "subscription": active_sub.to_dict()}), 409
+
+    # Check for existing pending subscription
+    pending_sub = Subscription.query.filter_by(
+        user_id=user_id, status="pending_payment"
+    ).first()
+    if pending_sub and pending_sub.snap_token:
+        return jsonify({
+            "message": "Existing pending subscription found",
+            "subscription": pending_sub.to_dict(),
+            "snap_token": pending_sub.snap_token,
+        }), 200
+
+    price_str = SiteSetting.get(f"sub_price_{plan}")
+    price = int(price_str) if price_str else 0
+    if price <= 0:
+        return jsonify({"error": "Subscription plan not available"}), 400
+
+    user = db.session.get(User, user_id)
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    midtrans_order_id = f"SUB-{user_id}-{plan}-{timestamp}"
+
+    sub = Subscription(
+        user_id=user_id,
+        plan=plan,
+        amount=price,
+        midtrans_order_id=midtrans_order_id,
+    )
+    db.session.add(sub)
+    db.session.flush()
+
+    payment_mode = SiteSetting.get("payment_mode")
+
+    if payment_mode == "manual":
+        db.session.commit()
+        return jsonify({
+            "message": "Subscription created, awaiting manual payment",
+            "subscription": sub.to_dict(),
+            "payment_mode": "manual",
+            "manual_info": {
+                "qris_image_url": SiteSetting.get("manual_qris_image_url"),
+                "whatsapp_number": SiteSetting.get("manual_whatsapp_number"),
+                "instructions": SiteSetting.get("manual_payment_instructions"),
+            },
+        }), 201
+    else:
+        try:
+            snap = _get_snap()
+            transaction = snap.create_transaction({
+                "transaction_details": {
+                    "order_id": midtrans_order_id,
+                    "gross_amount": price,
+                },
+                "item_details": [{
+                    "id": f"sub_{plan}",
+                    "price": price,
+                    "quantity": 1,
+                    "name": f"Playfast {Subscription.PLAN_LABELS.get(plan, plan)} Subscription",
+                }],
+                "customer_details": {
+                    "email": user.email if user else "",
+                },
+            })
+            snap_token = transaction["token"]
+            sub.snap_token = snap_token
+            db.session.commit()
+
+            return jsonify({
+                "message": "Subscription created, awaiting payment",
+                "subscription": sub.to_dict(),
+                "payment_mode": "midtrans",
+                "snap_token": snap_token,
+            }), 201
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("Failed to create Midtrans transaction for subscription: %s", e)
+            return jsonify({"error": "Payment service unavailable, please try again later"}), 502
+
+
+@store_bp.route("/subscription/status", methods=["GET"])
+@jwt_required()
+def subscription_status():
+    """Return the current user's subscription status."""
+    user_id = int(get_jwt_identity())
+    active_sub = _get_active_subscription(user_id)
+
+    if active_sub:
+        return jsonify({
+            "is_subscribed": True,
+            "subscription": active_sub.to_dict(),
+        }), 200
+
+    # Check for pending subscription
+    pending_sub = Subscription.query.filter_by(
+        user_id=user_id, status="pending_payment"
+    ).first()
+
+    return jsonify({
+        "is_subscribed": False,
+        "subscription": pending_sub.to_dict() if pending_sub else None,
+    }), 200
 
 
 @store_bp.route("/games", methods=["GET"])
@@ -497,6 +653,39 @@ def midtrans_webhook():
     if signature_key != expected_signature:
         logger.warning("Midtrans webhook signature mismatch for order %s", order_id)
         return jsonify({"error": "Invalid signature"}), 403
+
+    # Handle subscription payments (SUB- prefix)
+    if order_id.startswith("SUB-"):
+        sub = Subscription.query.filter_by(midtrans_order_id=order_id).first()
+        if not sub:
+            logger.warning("Midtrans webhook: subscription not found for %s", order_id)
+            return jsonify({"error": "Subscription not found"}), 404
+
+        if transaction_status in ("capture", "settlement"):
+            if transaction_status == "capture" and fraud_status not in ("accept", ""):
+                sub.status = "cancelled"
+                db.session.commit()
+                return jsonify({"status": "cancelled"}), 200
+
+            if sub.status == "pending_payment":
+                sub.payment_type = payment_type
+                sub.paid_at = datetime.now(timezone.utc)
+                sub.activate()
+                db.session.commit()
+                logger.info("Subscription %s activated for user %s", sub.id, sub.user_id)
+
+            return jsonify({"status": "ok"}), 200
+
+        elif transaction_status in ("cancel", "deny", "expire"):
+            if sub.status == "pending_payment":
+                sub.status = "cancelled"
+                db.session.commit()
+            return jsonify({"status": "cancelled"}), 200
+
+        elif transaction_status == "pending":
+            return jsonify({"status": "pending"}), 200
+
+        return jsonify({"status": "ignored"}), 200
 
     # Look up order by midtrans_order_id
     order = Order.query.filter_by(midtrans_order_id=order_id).first()
