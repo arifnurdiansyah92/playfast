@@ -24,6 +24,13 @@ class Config:
 
     FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+    # SMTP / Email
+    SMTP_HOST = os.getenv("SMTP_HOST", "smtp-relay.brevo.com")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    MAIL_SENDER = os.getenv("MAIL_SENDER", "Playfast <noreply@playfast.id>")
+
 
 class DevelopmentConfig(Config):
     DEBUG = True

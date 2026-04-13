@@ -13,8 +13,11 @@ from flask_jwt_extended import (
     unset_jwt_cookies,
 )
 
+from flask import current_app
+
 from app.extensions import db
-from app.models import PasswordResetToken, User
+from app.models import EmailVerificationToken, PasswordResetToken, User
+from app.email_service import send_password_reset_email, send_verification_email
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -42,7 +45,15 @@ def register():
     user = User(email=email)
     user.set_password(password)
     db.session.add(user)
+    db.session.flush()
+
+    # Send verification email
+    token = EmailVerificationToken.create_for_user(user.id)
     db.session.commit()
+
+    frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
+    verify_url = f"{frontend_url}/verify-email?token={token.token}"
+    send_verification_email(email, verify_url)
 
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
@@ -167,11 +178,7 @@ def update_profile():
 
 @auth_bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
-    """Request a password reset. Creates a token and returns instructions.
-
-    In production this would send an email. For now the admin can look up
-    the token via the admin panel and share the reset link with the user.
-    """
+    """Request a password reset. Creates a token and sends email."""
     data = request.get_json() or {}
     email = (data.get("email") or "").strip().lower()
 
@@ -189,9 +196,12 @@ def forgot_password():
     token = PasswordResetToken.create_for_user(user.id)
     db.session.commit()
 
+    frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
+    reset_url = f"{frontend_url}/reset-password?token={token.token}"
+    send_password_reset_email(email, reset_url)
+
     return jsonify({
         "message": "Jika email terdaftar, instruksi reset password akan dikirim.",
-        "reset_token": token.token,  # Returned so admin can share the link
     }), 200
 
 
@@ -220,3 +230,50 @@ def reset_password():
     db.session.commit()
 
     return jsonify({"message": "Password berhasil direset. Silakan login."}), 200
+
+
+@auth_bp.route("/verify-email", methods=["POST"])
+def verify_email():
+    """Verify email using a token."""
+    data = request.get_json() or {}
+    token_str = (data.get("token") or "").strip()
+
+    if not token_str:
+        return jsonify({"error": "Token tidak valid"}), 400
+
+    token = EmailVerificationToken.validate(token_str)
+    if not token:
+        return jsonify({"error": "Token tidak valid atau sudah kedaluwarsa"}), 400
+
+    user = db.session.get(User, token.user_id)
+    if not user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
+
+    user.email_verified = True
+    token.is_used = True
+    db.session.commit()
+
+    return jsonify({"message": "Email berhasil diverifikasi!"}), 200
+
+
+@auth_bp.route("/resend-verification", methods=["POST"])
+@jwt_required()
+def resend_verification():
+    """Resend the verification email for the current user."""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+
+    if not user:
+        return jsonify({"error": "User tidak ditemukan"}), 404
+
+    if user.email_verified:
+        return jsonify({"message": "Email sudah terverifikasi"}), 200
+
+    token = EmailVerificationToken.create_for_user(user.id)
+    db.session.commit()
+
+    frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
+    verify_url = f"{frontend_url}/verify-email?token={token.token}"
+    send_verification_email(user.email, verify_url)
+
+    return jsonify({"message": "Email verifikasi telah dikirim ulang."}), 200

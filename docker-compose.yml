@@ -28,10 +28,15 @@ services:
       DATABASE_URL: postgresql://playfast:${POSTGRES_PASSWORD:-playfast_secret_2026}@postgres:5432/playfast
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-production-please}
       FLASK_ENV: production
-      FRONTEND_URL: https://playfast.andev.web.id
+      FRONTEND_URL: https://playfast.id
       MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:-SB-Mid-server-7Fp0W-6BPItzBeHc4WmVz0rh}
       MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY:-SB-Mid-client-VNwEU_8NEdo5N3og}
       MIDTRANS_IS_PRODUCTION: ${MIDTRANS_IS_PRODUCTION:-false}
+      SMTP_HOST: ${SMTP_HOST:-smtp-relay.brevo.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      MAIL_SENDER: ${MAIL_SENDER:-Playfast <noreply@playfast.id>}
     networks:
       - playfast
     expose:

@@ -118,6 +118,8 @@ def _run_schema_upgrades():
         "ALTER TABLE orders ADD COLUMN amount INTEGER",
         # Order type column for subscription vs purchase
         "ALTER TABLE orders ADD COLUMN type VARCHAR(20) NOT NULL DEFAULT 'purchase'",
+        # User email verification
+        "ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     for stmt in alter_statements:
         try:
@@ -126,5 +128,6 @@ def _run_schema_upgrades():
         except Exception:
             db.session.rollback()
 
-    from app.models import Subscription
+    from app.models import EmailVerificationToken, Subscription
     Subscription.__table__.create(db.engine, checkfirst=True)
+    EmailVerificationToken.__table__.create(db.engine, checkfirst=True)

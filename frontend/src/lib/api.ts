@@ -95,6 +95,7 @@ export interface User {
   id: number
   email: string
   role: 'user' | 'admin'
+  email_verified: boolean
   created_at: string
 }
 
@@ -139,6 +140,17 @@ export const authApi = {
     return request<{ message: string }>('/api/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify({ token, password })
+    })
+  },
+  verifyEmail(token: string) {
+    return request<{ message: string }>('/api/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token })
+    })
+  },
+  resendVerification() {
+    return request<{ message: string }>('/api/auth/resend-verification', {
+      method: 'POST'
     })
   }
 }
