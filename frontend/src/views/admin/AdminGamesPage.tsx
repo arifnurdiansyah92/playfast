@@ -384,7 +384,7 @@ const AdminGamesPage = () => {
                       </Tooltip>
                     </TableCell>
                     <TableCell align='center'>
-                      <Chip size='small' label={game.accounts?.length ?? 0} variant='tonal' color='info' />
+                      <Chip size='small' label={game.available_accounts ?? 0} variant='tonal' color='info' />
                     </TableCell>
                     <TableCell align='right'>
                       <Tooltip title='Edit Instructions'>

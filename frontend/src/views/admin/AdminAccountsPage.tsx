@@ -57,6 +57,7 @@ const AdminAccountsPage = () => {
     mutationFn: (formData: FormData) => adminApi.addAccount(formData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-games'] })
       setAddOpen(false); setPassword(''); setFile(null); setAddError('')
       setSnackMsg('Account added successfully')
     },
@@ -67,6 +68,7 @@ const AdminAccountsPage = () => {
     mutationFn: (id: number) => adminApi.deleteAccount(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-games'] })
       setDeleteConfirm(null)
       setSnackMsg('Account deleted')
     },
@@ -77,6 +79,7 @@ const AdminAccountsPage = () => {
     mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) => adminApi.updateAccount(id, { is_active }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-games'] })
       setSnackMsg('Account updated')
     },
     onError: (err: any) => setSnackMsg(`Update failed: ${err.message}`)

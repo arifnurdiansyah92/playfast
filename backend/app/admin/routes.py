@@ -709,14 +709,13 @@ def list_games():
         # Include which accounts own this game
         account_links = (
             GameAccount.query.join(SteamAccount)
-            .filter(GameAccount.game_id == game.id)
+            .filter(GameAccount.game_id == game.id, SteamAccount.is_active == True)  # noqa: E712
             .all()
         )
         gd["accounts"] = [
             {
                 "id": link.steam_account.id,
                 "account_name": link.steam_account.account_name,
-                "is_active": link.steam_account.is_active,
             }
             for link in account_links
         ]
