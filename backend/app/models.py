@@ -413,12 +413,14 @@ class Subscription(db.Model):
         "monthly": 30,
         "3monthly": 90,
         "yearly": 365,
+        "lifetime": 36500,
     }
 
     PLAN_LABELS = {
         "monthly": "Monthly",
         "3monthly": "3 Months",
         "yearly": "Yearly",
+        "lifetime": "Lifetime",
     }
 
     id = db.Column(db.Integer, primary_key=True)

@@ -480,6 +480,12 @@ export const adminApi = {
   confirmSubscription(id: number) {
     return request<{ message: string; subscription: Subscription }>(`/api/admin/subscriptions/${id}/confirm`, { method: 'POST' })
   },
+  grantLifetime(userId: number) {
+    return request<{ message: string; subscription: Subscription }>('/api/admin/subscriptions/grant-lifetime', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId })
+    })
+  },
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

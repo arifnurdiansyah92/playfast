@@ -25,6 +25,8 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Snackbar from '@mui/material/Snackbar'
 
+import Tooltip from '@mui/material/Tooltip'
+
 import CustomTextField from '@core/components/mui/TextField'
 import { adminApi } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
@@ -36,6 +38,7 @@ const AdminUsersPage = () => {
   const [resetPwUser, setResetPwUser] = useState<{ id: number; email: string } | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; email: string } | null>(null)
+  const [lifetimeConfirm, setLifetimeConfirm] = useState<{ id: number; email: string } | null>(null)
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -61,6 +64,17 @@ const AdminUsersPage = () => {
       setSnackMsg('User deleted')
     },
     onError: (err: any) => setSnackMsg(err.message || 'Failed')
+  })
+
+  const lifetimeMutation = useMutation({
+    mutationFn: (userId: number) => adminApi.grantLifetime(userId),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })
+      setLifetimeConfirm(null)
+      setSnackMsg(res.message)
+    },
+    onError: (err: any) => { setSnackMsg(err.message || 'Failed'); setLifetimeConfirm(null) }
   })
 
   const handleResetPassword = () => {
@@ -156,6 +170,11 @@ const AdminUsersPage = () => {
                               </Button>
                             </>
                           )}
+                          <Tooltip title='Grant Lifetime Access'>
+                            <IconButton size='small' color='warning' onClick={() => setLifetimeConfirm({ id: u.id, email: u.email })}>
+                              <i className='tabler-crown' style={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
                           <IconButton size='small' onClick={() => { setResetPwUser({ id: u.id, email: u.email }); setNewPassword('') }}>
                             <i className='tabler-key' style={{ fontSize: 18 }} />
                           </IconButton>
@@ -216,6 +235,27 @@ const AdminUsersPage = () => {
             disabled={deleteMutation.isPending}
           >
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Grant Lifetime Dialog */}
+      <Dialog open={!!lifetimeConfirm} onClose={() => setLifetimeConfirm(null)} maxWidth='xs' fullWidth>
+        <DialogTitle>Grant Lifetime Access</DialogTitle>
+        <DialogContent>
+          <Typography color='text.secondary'>
+            Grant lifetime Premium subscription to <strong>{lifetimeConfirm?.email}</strong>? This gives them unlimited access to all games forever.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLifetimeConfirm(null)}>Cancel</Button>
+          <Button
+            variant='contained'
+            color='warning'
+            onClick={() => lifetimeConfirm && lifetimeMutation.mutate(lifetimeConfirm.id)}
+            disabled={lifetimeMutation.isPending}
+          >
+            {lifetimeMutation.isPending ? 'Granting...' : 'Grant Lifetime'}
           </Button>
         </DialogActions>
       </Dialog>

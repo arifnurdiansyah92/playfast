@@ -1076,6 +1076,46 @@ def confirm_subscription_payment(sub_id: int):
     }), 200
 
 
+@admin_bp.route("/subscriptions/grant-lifetime", methods=["POST"])
+@admin_required
+def grant_lifetime_access():
+    """Grant lifetime subscription access to a specific user."""
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    # Check if user already has an active subscription
+    existing = (
+        Subscription.query
+        .filter_by(user_id=user_id, status="active")
+        .first()
+    )
+    if existing and existing.is_active:
+        return jsonify({"error": "User already has an active subscription"}), 409
+
+    sub = Subscription(
+        user_id=user_id,
+        plan="lifetime",
+        amount=0,
+        payment_type="admin_grant",
+    )
+    sub.paid_at = datetime.now(timezone.utc)
+    sub.activate()
+    db.session.add(sub)
+    db.session.commit()
+
+    return jsonify({
+        "message": f"Lifetime access granted to {target.email}",
+        "subscription": sub.to_dict(),
+    }), 201
+
+
 # ---------------------------------------------------------------------------
 
 
