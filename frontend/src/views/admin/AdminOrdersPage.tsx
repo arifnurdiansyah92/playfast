@@ -159,7 +159,7 @@ const AdminOrdersPage = () => {
                     <TableCell><Typography variant='body2'>{order.user_email || `User #${order.user_id}`}</Typography></TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <Box component='img' src={gameThumbnail(order.game?.appid)} alt='' sx={{ width: 48, height: 18, borderRadius: 0.5, objectFit: 'cover' }} onError={handleImageError} />
+                        <Box component='img' src={order.game?.appid ? gameThumbnail(order.game.appid) : ''} alt='' sx={{ width: 48, height: 18, borderRadius: 0.5, objectFit: 'cover' }} onError={handleImageError} />
                         <Typography variant='subtitle2'>{order.game?.name}</Typography>
                       </Box>
                     </TableCell>

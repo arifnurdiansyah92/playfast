@@ -197,7 +197,7 @@ const OrderConfirmPage = ({ orderId }: Props) => {
           <Box sx={{ display: 'flex', gap: 3, alignItems: 'center', mb: 3 }}>
             <Box
               component='img'
-              src={gameHeaderImage(order.game?.appid)}
+              src={order.game?.appid ? gameHeaderImage(order.game.appid) : ''}
               alt={order.game?.name}
               sx={{ width: 120, borderRadius: 1, objectFit: 'cover' }}
               onError={handleImageError}
