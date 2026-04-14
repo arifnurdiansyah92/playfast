@@ -21,7 +21,8 @@ jobs:
             # Backup database BEFORE any changes
             ./backup.sh
 
-            # Pull latest
+            # Pull latest (reset tracked files to match remote, preserve .env)
+            git checkout -- .
             git pull origin master
 
             # Free RAM: stop non-playfast containers during build
