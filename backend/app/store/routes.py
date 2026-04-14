@@ -823,6 +823,7 @@ def list_orders():
 
     pagination = (
         Order.query.filter_by(user_id=user_id)
+        .filter(Order.type != "subscription")
         .order_by(Order.created_at.desc())
         .paginate(page=page, per_page=per_page, error_out=False)
     )
