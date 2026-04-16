@@ -273,7 +273,7 @@ const StorePage = () => {
                       <CardMedia
                         component='img'
                         height={140}
-                        image={gameHeaderImage(game.appid)}
+                        image={game.header_image || gameHeaderImage(game.appid)}
                         alt={game.name}
                         onError={handleImageError}
                         sx={{
@@ -400,7 +400,7 @@ const StorePage = () => {
                       <CardMedia
                         component='img'
                         height={140}
-                        image={gameHeaderImage(game.appid)}
+                        image={game.header_image || gameHeaderImage(game.appid)}
                         alt={game.name}
                         onError={handleImageError}
                         sx={{

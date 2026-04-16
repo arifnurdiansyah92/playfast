@@ -397,7 +397,7 @@ const LandingPage = () => {
                         <Box sx={{ position: 'relative' }}>
                           <CardMedia
                             component='img' height={130}
-                            image={gameHeaderImage(game.appid)}
+                            image={game.header_image || gameHeaderImage(game.appid)}
                             alt={game.name} onError={handleImageError} sx={{ objectFit: 'cover' }}
                           />
                           <Chip

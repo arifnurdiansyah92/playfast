@@ -166,9 +166,8 @@ const PlayPage = ({ orderId }: Props) => {
   }
 
   const instructions = instructionsData?.instructions?.content
-  const headerImage = order.game?.appid
-    ? gameHeaderImage(order.game.appid)
-    : null
+  const headerImage = order.game?.header_image
+    || (order.game?.appid ? gameHeaderImage(order.game.appid) : null)
 
   return (
     <div className='flex flex-col gap-5'>

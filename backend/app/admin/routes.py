@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import uuid
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 
@@ -760,7 +762,7 @@ def list_games():
 
     games = []
     for game in pagination.items:
-        gd = game.to_dict(include_availability=True)
+        gd = game.to_dict(include_availability=True, admin=True)
         # Include which accounts own this game
         account_links = (
             GameAccount.query.join(SteamAccount)
@@ -863,6 +865,15 @@ def update_game(game_id: int):
         game.is_featured = bool(data["is_featured"])
     if "name" in data:
         game.name = data["name"]
+    # Custom override fields (set to None to clear)
+    if "custom_name" in data:
+        game.custom_name = data["custom_name"] or None
+    if "custom_description" in data:
+        game.custom_description = data["custom_description"] or None
+    if "custom_header_image" in data:
+        game.custom_header_image = data["custom_header_image"] or None
+    if "custom_screenshots" in data:
+        game.custom_screenshots = data["custom_screenshots"] or None
 
     # Handle inline instructions update
     if "instructions" in data:
@@ -883,8 +894,44 @@ def update_game(game_id: int):
     db.session.commit()
     return jsonify({
         "message": "Game updated",
-        "game": game.to_dict(include_availability=True),
+        "game": game.to_dict(include_availability=True, admin=True),
     }), 200
+
+
+@admin_bp.route("/games/<int:game_id>/upload-image", methods=["POST"])
+@admin_required
+def upload_game_image(game_id: int):
+    """Upload a custom image for a game (header or screenshot)."""
+    game = db.session.get(Game, game_id)
+    if not game:
+        return jsonify({"error": "Game not found"}), 404
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": "No file selected"}), 400
+
+    # Validate extension
+    allowed_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_ext:
+        return jsonify({"error": f"File type not allowed. Use: {', '.join(allowed_ext)}"}), 400
+
+    # Save file
+    upload_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "uploads", "games", str(game_id),
+    )
+    os.makedirs(upload_dir, exist_ok=True)
+
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(upload_dir, filename)
+    file.save(filepath)
+
+    url = f"/uploads/games/{game_id}/{filename}"
+    return jsonify({"url": url}), 200
 
 
 @admin_bp.route("/games/<int:game_id>/instructions", methods=["PUT"])

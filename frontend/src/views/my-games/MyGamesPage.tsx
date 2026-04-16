@@ -123,7 +123,7 @@ const MyGamesPage = () => {
             {filtered.map((game, idx) => {
               const isBonus = game.type === 'bonus'
               const isSubscription = game.type === 'subscription'
-              const headerImage = gameHeaderImage(game.appid)
+              const headerImage = game.header_image || gameHeaderImage(game.appid)
 
               return (
                 <Grid size={{ xs: 12, sm: 6, md: 4 }} key={`${game.id}-${idx}`}>

@@ -98,6 +98,10 @@ class Game(db.Model):
     genres = db.Column(db.String(500), nullable=True)  # comma-separated genre names
     screenshots = db.Column(db.JSON, nullable=True)  # [{thumbnail, full}]
     movies = db.Column(db.JSON, nullable=True)  # [{id, name, thumbnail, mp4_480, mp4_max}]
+    custom_name = db.Column(db.String(500), nullable=True)
+    custom_description = db.Column(db.Text, nullable=True)
+    custom_header_image = db.Column(db.String(500), nullable=True)
+    custom_screenshots = db.Column(db.JSON, nullable=True)  # [{thumbnail, full}]
     price = db.Column(db.Integer, default=50000, nullable=False)  # in smallest currency unit
     is_enabled = db.Column(db.Boolean, default=True, nullable=False)
     is_featured = db.Column(db.Boolean, default=False, nullable=False)
@@ -126,16 +130,17 @@ class Game(db.Model):
             .count()
         )
 
-    def to_dict(self, include_availability=False):
+    def to_dict(self, include_availability=False, admin=False):
+        # Merged view: custom overrides win over Steam data
         result = {
             "id": self.id,
             "appid": self.appid,
-            "name": self.name,
+            "name": self.custom_name or self.name,
             "icon": self.icon,
-            "description": self.description,
-            "header_image": self.header_image,
+            "description": self.custom_description or self.description,
+            "header_image": self.custom_header_image or self.header_image,
             "genres": self.genres,
-            "screenshots": self.screenshots or [],
+            "screenshots": self.custom_screenshots if self.custom_screenshots else (self.screenshots or []),
             "movies": self.movies or [],
             "price": self.price,
             "is_enabled": self.is_enabled,
@@ -144,6 +149,16 @@ class Game(db.Model):
         }
         if include_availability:
             result["available_accounts"] = self.available_account_count()
+        if admin:
+            # Expose both steam and custom values for the admin UI
+            result["steam_name"] = self.name
+            result["steam_description"] = self.description
+            result["steam_header_image"] = self.header_image
+            result["steam_screenshots"] = self.screenshots or []
+            result["custom_name"] = self.custom_name
+            result["custom_description"] = self.custom_description
+            result["custom_header_image"] = self.custom_header_image
+            result["custom_screenshots"] = self.custom_screenshots
         return result
 
 

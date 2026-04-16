@@ -37,6 +37,8 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       MAIL_SENDER: ${MAIL_SENDER:-Playfast <noreply@playfast.id>}
+    volumes:
+      - uploads:/app/app/uploads
     networks:
       - playfast
     expose:
@@ -59,6 +61,7 @@ services:
 
 volumes:
   pgdata:
+  uploads:
 
 networks:
   playfast:

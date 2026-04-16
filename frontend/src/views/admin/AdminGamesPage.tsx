@@ -59,6 +59,13 @@ const AdminGamesPage = () => {
   const [instructionsOpen, setInstructionsOpen] = useState<Game | null>(null)
   const [instructionsText, setInstructionsText] = useState('')
 
+  // Content override dialog
+  const [contentOpen, setContentOpen] = useState<Game | null>(null)
+  const [contentName, setContentName] = useState('')
+  const [contentDesc, setContentDesc] = useState('')
+  const [contentHeaderImage, setContentHeaderImage] = useState('')
+  const [contentUploading, setContentUploading] = useState(false)
+
   // Selection
   const [selected, setSelected] = useState<Set<number>>(new Set())
 
@@ -110,6 +117,17 @@ const AdminGamesPage = () => {
       setSnackMsg(res.message)
     },
     onError: (err: any) => setSnackMsg(`Bulk update failed: ${err.message}`)
+  })
+
+  const updateContentMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<{ custom_name: string | null; custom_description: string | null; custom_header_image: string | null }> }) =>
+      adminApi.updateGame(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-games'] })
+      setContentOpen(null)
+      setSnackMsg('Content overrides saved')
+    },
+    onError: (err: any) => setSnackMsg(`Update failed: ${err.message}`)
   })
 
   const updateInstructionsMutation = useMutation({
@@ -327,7 +345,12 @@ const AdminGamesPage = () => {
                           onError={handleImageError}
                         />
                         <Box>
-                          <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>{game.name}</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>{game.name}</Typography>
+                            {(game.custom_name || game.custom_description || game.custom_header_image) && (
+                              <Chip label='Custom' size='small' color='info' variant='tonal' sx={{ height: 18, fontSize: '0.6rem' }} />
+                            )}
+                          </Box>
                           <Typography variant='caption' color='text.secondary'>{game.appid}</Typography>
                           {game.genres && (
                             <Typography variant='caption' color='text.disabled' sx={{ display: 'block', fontSize: '0.7rem' }}>
@@ -387,11 +410,23 @@ const AdminGamesPage = () => {
                       <Chip size='small' label={game.available_accounts ?? 0} variant='tonal' color='info' />
                     </TableCell>
                     <TableCell align='right'>
-                      <Tooltip title='Edit Instructions'>
-                        <IconButton size='small' onClick={() => { setInstructionsOpen(game); setInstructionsText('') }}>
-                          <i className='tabler-book-2' />
-                        </IconButton>
-                      </Tooltip>
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                        <Tooltip title='Edit Content'>
+                          <IconButton size='small' onClick={() => {
+                            setContentOpen(game)
+                            setContentName(game.custom_name || '')
+                            setContentDesc(game.custom_description || '')
+                            setContentHeaderImage(game.custom_header_image || '')
+                          }}>
+                            <i className='tabler-photo-edit' />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title='Edit Instructions'>
+                          <IconButton size='small' onClick={() => { setInstructionsOpen(game); setInstructionsText('') }}>
+                            <i className='tabler-book-2' />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -446,6 +481,99 @@ const AdminGamesPage = () => {
             disabled={updateInstructionsMutation.isPending}
           >
             {updateInstructionsMutation.isPending ? 'Saving...' : 'Save Instructions'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Content Override Dialog */}
+      <Dialog open={contentOpen !== null} onClose={() => setContentOpen(null)} maxWidth='md' fullWidth>
+        <DialogTitle>Edit Content — {contentOpen?.steam_name || contentOpen?.name}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2 }}>
+            {/* Steam vs Custom name */}
+            <Box>
+              <Typography variant='caption' color='text.secondary' sx={{ mb: 0.5, display: 'block' }}>
+                Steam name: {contentOpen?.steam_name || contentOpen?.name}
+              </Typography>
+              <TextField
+                fullWidth label='Custom Name (leave empty to use Steam name)' value={contentName}
+                onChange={e => setContentName(e.target.value)}
+              />
+            </Box>
+
+            {/* Header Image */}
+            <Box>
+              <Typography variant='caption' color='text.secondary' sx={{ mb: 0.5, display: 'block' }}>
+                Steam header: {contentOpen?.steam_header_image || `https://cdn.akamai.steamstatic.com/steam/apps/${contentOpen?.appid}/header.jpg`}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                <TextField
+                  fullWidth label='Custom Header Image URL (or upload below)' value={contentHeaderImage}
+                  onChange={e => setContentHeaderImage(e.target.value)}
+                />
+                <Button
+                  variant='outlined' component='label' sx={{ minWidth: 100, whiteSpace: 'nowrap' }}
+                  disabled={contentUploading}
+                >
+                  {contentUploading ? 'Uploading...' : 'Upload'}
+                  <input type='file' hidden accept='image/*' onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file || !contentOpen) return
+                    setContentUploading(true)
+                    try {
+                      const url = await adminApi.uploadGameImage(contentOpen.id, file)
+                      setContentHeaderImage(url)
+                      setSnackMsg('Image uploaded')
+                    } catch (err: any) {
+                      setSnackMsg(`Upload failed: ${err.message}`)
+                    } finally {
+                      setContentUploading(false)
+                      e.target.value = ''
+                    }
+                  }} />
+                </Button>
+              </Box>
+              {contentHeaderImage && (
+                <Box component='img' src={contentHeaderImage} alt='Preview' onError={handleImageError}
+                  sx={{ mt: 1, maxHeight: 150, borderRadius: 1, objectFit: 'cover' }}
+                />
+              )}
+            </Box>
+
+            {/* Description */}
+            <Box>
+              <Typography variant='caption' color='text.secondary' sx={{ mb: 0.5, display: 'block' }}>
+                Steam description: {contentOpen?.steam_description ? `${contentOpen.steam_description.slice(0, 100)}...` : '(none)'}
+              </Typography>
+              <TextField
+                fullWidth multiline minRows={4} maxRows={10}
+                label='Custom Description (leave empty to use Steam description)'
+                value={contentDesc} onChange={e => setContentDesc(e.target.value)}
+              />
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 1 }}>
+          {(contentName || contentDesc || contentHeaderImage) && (
+            <Button color='error' onClick={() => { setContentName(''); setContentDesc(''); setContentHeaderImage('') }}>
+              Clear All Overrides
+            </Button>
+          )}
+          <Box sx={{ flexGrow: 1 }} />
+          <Button onClick={() => setContentOpen(null)}>Cancel</Button>
+          <Button
+            variant='contained'
+            disabled={updateContentMutation.isPending}
+            onClick={() => contentOpen && updateContentMutation.mutate({
+              id: contentOpen.id,
+              data: {
+                custom_name: contentName || null,
+                custom_description: contentDesc || null,
+                custom_header_image: contentHeaderImage || null,
+              }
+            })}
+          >
+            {updateContentMutation.isPending ? 'Saving...' : 'Save Overrides'}
           </Button>
         </DialogActions>
       </Dialog>

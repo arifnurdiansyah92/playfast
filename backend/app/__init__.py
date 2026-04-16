@@ -74,6 +74,15 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(store_bp)
     app.register_blueprint(admin_bp)
 
+    # ---------- Serve uploaded files ----------
+    from flask import send_from_directory
+
+    uploads_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
+
+    @app.route("/uploads/<path:filename>")
+    def serve_upload(filename):
+        return send_from_directory(uploads_dir, filename)
+
     # ---------- Health check with DB connectivity ----------
     @app.route("/api/health")
     def health():
@@ -123,6 +132,11 @@ def _run_schema_upgrades():
         # Game media columns
         "ALTER TABLE games ADD COLUMN screenshots JSON",
         "ALTER TABLE games ADD COLUMN movies JSON",
+        # Game custom override columns
+        "ALTER TABLE games ADD COLUMN custom_name VARCHAR(500)",
+        "ALTER TABLE games ADD COLUMN custom_description TEXT",
+        "ALTER TABLE games ADD COLUMN custom_header_image VARCHAR(500)",
+        "ALTER TABLE games ADD COLUMN custom_screenshots JSON",
     ]
     for stmt in alter_statements:
         try:

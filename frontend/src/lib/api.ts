@@ -186,6 +186,15 @@ export interface Game {
   available_accounts?: number
   accounts?: { id: number; account_name: string }[]
   created_at: string
+  // Admin-only: override fields
+  steam_name?: string
+  steam_description?: string
+  steam_header_image?: string
+  steam_screenshots?: GameScreenshot[]
+  custom_name?: string | null
+  custom_description?: string | null
+  custom_header_image?: string | null
+  custom_screenshots?: GameScreenshot[] | null
 }
 
 export interface GamesResponse {
@@ -443,12 +452,27 @@ export const adminApi = {
     const qs = searchParams.toString()
     return request<{ games: Game[]; total: number; page: number; per_page: number; pages: number; genres: string[]; years: number[] }>(`/api/admin/games${qs ? `?${qs}` : ''}`)
   },
-  async updateGame(id: number, data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean }>) {
+  async updateGame(id: number, data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean; custom_name: string | null; custom_description: string | null; custom_header_image: string | null; custom_screenshots: GameScreenshot[] | null }>) {
     const res = await request<{ game: Game }>(`/api/admin/games/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
     })
     return res.game
+  },
+  async uploadGameImage(gameId: number, file: File): Promise<string> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`${API_BASE}/api/admin/games/${gameId}/upload-image`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload failed' }))
+      throw new ApiError(res.status, err.error || 'Upload failed')
+    }
+    const data = await res.json()
+    return data.url
   },
   bulkUpdateGames(ids: number[], data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean }>) {
     return request<{ message: string; updated: number }>('/api/admin/games/bulk-update', {

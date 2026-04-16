@@ -145,7 +145,7 @@ const GameDetailPage = ({ appid }: Props) => {
     )
   }
 
-  const headerImage = gameHeaderImage(game.appid)
+  const headerImage = game.header_image || gameHeaderImage(game.appid)
   const genreList = game.genres ? game.genres.split(',').map(g => g.trim()).filter(Boolean) : []
 
   return (
