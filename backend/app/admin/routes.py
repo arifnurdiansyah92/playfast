@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone, timedelta
 from functools import wraps
@@ -492,14 +493,24 @@ def admin_act_confirmation(account_id: int, conf_id: str):
 # ---------------------------------------------------------------------------
 
 
+_last_steam_api_call = 0.0
+
+
 def _fetch_game_metadata(appid: int) -> dict | None:
     """
     Fetch metadata for a game from the Steam Store API.
     Returns dict with description, header_image, genres, screenshots, movies or None on failure.
+    Rate-limited to avoid Steam API throttling.
     """
+    global _last_steam_api_call
+    elapsed = time.time() - _last_steam_api_call
+    if elapsed < 0.5:
+        time.sleep(0.5 - elapsed)
+    _last_steam_api_call = time.time()
+
     try:
         resp = http_requests.get(
-            f"https://store.steampowered.com/api/appdetails?appids={appid}",
+            f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=id",
             timeout=10,
         )
         resp.raise_for_status()
@@ -648,8 +659,9 @@ def _sync_account_games(account: SteamAccount) -> dict:
             if g.get("icon") and game.icon != g["icon"]:
                 game.icon = g["icon"]
 
-            # Backfill metadata if missing screenshots/movies or original_price
-            if not game.screenshots or not game.original_price:
+            # Backfill metadata only if completely missing (no screenshots at all)
+            # Don't backfill original_price here — use Refresh Metadata instead
+            if not game.screenshots and not game.description:
                 metadata = _fetch_game_metadata(g["appid"])
                 if metadata:
                     game.description = metadata.get("description") or game.description
@@ -657,7 +669,7 @@ def _sync_account_games(account: SteamAccount) -> dict:
                     game.genres = metadata.get("genres") or game.genres
                     game.screenshots = metadata.get("screenshots") or game.screenshots
                     game.movies = metadata.get("movies") or game.movies
-                    if metadata.get("original_price") and not game.original_price:
+                    if metadata.get("original_price"):
                         game.original_price = metadata["original_price"]
 
         # Upsert GameAccount link
@@ -716,22 +728,42 @@ def sync_single_account(account_id: int):
 @admin_bp.route("/games/refresh-metadata", methods=["POST"])
 @admin_required
 def refresh_game_metadata():
-    """Re-fetch metadata (screenshots, movies, description, price) for all games from Steam."""
-    games = Game.query.all()
+    """Re-fetch metadata from Steam. Use ?scope=missing to only fill gaps, or ?scope=all for full refresh."""
+    scope = request.args.get("scope", "missing").strip()
+
+    if scope == "all":
+        games = Game.query.all()
+    else:
+        # Only games missing key data (original_price, screenshots, description)
+        games = Game.query.filter(
+            db.or_(
+                Game.original_price.is_(None),
+                Game.screenshots.is_(None),
+                Game.description.is_(None),
+            )
+        ).all()
+
     updated = 0
-    for game in games:
+    total = len(games)
+
+    for i, game in enumerate(games):
         metadata = _fetch_game_metadata(game.appid)
         if metadata:
             game.description = metadata.get("description") or game.description
             game.header_image = metadata.get("header_image") or game.header_image
             game.genres = metadata.get("genres") or game.genres
-            game.screenshots = metadata.get("screenshots")
-            game.movies = metadata.get("movies")
+            game.screenshots = metadata.get("screenshots") or game.screenshots
+            game.movies = metadata.get("movies") or game.movies
             if metadata.get("original_price"):
                 game.original_price = metadata["original_price"]
             updated += 1
+
+        # Commit in batches of 20 to avoid losing progress on timeout
+        if (i + 1) % 20 == 0:
+            db.session.commit()
+
     db.session.commit()
-    return jsonify({"message": f"Metadata refreshed for {updated}/{len(games)} games"}), 200
+    return jsonify({"message": f"Metadata refreshed for {updated}/{total} games (scope: {scope})"}), 200
 
 
 # ---------------------------------------------------------------------------
