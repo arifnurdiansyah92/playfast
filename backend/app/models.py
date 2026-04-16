@@ -98,6 +98,7 @@ class Game(db.Model):
     genres = db.Column(db.String(500), nullable=True)  # comma-separated genre names
     screenshots = db.Column(db.JSON, nullable=True)  # [{thumbnail, full}]
     movies = db.Column(db.JSON, nullable=True)  # [{id, name, thumbnail, mp4_480, mp4_max}]
+    original_price = db.Column(db.Integer, nullable=True)  # Steam store price in IDR (smallest unit)
     custom_name = db.Column(db.String(500), nullable=True)
     custom_description = db.Column(db.Text, nullable=True)
     custom_header_image = db.Column(db.String(500), nullable=True)
@@ -143,6 +144,7 @@ class Game(db.Model):
             "screenshots": self.custom_screenshots if self.custom_screenshots else (self.screenshots or []),
             "movies": self.movies or [],
             "price": self.price,
+            "original_price": self.original_price,
             "is_enabled": self.is_enabled,
             "is_featured": self.is_featured,
             "created_at": self.created_at.isoformat(),

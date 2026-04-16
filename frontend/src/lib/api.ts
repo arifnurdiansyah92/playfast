@@ -176,6 +176,7 @@ export interface Game {
   name: string
   icon: string
   price: number
+  original_price?: number | null
   is_enabled: boolean
   is_featured: boolean
   description?: string

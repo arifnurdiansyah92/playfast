@@ -132,6 +132,8 @@ def _run_schema_upgrades():
         # Game media columns
         "ALTER TABLE games ADD COLUMN screenshots JSON",
         "ALTER TABLE games ADD COLUMN movies JSON",
+        # Game original Steam price
+        "ALTER TABLE games ADD COLUMN original_price INTEGER",
         # Game custom override columns
         "ALTER TABLE games ADD COLUMN custom_name VARCHAR(500)",
         "ALTER TABLE games ADD COLUMN custom_description TEXT",

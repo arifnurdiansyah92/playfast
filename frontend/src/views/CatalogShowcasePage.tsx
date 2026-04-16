@@ -142,10 +142,10 @@ const CatalogShowcasePage = () => {
                   <Typography variant='body2' sx={{ color: textSecondary, mt: 0.5 }}>Total Game</Typography>
                 </CardContent>
               </Card>
-              <Card sx={{ bgcolor: darkCard, border: `1px solid ${darkCardBorder}`, minWidth: 160 }}>
+              <Card sx={{ bgcolor: darkCard, border: `1px solid ${darkCardBorder}`, minWidth: 200 }}>
                 <CardContent sx={{ textAlign: 'center', py: 3 }}>
                   <Typography variant='h3' sx={{ fontWeight: 800, color: gold }}>{formatIDR(totalValue)}</Typography>
-                  <Typography variant='body2' sx={{ color: textSecondary, mt: 0.5 }}>Total Nilai Katalog</Typography>
+                  <Typography variant='body2' sx={{ color: textSecondary, mt: 0.5 }}>Nilai Asli di Steam</Typography>
                 </CardContent>
               </Card>
             </Box>
@@ -265,9 +265,20 @@ const CatalogShowcasePage = () => {
                           </Typography>
                         )}
                         <Box sx={{ flexGrow: 1 }} />
-                        <Typography variant='subtitle2' sx={{ fontWeight: 700, color: gold, fontSize: '0.85rem' }}>
-                          {formatIDR(game.price)}
-                        </Typography>
+                        {game.original_price ? (
+                          <Box>
+                            <Typography variant='caption' sx={{ color: textSecondary, textDecoration: 'line-through', fontSize: '0.7rem' }}>
+                              {formatIDR(game.original_price)}
+                            </Typography>
+                            <Typography variant='subtitle2' sx={{ fontWeight: 700, color: gold, fontSize: '0.85rem' }}>
+                              {formatIDR(game.price)}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography variant='subtitle2' sx={{ fontWeight: 700, color: gold, fontSize: '0.85rem' }}>
+                            {formatIDR(game.price)}
+                          </Typography>
+                        )}
                       </CardContent>
                     </Card>
                   </Grid>

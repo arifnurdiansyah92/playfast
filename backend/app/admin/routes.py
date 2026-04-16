@@ -531,12 +531,25 @@ def _fetch_game_metadata(appid: int) -> dict | None:
                 "mp4_max": mp4.get("max", ""),
             })
 
+        # Price (Steam returns in cents for most currencies, or whole units)
+        price_overview = details.get("price_overview")
+        original_price = None
+        if price_overview:
+            # final_formatted is like "Rp 299 000", final is cents in some regions
+            # Use 'initial' which is the non-discounted price in cents
+            original_price = price_overview.get("initial")  # in cents
+            if original_price and price_overview.get("currency") == "IDR":
+                # Steam IDR prices are already in whole IDR (not cents)
+                # but the API returns them * 100, so divide back
+                original_price = original_price // 100
+
         return {
             "description": details.get("short_description", ""),
             "header_image": details.get("header_image", ""),
             "genres": genre_names,
             "screenshots": screenshots,
             "movies": movies,
+            "original_price": original_price,
         }
     except Exception as e:
         logger.warning("Failed to fetch metadata for appid %s: %s", appid, e)
@@ -626,6 +639,8 @@ def _sync_account_games(account: SteamAccount) -> dict:
                 game.genres = metadata.get("genres")
                 game.screenshots = metadata.get("screenshots")
                 game.movies = metadata.get("movies")
+                if metadata.get("original_price"):
+                    game.original_price = metadata["original_price"]
         else:
             # Update name/icon if changed
             if game.name != g["name"]:
@@ -633,15 +648,17 @@ def _sync_account_games(account: SteamAccount) -> dict:
             if g.get("icon") and game.icon != g["icon"]:
                 game.icon = g["icon"]
 
-            # Backfill metadata if missing screenshots/movies
-            if not game.screenshots:
+            # Backfill metadata if missing screenshots/movies or original_price
+            if not game.screenshots or not game.original_price:
                 metadata = _fetch_game_metadata(g["appid"])
                 if metadata:
                     game.description = metadata.get("description") or game.description
                     game.header_image = metadata.get("header_image") or game.header_image
                     game.genres = metadata.get("genres") or game.genres
-                    game.screenshots = metadata.get("screenshots")
-                    game.movies = metadata.get("movies")
+                    game.screenshots = metadata.get("screenshots") or game.screenshots
+                    game.movies = metadata.get("movies") or game.movies
+                    if metadata.get("original_price") and not game.original_price:
+                        game.original_price = metadata["original_price"]
 
         # Upsert GameAccount link
         existing_link = GameAccount.query.filter_by(
@@ -699,7 +716,7 @@ def sync_single_account(account_id: int):
 @admin_bp.route("/games/refresh-metadata", methods=["POST"])
 @admin_required
 def refresh_game_metadata():
-    """Re-fetch metadata (screenshots, movies, description) for all games from Steam."""
+    """Re-fetch metadata (screenshots, movies, description, price) for all games from Steam."""
     games = Game.query.all()
     updated = 0
     for game in games:
@@ -710,6 +727,8 @@ def refresh_game_metadata():
             game.genres = metadata.get("genres") or game.genres
             game.screenshots = metadata.get("screenshots")
             game.movies = metadata.get("movies")
+            if metadata.get("original_price"):
+                game.original_price = metadata["original_price"]
             updated += 1
     db.session.commit()
     return jsonify({"message": f"Metadata refreshed for {updated}/{len(games)} games"}), 200

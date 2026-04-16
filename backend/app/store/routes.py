@@ -418,9 +418,9 @@ def catalog_showcase():
     )
 
     games_data = [g.to_dict() for g in games]
-    total_value = sum(g.price for g in games)
+    total_value = sum(g.original_price or 0 for g in games)
 
-    # Price tier breakdown
+    # Price tier breakdown based on original Steam price
     tiers = [
         {"label": "> Rp 500K", "min": 500000},
         {"label": "> Rp 200K", "min": 200000},
@@ -429,7 +429,7 @@ def catalog_showcase():
     ]
     tier_counts = []
     for tier in tiers:
-        count = sum(1 for g in games if g.price >= tier["min"])
+        count = sum(1 for g in games if (g.original_price or 0) >= tier["min"])
         if count > 0:
             tier_counts.append({"label": tier["label"], "count": count})
 
