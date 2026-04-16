@@ -398,6 +398,49 @@ def featured_games():
     return jsonify({"games": [g.to_dict() for g in games]}), 200
 
 
+@store_bp.route("/games/catalog", methods=["GET"])
+def catalog_showcase():
+    """Public catalog page: all enabled games with stats for sharing."""
+    available_game_ids = (
+        db.session.query(GameAccount.game_id)
+        .join(SteamAccount)
+        .filter(SteamAccount.is_active == True)  # noqa: E712
+        .group_by(GameAccount.game_id)
+        .subquery()
+    )
+    games = (
+        Game.query.filter(
+            Game.is_enabled == True,  # noqa: E712
+            Game.id.in_(db.session.query(available_game_ids.c.game_id)),
+        )
+        .order_by(Game.price.desc(), Game.name.asc())
+        .all()
+    )
+
+    games_data = [g.to_dict() for g in games]
+    total_value = sum(g.price for g in games)
+
+    # Price tier breakdown
+    tiers = [
+        {"label": "> Rp 500K", "min": 500000},
+        {"label": "> Rp 200K", "min": 200000},
+        {"label": "> Rp 100K", "min": 100000},
+        {"label": "> Rp 50K", "min": 50000},
+    ]
+    tier_counts = []
+    for tier in tiers:
+        count = sum(1 for g in games if g.price >= tier["min"])
+        if count > 0:
+            tier_counts.append({"label": tier["label"], "count": count})
+
+    return jsonify({
+        "games": games_data,
+        "total_games": len(games),
+        "total_value": total_value,
+        "tiers": tier_counts,
+    }), 200
+
+
 @store_bp.route("/games/<int:appid>", methods=["GET"])
 def game_detail(appid: int):
     """Get a single game's details by Steam appid."""
