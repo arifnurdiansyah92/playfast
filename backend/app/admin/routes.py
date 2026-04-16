@@ -511,7 +511,7 @@ def _fetch_game_metadata(appid: int) -> dict | None:
 
     try:
         resp = http_requests.get(
-            f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=id",
+            f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=us",
             timeout=10,
         )
         resp.raise_for_status()
@@ -543,17 +543,14 @@ def _fetch_game_metadata(appid: int) -> dict | None:
                 "mp4_max": mp4.get("max", ""),
             })
 
-        # Price (Steam returns in cents for most currencies, or whole units)
+        # Price: fetch USD and convert to IDR
         price_overview = details.get("price_overview")
         original_price = None
         if price_overview:
-            # final_formatted is like "Rp 299 000", final is cents in some regions
-            # Use 'initial' which is the non-discounted price in cents
-            original_price = price_overview.get("initial")  # in cents
-            if original_price and price_overview.get("currency") == "IDR":
-                # Steam IDR prices are already in whole IDR (not cents)
-                # but the API returns them * 100, so divide back
-                original_price = original_price // 100
+            initial_cents = price_overview.get("initial")  # USD cents
+            if initial_cents:
+                usd_price = initial_cents / 100  # e.g. 8999 -> 89.99
+                original_price = round(usd_price * 17000)  # convert to IDR
 
         return {
             "description": details.get("short_description", ""),
@@ -787,7 +784,7 @@ def _bg_refresh_metadata(job, app, game_ids):
                     game.genres = metadata.get("genres") or game.genres
                     game.screenshots = metadata.get("screenshots") or game.screenshots
                     game.movies = metadata.get("movies") or game.movies
-                    if metadata.get("original_price"):
+                    if metadata.get("original_price") is not None:
                         game.original_price = metadata["original_price"]
                     updated += 1
 
