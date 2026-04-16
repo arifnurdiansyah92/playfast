@@ -373,6 +373,16 @@ export interface DashboardStats {
   revenue_total: number
 }
 
+export interface JobStatus {
+  job_type: string
+  status: 'running' | 'completed' | 'failed'
+  total: number
+  processed: number
+  message: string
+  started_at: string
+  finished_at: string | null
+}
+
 export interface AuditEntry {
   id: number
   user_email: string
@@ -436,10 +446,14 @@ export const adminApi = {
     return res.assignments
   },
   syncGames() {
-    return request<{ message: string }>('/api/admin/accounts/sync-games', { method: 'POST' })
+    return request<{ message: string; job?: JobStatus }>('/api/admin/accounts/sync-games', { method: 'POST' })
   },
-  refreshGameMetadata() {
-    return request<{ message: string }>('/api/admin/games/refresh-metadata', { method: 'POST' })
+  refreshGameMetadata(scope?: string) {
+    const qs = scope ? `?scope=${scope}` : ''
+    return request<{ message: string; job?: JobStatus }>(`/api/admin/games/refresh-metadata${qs}`, { method: 'POST' })
+  },
+  getJobStatus() {
+    return request<{ job: JobStatus | null }>('/api/admin/jobs/current')
   },
   async getGames(params?: { q?: string; genre?: string; is_enabled?: string; is_featured?: string; year?: string; page?: number; per_page?: number }) {
     const searchParams = new URLSearchParams()

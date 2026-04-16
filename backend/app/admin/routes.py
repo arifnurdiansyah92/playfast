@@ -15,6 +15,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
+from app.jobs import get_current_job, start_job
 from app.models import (
     Assignment,
     CodeRequestLog,
@@ -695,20 +696,35 @@ def _sync_account_games(account: SteamAccount) -> dict:
 @admin_bp.route("/accounts/sync-games", methods=["POST"])
 @admin_required
 def sync_all_games():
-    """Fetch games from ALL active accounts, deduplicate, update catalog."""
+    """Fetch games from ALL active accounts in background."""
     accounts = SteamAccount.query.filter_by(is_active=True).all()
     if not accounts:
         return jsonify({"error": "No active accounts to sync"}), 404
 
-    results = []
-    for account in accounts:
-        result = _sync_account_games(account)
-        results.append(result)
+    account_ids = [a.id for a in accounts]
+    from flask import current_app
+    app = current_app._get_current_object()
 
-    return jsonify({
-        "message": "Sync complete",
-        "results": results,
-    }), 200
+    job = start_job("sync_games", _bg_sync_games, args=(app, account_ids), total=len(account_ids))
+    if not job:
+        return jsonify({"error": "A job is already running", "job": get_current_job().to_dict()}), 409
+
+    return jsonify({"message": "Sync started in background", "job": job.to_dict()}), 202
+
+
+def _bg_sync_games(job, app, account_ids):
+    """Background: sync games for all accounts."""
+    with app.app_context():
+        results = []
+        for i, account_id in enumerate(account_ids):
+            account = db.session.get(SteamAccount, account_id)
+            if account:
+                result = _sync_account_games(account)
+                results.append(result)
+            job.processed = i + 1
+
+        success_count = sum(1 for r in results if r.get("success"))
+        job.message = f"Synced {success_count}/{len(account_ids)} accounts"
 
 
 @admin_bp.route("/accounts/<int:account_id>/sync", methods=["POST"])
@@ -728,42 +744,76 @@ def sync_single_account(account_id: int):
 @admin_bp.route("/games/refresh-metadata", methods=["POST"])
 @admin_required
 def refresh_game_metadata():
-    """Re-fetch metadata from Steam. Use ?scope=missing to only fill gaps, or ?scope=all for full refresh."""
+    """Re-fetch metadata from Steam in background."""
     scope = request.args.get("scope", "missing").strip()
 
     if scope == "all":
-        games = Game.query.all()
+        game_ids = [g.id for g in Game.query.all()]
     else:
-        # Only games missing key data (original_price, screenshots, description)
-        games = Game.query.filter(
-            db.or_(
-                Game.original_price.is_(None),
-                Game.screenshots.is_(None),
-                Game.description.is_(None),
-            )
-        ).all()
+        game_ids = [
+            g.id for g in Game.query.filter(
+                db.or_(
+                    Game.original_price.is_(None),
+                    Game.screenshots.is_(None),
+                    Game.description.is_(None),
+                )
+            ).all()
+        ]
 
-    updated = 0
-    total = len(games)
+    if not game_ids:
+        return jsonify({"message": "All games already have metadata"}), 200
 
-    for i, game in enumerate(games):
-        metadata = _fetch_game_metadata(game.appid)
-        if metadata:
-            game.description = metadata.get("description") or game.description
-            game.header_image = metadata.get("header_image") or game.header_image
-            game.genres = metadata.get("genres") or game.genres
-            game.screenshots = metadata.get("screenshots") or game.screenshots
-            game.movies = metadata.get("movies") or game.movies
-            if metadata.get("original_price"):
-                game.original_price = metadata["original_price"]
-            updated += 1
+    from flask import current_app
+    app = current_app._get_current_object()
 
-        # Commit in batches of 20 to avoid losing progress on timeout
-        if (i + 1) % 20 == 0:
-            db.session.commit()
+    job = start_job("refresh_metadata", _bg_refresh_metadata, args=(app, game_ids), total=len(game_ids))
+    if not job:
+        return jsonify({"error": "A job is already running", "job": get_current_job().to_dict()}), 409
 
-    db.session.commit()
-    return jsonify({"message": f"Metadata refreshed for {updated}/{total} games (scope: {scope})"}), 200
+    return jsonify({"message": f"Refreshing metadata for {len(game_ids)} games in background", "job": job.to_dict()}), 202
+
+
+def _bg_refresh_metadata(job, app, game_ids):
+    """Background: refresh metadata for games."""
+    with app.app_context():
+        updated = 0
+        for i, game_id in enumerate(game_ids):
+            game = db.session.get(Game, game_id)
+            if game:
+                metadata = _fetch_game_metadata(game.appid)
+                if metadata:
+                    game.description = metadata.get("description") or game.description
+                    game.header_image = metadata.get("header_image") or game.header_image
+                    game.genres = metadata.get("genres") or game.genres
+                    game.screenshots = metadata.get("screenshots") or game.screenshots
+                    game.movies = metadata.get("movies") or game.movies
+                    if metadata.get("original_price"):
+                        game.original_price = metadata["original_price"]
+                    updated += 1
+
+            job.processed = i + 1
+
+            # Commit every 20 games
+            if (i + 1) % 20 == 0:
+                db.session.commit()
+
+        db.session.commit()
+        job.message = f"Refreshed {updated}/{len(game_ids)} games"
+
+
+# ---------------------------------------------------------------------------
+# Job status
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/jobs/current", methods=["GET"])
+@admin_required
+def current_job_status():
+    """Get status of the current background job."""
+    job = get_current_job()
+    if not job:
+        return jsonify({"job": None}), 200
+    return jsonify({"job": job.to_dict()}), 200
 
 
 # ---------------------------------------------------------------------------

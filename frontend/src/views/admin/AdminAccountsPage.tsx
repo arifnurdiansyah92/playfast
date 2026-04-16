@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -30,7 +30,10 @@ import Tooltip from '@mui/material/Tooltip'
 import Snackbar from '@mui/material/Snackbar'
 
 import CustomTextField from '@core/components/mui/TextField'
+import LinearProgress from '@mui/material/LinearProgress'
+
 import { adminApi } from '@/lib/api'
+import type { JobStatus } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 const AdminAccountsPage = () => {
@@ -43,6 +46,8 @@ const AdminAccountsPage = () => {
   const [file, setFile] = useState<File | null>(null)
   const [addError, setAddError] = useState('')
   const [snackMsg, setSnackMsg] = useState('')
+  const [activeJob, setActiveJob] = useState<JobStatus | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [editPwId, setEditPwId] = useState<{ id: number; name: string } | null>(null)
   const [editPwValue, setEditPwValue] = useState('')
@@ -95,14 +100,46 @@ const AdminAccountsPage = () => {
     onError: (err: any) => setSnackMsg(`Update failed: ${err.message}`)
   })
 
+  const startPolling = useCallback(() => {
+    if (pollRef.current) return
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await adminApi.getJobStatus()
+        if (res.job) {
+          setActiveJob(res.job)
+          if (res.job.status !== 'running') {
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+            queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+            queryClient.invalidateQueries({ queryKey: ['admin-games'] })
+            setSnackMsg(res.job.message || `${res.job.job_type} ${res.job.status}`)
+            setTimeout(() => setActiveJob(null), 5000)
+          }
+        } else {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+          setActiveJob(null)
+        }
+      } catch { /* ignore */ }
+    }, 2000)
+  }, [queryClient])
+
+  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current) } }, [])
+
   const syncMutation = useMutation({
     mutationFn: () => adminApi.syncGames(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['admin-games'] })
-      setSnackMsg('All games synced')
+    onSuccess: (res) => {
+      if (res.job) { setActiveJob(res.job); startPolling() }
+      setSnackMsg(res.message)
     },
     onError: (err: any) => setSnackMsg(`Sync failed: ${err.message}`)
+  })
+
+  const refreshMutation = useMutation({
+    mutationFn: () => adminApi.refreshGameMetadata(),
+    onSuccess: (res) => {
+      if (res.job) { setActiveJob(res.job); startPolling() }
+      setSnackMsg(res.message)
+    },
+    onError: (err: any) => setSnackMsg(`Refresh failed: ${err.message}`)
   })
 
   const syncOneMutation = useMutation({
@@ -136,14 +173,43 @@ const AdminAccountsPage = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button variant='outlined' startIcon={<i className='tabler-refresh' />} onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
-            {syncMutation.isPending ? 'Syncing...' : 'Sync All Games'}
+          <Button variant='outlined' startIcon={<i className='tabler-refresh' />} onClick={() => refreshMutation.mutate()} disabled={!!activeJob?.status && activeJob.status === 'running'}>
+            Refresh Metadata
+          </Button>
+          <Button variant='outlined' startIcon={<i className='tabler-refresh' />} onClick={() => syncMutation.mutate()} disabled={!!activeJob?.status && activeJob.status === 'running'}>
+            Sync All Games
           </Button>
           <Button variant='contained' startIcon={<i className='tabler-plus' />} onClick={() => setAddOpen(true)}>
             Add Account
           </Button>
         </Box>
       </Box>
+
+      {/* Background job progress */}
+      {activeJob && (
+        <Card sx={{ border: '1px solid', borderColor: activeJob.status === 'running' ? 'primary.main' : activeJob.status === 'completed' ? 'success.main' : 'error.main' }}>
+          <CardContent sx={{ py: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                {activeJob.job_type === 'sync_games' ? 'Syncing Games' : 'Refreshing Metadata'}
+                {activeJob.status === 'running' && '...'}
+              </Typography>
+              <Chip
+                size='small'
+                label={activeJob.status === 'running' ? `${activeJob.processed}/${activeJob.total}` : activeJob.status}
+                color={activeJob.status === 'running' ? 'primary' : activeJob.status === 'completed' ? 'success' : 'error'}
+                variant='tonal'
+              />
+            </Box>
+            {activeJob.status === 'running' && activeJob.total > 0 && (
+              <LinearProgress variant='determinate' value={(activeJob.processed / activeJob.total) * 100} />
+            )}
+            {activeJob.message && (
+              <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, display: 'block' }}>{activeJob.message}</Typography>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <Card><CardContent>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</CardContent></Card>
