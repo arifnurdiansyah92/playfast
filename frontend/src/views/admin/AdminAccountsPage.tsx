@@ -134,7 +134,7 @@ const AdminAccountsPage = () => {
   })
 
   const refreshMutation = useMutation({
-    mutationFn: () => adminApi.refreshGameMetadata(),
+    mutationFn: () => adminApi.refreshGameMetadata('all'),
     onSuccess: (res) => {
       if (res.job) { setActiveJob(res.job); startPolling() }
       setSnackMsg(res.message)
