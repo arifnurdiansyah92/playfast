@@ -367,7 +367,8 @@ export interface AuditEntry {
   id: number
   user_email: string
   account_name: string
-  timestamp: string
+  game_name: string | null
+  created_at: string
   ip_address: string
 }
 

@@ -1059,6 +1059,11 @@ def audit_codes():
         ld["account_name"] = (
             entry.steam_account.account_name if entry.steam_account else None
         )
+        ld["game_name"] = (
+            entry.assignment.game.name
+            if entry.assignment and entry.assignment.game
+            else None
+        )
         logs.append(ld)
 
     return jsonify({

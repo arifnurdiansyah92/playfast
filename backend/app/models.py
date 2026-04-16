@@ -254,6 +254,7 @@ class Assignment(db.Model):
         uselist=False,
         overlaps="assignment,order_ref",
     )
+    game = db.relationship("Game", foreign_keys=[game_id])
 
 
 class CodeRequestLog(db.Model):

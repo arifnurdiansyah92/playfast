@@ -323,7 +323,7 @@ const AdminDashboardPage = () => {
                     <TableRow key={entry.id} hover>
                       <TableCell>{entry.user_email}</TableCell>
                       <TableCell><Typography variant='body2' sx={{ fontFamily: 'monospace' }}>{entry.account_name}</Typography></TableCell>
-                      <TableCell>{new Date(entry.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</TableCell>
+                      <TableCell>{new Date(entry.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -71,8 +71,8 @@ const AdminAuditPage = () => {
                   <TableCell>ID</TableCell>
                   <TableCell>User</TableCell>
                   <TableCell>Account</TableCell>
+                  <TableCell>Game</TableCell>
                   <TableCell>Timestamp</TableCell>
-                  <TableCell>IP Address</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -94,7 +94,12 @@ const AdminAuditPage = () => {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      {new Date(entry.timestamp).toLocaleString('id-ID', {
+                      <Typography variant='body2'>
+                        {entry.game_name ?? '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(entry.created_at).toLocaleString('id-ID', {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',
@@ -102,11 +107,6 @@ const AdminAuditPage = () => {
                         minute: '2-digit',
                         second: '2-digit'
                       })}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant='body2' sx={{ fontFamily: 'monospace' }}>
-                        {entry.ip_address}
-                      </Typography>
                     </TableCell>
                   </TableRow>
                 ))}
