@@ -122,7 +122,16 @@ const AdminAccountsPage = () => {
     }, 2000)
   }, [queryClient])
 
-  useEffect(() => { return () => { if (pollRef.current) clearInterval(pollRef.current) } }, [])
+  // Check for active job on mount
+  useEffect(() => {
+    adminApi.getJobStatus().then(res => {
+      if (res.job) {
+        setActiveJob(res.job)
+        if (res.job.status === 'running') startPolling()
+      }
+    }).catch(() => {})
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [startPolling])
 
   const syncMutation = useMutation({
     mutationFn: () => adminApi.syncGames(),
@@ -187,19 +196,24 @@ const AdminAccountsPage = () => {
 
       {/* Background job progress */}
       {activeJob && (
-        <Card sx={{ border: '1px solid', borderColor: activeJob.status === 'running' ? 'primary.main' : activeJob.status === 'completed' ? 'success.main' : 'error.main' }}>
+        <Card sx={{ border: '1px solid', borderColor: activeJob.status === 'running' ? 'primary.main' : activeJob.status === 'completed' ? 'success.main' : 'warning.main' }}>
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
               <Typography variant='body2' sx={{ fontWeight: 600 }}>
                 {activeJob.job_type === 'sync_games' ? 'Syncing Games' : 'Refreshing Metadata'}
                 {activeJob.status === 'running' && '...'}
               </Typography>
-              <Chip
-                size='small'
-                label={activeJob.status === 'running' ? `${activeJob.processed}/${activeJob.total}` : activeJob.status}
-                color={activeJob.status === 'running' ? 'primary' : activeJob.status === 'completed' ? 'success' : 'error'}
-                variant='tonal'
-              />
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <Chip
+                  size='small'
+                  label={activeJob.status === 'running' ? `${activeJob.processed}/${activeJob.total}` : activeJob.status}
+                  color={activeJob.status === 'running' ? 'primary' : activeJob.status === 'completed' ? 'success' : 'warning'}
+                  variant='tonal'
+                />
+                {activeJob.status !== 'running' && (
+                  <IconButton size='small' onClick={() => setActiveJob(null)}><i className='tabler-x' /></IconButton>
+                )}
+              </Box>
             </Box>
             {activeJob.status === 'running' && activeJob.total > 0 && (
               <LinearProgress variant='determinate' value={(activeJob.processed / activeJob.total) * 100} />

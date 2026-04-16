@@ -375,7 +375,7 @@ export interface DashboardStats {
 
 export interface JobStatus {
   job_type: string
-  status: 'running' | 'completed' | 'failed'
+  status: 'running' | 'completed' | 'failed' | 'interrupted'
   total: number
   processed: number
   message: string

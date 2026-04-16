@@ -723,9 +723,9 @@ def sync_all_games():
 
     job = start_job("sync_games", _bg_sync_games, args=(app, account_ids), total=len(account_ids))
     if not job:
-        return jsonify({"error": "A job is already running", "job": get_current_job().to_dict()}), 409
+        return jsonify({"error": "A job is already running", "job": get_current_job()}), 409
 
-    return jsonify({"message": "Sync started in background", "job": job.to_dict()}), 202
+    return jsonify({"message": "Sync started in background", "job": job}), 202
 
 
 def _bg_sync_games(job, app, account_ids):
@@ -784,9 +784,9 @@ def refresh_game_metadata():
 
     job = start_job("refresh_metadata", _bg_refresh_metadata, args=(app, game_ids), total=len(game_ids))
     if not job:
-        return jsonify({"error": "A job is already running", "job": get_current_job().to_dict()}), 409
+        return jsonify({"error": "A job is already running", "job": get_current_job()}), 409
 
-    return jsonify({"message": f"Refreshing metadata for {len(game_ids)} games in background", "job": job.to_dict()}), 202
+    return jsonify({"message": f"Refreshing metadata for {len(game_ids)} games in background", "job": job}), 202
 
 
 def _bg_refresh_metadata(job, app, game_ids):
@@ -829,7 +829,7 @@ def current_job_status():
     job = get_current_job()
     if not job:
         return jsonify({"job": None}), 200
-    return jsonify({"job": job.to_dict()}), 200
+    return jsonify({"job": job}), 200
 
 
 # ---------------------------------------------------------------------------
