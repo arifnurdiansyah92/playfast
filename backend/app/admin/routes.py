@@ -504,65 +504,84 @@ def _fetch_game_metadata(appid: int) -> dict | None:
     Rate-limited to avoid Steam API throttling.
     """
     global _last_steam_api_call
-    elapsed = time.time() - _last_steam_api_call
-    if elapsed < 0.5:
-        time.sleep(0.5 - elapsed)
-    _last_steam_api_call = time.time()
 
-    try:
-        resp = http_requests.get(
-            f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=us",
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        app_data = data.get(str(appid), {})
-        if not app_data.get("success"):
+    app_data = None
+    for attempt in range(3):
+        elapsed = time.time() - _last_steam_api_call
+        delay = 1.5 if attempt == 0 else 5.0
+        if elapsed < delay:
+            time.sleep(delay - elapsed)
+        _last_steam_api_call = time.time()
+
+        try:
+            resp = http_requests.get(
+                f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=us",
+                timeout=10,
+            )
+            if resp.status_code == 429:
+                logger.warning("Steam rate limit hit for appid %s, waiting 30s (attempt %d)", appid, attempt + 1)
+                time.sleep(30)
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            if data is None:
+                logger.warning("Steam returned null for appid %s, waiting 10s (attempt %d)", appid, attempt + 1)
+                time.sleep(10)
+                continue
+            app_data = data.get(str(appid), {})
+            if not app_data.get("success"):
+                return None
+            break
+        except Exception as e:
+            if attempt < 2:
+                logger.warning("Retry %d for appid %s: %s", attempt + 1, appid, e)
+                time.sleep(5)
+                continue
+            logger.warning("Failed to fetch metadata for appid %s: %s", appid, e)
             return None
-        details = app_data.get("data", {})
-        genres_list = details.get("genres", [])
-        genre_names = ", ".join(g.get("description", "") for g in genres_list)
 
-        # Screenshots
-        screenshots = []
-        for ss in details.get("screenshots", []):
-            screenshots.append({
-                "thumbnail": ss.get("path_thumbnail", ""),
-                "full": ss.get("path_full", ""),
-            })
-
-        # Movies / trailers
-        movies = []
-        for mv in details.get("movies", []):
-            mp4 = mv.get("mp4", {})
-            movies.append({
-                "id": mv.get("id"),
-                "name": mv.get("name", ""),
-                "thumbnail": mv.get("thumbnail", ""),
-                "mp4_480": mp4.get("480", ""),
-                "mp4_max": mp4.get("max", ""),
-            })
-
-        # Price: fetch USD and convert to IDR
-        price_overview = details.get("price_overview")
-        original_price = None
-        if price_overview:
-            initial_cents = price_overview.get("initial")  # USD cents
-            if initial_cents:
-                usd_price = initial_cents / 100  # e.g. 8999 -> 89.99
-                original_price = round(usd_price * 17000)  # convert to IDR
-
-        return {
-            "description": details.get("short_description", ""),
-            "header_image": details.get("header_image", ""),
-            "genres": genre_names,
-            "screenshots": screenshots,
-            "movies": movies,
-            "original_price": original_price,
-        }
-    except Exception as e:
-        logger.warning("Failed to fetch metadata for appid %s: %s", appid, e)
+    if not app_data or not app_data.get("success"):
         return None
+
+    details = app_data.get("data", {})
+    genres_list = details.get("genres", [])
+    genre_names = ", ".join(g.get("description", "") for g in genres_list)
+
+    screenshots = []
+    for ss in details.get("screenshots", []):
+        screenshots.append({
+            "thumbnail": ss.get("path_thumbnail", ""),
+            "full": ss.get("path_full", ""),
+        })
+
+    movies = []
+    for mv in details.get("movies", []):
+        mp4 = mv.get("mp4", {})
+        movies.append({
+            "id": mv.get("id"),
+            "name": mv.get("name", ""),
+            "thumbnail": mv.get("thumbnail", ""),
+            "mp4_480": mp4.get("480", ""),
+            "mp4_max": mp4.get("max", ""),
+        })
+
+    # Price: fetch USD and convert to IDR
+    price_overview = details.get("price_overview")
+    original_price = None
+    if price_overview:
+        initial_cents = price_overview.get("initial")
+        if initial_cents:
+            usd_price = initial_cents / 100
+            original_price = round(usd_price * 17000)
+
+    return {
+        "description": details.get("short_description", ""),
+        "header_image": details.get("header_image", ""),
+        "genres": genre_names,
+        "screenshots": screenshots,
+        "movies": movies,
+        "original_price": original_price,
+    }
 
 
 def _sync_account_games(account: SteamAccount) -> dict:
