@@ -38,6 +38,8 @@ const LandingPage = () => {
   const [games, setGames] = useState<Game[]>([])
   const [gamesLoading, setGamesLoading] = useState(true)
   const [openFaq, setOpenFaq] = useState<number | null>(null)
+  const [plans, setPlans] = useState<{ plan: string; label: string; price: number; duration_days: number }[]>([])
+  const [plansLoading, setPlansLoading] = useState(true)
 
   useEffect(() => {
     storeApi.getFeaturedGames().then(featured => {
@@ -59,6 +61,12 @@ const LandingPage = () => {
   }, [])
 
   useEffect(() => {
+    storeApi.getSubscriptionPlans()
+      .then(data => { setPlans(data.plans); setPlansLoading(false) })
+      .catch(() => setPlansLoading(false))
+  }, [])
+
+  useEffect(() => {
     if (!loading && user) {
       router.replace('/store')
     }
@@ -67,8 +75,8 @@ const LandingPage = () => {
   const features = [
     { icon: 'tabler-bolt', title: 'Akses Instan', desc: 'Dapatkan kredensial Steam dan kode guard langsung setelah pembelian' },
     { icon: 'tabler-shield-lock', title: 'Kode Steam Guard', desc: 'Kode 2FA otomatis — nggak perlu nunggu seller bales' },
-    { icon: 'tabler-infinity', title: 'Main Selamanya', desc: 'Bayar sekali, akses selamanya. Tanpa langganan atau batas waktu' },
-    { icon: 'tabler-currency-dollar', title: 'Harga Terjangkau', desc: 'Mulai dari Rp 50.000 per game — jauh lebih murah dari harga asli' },
+    { icon: 'tabler-crown', title: 'Subscribe = Semua Game', desc: 'Satu subscription, akses semua game di katalog. Game baru otomatis tersedia' },
+    { icon: 'tabler-currency-dollar', title: 'Harga Terjangkau', desc: 'Beli satuan mulai Rp 50K, atau subscribe untuk akses semua' },
   ]
 
   const steps = [
@@ -85,7 +93,7 @@ const LandingPage = () => {
     },
     {
       q: 'Ini langganan atau beli putus?',
-      a: 'Ini beli putus. Begitu kamu beli akses ke sebuah game, kamu bisa pakai kredensial dan generate kode Steam Guard tanpa batas waktu. Nggak ada biaya berulang atau timer sewa.'
+      a: 'Dua-duanya ada! Kamu bisa beli satuan per game (bayar sekali, akses selamanya), atau pilih Playfast Premium — subscription bulanan/tahunan yang membuka akses ke semua game di katalog. Pilih yang paling cocok buat kamu.'
     },
     {
       q: 'Apa itu kode Steam Guard dan kenapa dibutuhkan?',
@@ -200,7 +208,7 @@ const LandingPage = () => {
                 fontWeight: 400, lineHeight: 1.7, fontSize: { xs: '1rem', md: '1.15rem' },
               }}
             >
-              Akses ribuan game Steam secara instan. Kode Steam Guard otomatis — tanpa ribet. Bayar sekali, main selamanya.
+              Akses ribuan game Steam secara instan. Beli satuan atau subscribe untuk akses semua game. Kode Steam Guard otomatis — tanpa ribet.
             </Typography>
 
             {/* Social proof */}
@@ -243,8 +251,8 @@ const LandingPage = () => {
             }}
           >
             {[
-              { label: 'Mulai dari', value: 'Rp 50K' },
-              { label: 'Durasi Akses', value: 'Selamanya' },
+              { label: 'Per Game', value: 'Rp 50K' },
+              { label: 'Semua Game', value: 'Subscribe' },
               { label: 'Kode Guard', value: 'Instan' },
             ].map(s => (
               <Box key={s.label} sx={{ textAlign: 'center', minWidth: 100 }}>
@@ -428,6 +436,134 @@ const LandingPage = () => {
           </Container>
         )}
 
+        {/* ════════════════════ PRICING / SUBSCRIBE ════════════════════ */}
+        <Box sx={{ py: 10, bgcolor: 'rgba(0,0,0,0.2)' }}>
+          <Container maxWidth='lg'>
+            <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>
+              Pilih Cara Mainmu
+            </Typography>
+            <Typography variant='body1' sx={{ textAlign: 'center', color: textSecondary, mb: 6 }}>
+              Beli satuan per game, atau subscribe untuk akses semua game sekaligus
+            </Typography>
+
+            <Grid container spacing={3} justifyContent='center'>
+              {/* Per-game card */}
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <Card sx={{ ...cardSx, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <CardContent sx={{ textAlign: 'center', py: 4, px: 3, display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+                    <Box sx={{
+                      width: 48, height: 48, borderRadius: '50%', mx: 'auto', mb: 2,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: `linear-gradient(135deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.04) 100%)`,
+                      border: `1px solid rgba(201,168,76,0.25)`,
+                    }}>
+                      <i className='tabler-shopping-cart' style={{ fontSize: 24, color: gold }} />
+                    </Box>
+                    <Typography variant='h6' sx={{ fontWeight: 700, mb: 1 }}>Beli Satuan</Typography>
+                    <Typography variant='h4' sx={{ fontWeight: 800, color: gold, mb: 0.5 }}>Rp 50K</Typography>
+                    <Typography variant='body2' sx={{ color: textSecondary, mb: 2 }}>mulai dari / game</Typography>
+                    <Box sx={{ textAlign: 'left', mb: 3 }}>
+                      {['Pilih game yang kamu mau', 'Bayar sekali, akses selamanya', 'Kode Steam Guard otomatis'].map(t => (
+                        <Box key={t} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <i className='tabler-check' style={{ fontSize: 16, color: gold }} />
+                          <Typography variant='body2' sx={{ color: textSecondary }}>{t}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                    <Box sx={{ flexGrow: 1 }} />
+                    <Button
+                      component={Link} href='/store' variant='outlined' fullWidth size='large'
+                      sx={{ fontWeight: 700, borderColor: `rgba(201,168,76,0.35)`, color: textPrimary, '&:hover': { borderColor: gold, bgcolor: goldGlow } }}
+                    >
+                      Lihat Game
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Subscription plan cards */}
+              {plansLoading
+                ? [1, 2, 3].map(i => (
+                  <Grid size={{ xs: 12, sm: 6, md: 3 }} key={i}>
+                    <Card sx={{ ...cardSx, height: '100%' }}>
+                      <CardContent sx={{ py: 4, px: 3 }}>
+                        <Skeleton width='60%' height={28} sx={{ mx: 'auto', mb: 2 }} />
+                        <Skeleton width='50%' height={40} sx={{ mx: 'auto', mb: 1 }} />
+                        <Skeleton width='40%' height={20} sx={{ mx: 'auto', mb: 3 }} />
+                        <Skeleton variant='rounded' height={44} />
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))
+                : plans.map(plan => {
+                  const isBest = plan.plan === 'yearly'
+                  const monthlyEquiv = plan.plan === 'monthly'
+                    ? plan.price
+                    : plan.plan === '3monthly'
+                      ? Math.round(plan.price / 3)
+                      : Math.round(plan.price / 12)
+
+                  return (
+                    <Grid size={{ xs: 12, sm: 6, md: 3 }} key={plan.plan}>
+                      <Card sx={{
+                        ...cardSx, height: '100%', display: 'flex', flexDirection: 'column',
+                        position: 'relative',
+                        ...(isBest ? { borderColor: `rgba(201,168,76,0.5)`, boxShadow: `0 0 30px rgba(201,168,76,0.1)` } : {}),
+                      }}>
+                        {isBest && (
+                          <Chip
+                            label='Best Value'
+                            size='small'
+                            sx={{
+                              position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)',
+                              bgcolor: gold, color: dark, fontWeight: 700, fontSize: '0.7rem',
+                            }}
+                          />
+                        )}
+                        <CardContent sx={{ textAlign: 'center', py: 4, px: 3, display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+                          <Box sx={{
+                            width: 48, height: 48, borderRadius: '50%', mx: 'auto', mb: 2,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: `linear-gradient(135deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.04) 100%)`,
+                            border: `1px solid rgba(201,168,76,0.25)`,
+                          }}>
+                            <i className='tabler-crown' style={{ fontSize: 24, color: gold }} />
+                          </Box>
+                          <Typography variant='h6' sx={{ fontWeight: 700, mb: 1 }}>{plan.label}</Typography>
+                          <Typography variant='h4' sx={{ fontWeight: 800, color: gold, mb: 0.5 }}>
+                            {formatIDR(plan.price)}
+                          </Typography>
+                          <Typography variant='body2' sx={{ color: textSecondary, mb: 2 }}>
+                            {plan.plan !== 'monthly' && `${formatIDR(monthlyEquiv)}/bulan · `}{plan.duration_days} hari
+                          </Typography>
+                          <Box sx={{ textAlign: 'left', mb: 3 }}>
+                            {['Akses semua game di katalog', 'Kode Steam Guard otomatis', 'Game baru otomatis tersedia'].map(t => (
+                              <Box key={t} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                <i className='tabler-check' style={{ fontSize: 16, color: gold }} />
+                                <Typography variant='body2' sx={{ color: textSecondary }}>{t}</Typography>
+                              </Box>
+                            ))}
+                          </Box>
+                          <Box sx={{ flexGrow: 1 }} />
+                          <Button
+                            component={Link} href='/register?redirect=/subscribe' fullWidth size='large'
+                            variant={isBest ? 'contained' : 'outlined'}
+                            sx={isBest
+                              ? { fontWeight: 700, bgcolor: gold, color: dark, '&:hover': { bgcolor: goldLight } }
+                              : { fontWeight: 700, borderColor: `rgba(201,168,76,0.35)`, color: textPrimary, '&:hover': { borderColor: gold, bgcolor: goldGlow } }
+                            }
+                          >
+                            Subscribe
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  )
+                })}
+            </Grid>
+          </Container>
+        </Box>
+
         {/* ════════════════════ TESTIMONIALS ════════════════════ */}
         <Container maxWidth='lg' sx={{ py: 10 }}>
           <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>Kata Mereka</Typography>
@@ -524,19 +660,32 @@ const LandingPage = () => {
             <Box component='img' src='/images/brand/icon.png' alt='' sx={{ width: 56, height: 'auto', mx: 'auto', mb: 2, filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.4))' }} />
             <Typography variant='h4' sx={{ fontWeight: 700, mb: 2 }}>Siap Main?</Typography>
             <Typography sx={{ color: textSecondary, mb: 4, lineHeight: 1.7 }}>
-              Buat akun gratis dan mulai main dalam hitungan menit.
+              Buat akun gratis dan mulai main dalam hitungan menit. Beli satuan atau subscribe untuk akses semua game.
             </Typography>
-            <Button
-              component={Link} href='/register' variant='contained' size='large'
-              sx={{
-                px: 5, py: 1.5, fontSize: '1rem', fontWeight: 700,
-                bgcolor: gold, color: dark,
-                boxShadow: `0 4px 24px rgba(201,168,76,0.3)`,
-                '&:hover': { bgcolor: goldLight, boxShadow: `0 6px 32px rgba(201,168,76,0.4)` },
-              }}
-            >
-              Daftar Gratis
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button
+                component={Link} href='/register' variant='contained' size='large'
+                sx={{
+                  px: 5, py: 1.5, fontSize: '1rem', fontWeight: 700,
+                  bgcolor: gold, color: dark,
+                  boxShadow: `0 4px 24px rgba(201,168,76,0.3)`,
+                  '&:hover': { bgcolor: goldLight, boxShadow: `0 6px 32px rgba(201,168,76,0.4)` },
+                }}
+              >
+                Daftar Gratis
+              </Button>
+              <Button
+                component={Link} href='/register?redirect=/subscribe' variant='outlined' size='large'
+                sx={{
+                  px: 4, py: 1.5, fontSize: '1rem', fontWeight: 700,
+                  borderColor: 'rgba(201,168,76,0.35)', color: textPrimary,
+                  '&:hover': { borderColor: gold, bgcolor: goldGlow },
+                }}
+                startIcon={<i className='tabler-crown' />}
+              >
+                Lihat Paket Premium
+              </Button>
+            </Box>
           </Container>
         </Box>
 
