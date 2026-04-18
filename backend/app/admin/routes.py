@@ -454,17 +454,19 @@ def admin_logout_all_devices(account_id: int):
     mafile = account.mafile_data.copy()
     result = logout_all_devices(mafile, account.password)
 
-    # Persist updated tokens regardless of partial success
-    if mafile != account.mafile_data:
-        account.mafile_data = mafile
-        account.steam_id = mafile.get("Session", {}).get("SteamID", account.steam_id)
-        db.session.commit()
+    # Persist updated tokens regardless of partial success. Unconditional assign
+    # is intentional: shallow copy means nested Session dict is shared, so
+    # `mafile != account.mafile_data` is unreliable after the service mutates it.
+    account.mafile_data = mafile
+    account.steam_id = mafile.get("Session", {}).get("SteamID", account.steam_id)
+    db.session.commit()
 
     if result.get("error"):
         return jsonify({
             "error": result["error"],
-            "revoked_count": 0,
-            "relogin_success": False,
+            "revoked_count": result.get("revoked_count", 0),
+            "failed_count": result.get("failed_count", 0),
+            "relogin_success": result.get("relogin_success", False),
         }), 502
 
     return jsonify({
