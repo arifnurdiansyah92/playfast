@@ -2,6 +2,7 @@
 
 import base64
 import json
+import logging
 import os
 import sys
 import time
@@ -15,6 +16,8 @@ if _project_root not in sys.path:
 
 from steam_guard import generate_steam_guard_code, code_time_remaining, build_confirmation_params
 from steam_client import steam_login
+
+logger = logging.getLogger(__name__)
 
 # Steam API base
 STEAM_API = "https://api.steampowered.com"
@@ -276,5 +279,6 @@ def revoke_refresh_token(access_token: str, token_id: str, steam_id: str) -> boo
             timeout=15,
         )
         return resp.status_code == 200
-    except Exception:
+    except Exception as e:
+        logger.warning("revoke_refresh_token failed for token_id=%s: %r", token_id, e)
         return False
