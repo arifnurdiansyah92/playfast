@@ -244,7 +244,8 @@ def enumerate_tokens(access_token: str) -> list[dict]:
 
     Calls IAuthenticationService/EnumerateTokens. Returns a list of dicts each
     containing: token_id, token_description, time_updated, platform_type,
-    os_platform, logged_in. Raises on HTTP error.
+    os_platform, logged_in. Raises on HTTP error; network-layer exceptions
+    (ConnectionError, Timeout) also propagate.
     """
     resp = requests.post(
         f"{AUTH_URL}/EnumerateTokens/v1",
