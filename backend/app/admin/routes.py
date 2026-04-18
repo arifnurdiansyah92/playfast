@@ -820,6 +820,10 @@ def _bg_logout_all_bulk(job, app, account_ids):
                 mafile = account.mafile_data.copy()
                 result = logout_all_devices(mafile, account.password)
 
+                # Persist updated tokens regardless of partial success. Unconditional
+                # assign is intentional: shallow copy means nested Session dict is
+                # shared, so `mafile != account.mafile_data` is unreliable after the
+                # service mutates it. Same rationale as admin_logout_all_devices.
                 account.mafile_data = mafile
                 account.steam_id = mafile.get("Session", {}).get("SteamID", account.steam_id)
                 db.session.add(account)
