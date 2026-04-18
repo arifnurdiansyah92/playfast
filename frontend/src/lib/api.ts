@@ -432,6 +432,21 @@ export const adminApi = {
   loginAccount(id: number) {
     return request<{ message: string }>(`/api/admin/accounts/${id}/login`, { method: 'POST' })
   },
+  logoutAllDevices(id: number) {
+    return request<{
+      message: string
+      revoked_count: number
+      failed_count: number
+      devices: string[]
+      relogin_success: boolean
+    }>(`/api/admin/accounts/${id}/logout-all`, { method: 'POST' })
+  },
+  logoutAllBulk() {
+    return request<{ message: string; job?: JobStatus }>(
+      '/api/admin/accounts/logout-all-bulk',
+      { method: 'POST' }
+    )
+  },
   getConfirmations(id: number) {
     return request<{ confirmations: any[] }>(`/api/admin/accounts/${id}/confirmations`)
   },
