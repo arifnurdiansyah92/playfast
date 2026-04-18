@@ -779,6 +779,70 @@ def _bg_sync_games(job, app, account_ids):
         job.message = f"Synced {success_count}/{len(account_ids)} accounts"
 
 
+@admin_bp.route("/accounts/logout-all-bulk", methods=["POST"])
+@admin_required
+def logout_all_bulk():
+    """Kick every session on every active account, in the background."""
+    accounts = SteamAccount.query.filter_by(is_active=True).all()
+    if not accounts:
+        return jsonify({"error": "No active accounts to logout"}), 404
+
+    account_ids = [a.id for a in accounts]
+    from flask import current_app
+    app = current_app._get_current_object()
+
+    job = start_job(
+        "logout_all_bulk",
+        _bg_logout_all_bulk,
+        args=(app, account_ids),
+        total=len(account_ids),
+    )
+    if not job:
+        return jsonify({"error": "A job is already running", "job": get_current_job()}), 409
+
+    return jsonify({"message": "Bulk logout started in background", "job": job}), 202
+
+
+def _bg_logout_all_bulk(job, app, account_ids):
+    """Background: logout all devices across all active accounts."""
+    with app.app_context():
+        ok_accounts = 0
+        total_devices = 0
+        failures: list[str] = []
+
+        for i, account_id in enumerate(account_ids):
+            account = db.session.get(SteamAccount, account_id)
+            if not account:
+                job.processed = i + 1
+                continue
+
+            try:
+                mafile = account.mafile_data.copy()
+                result = logout_all_devices(mafile, account.password)
+
+                account.mafile_data = mafile
+                account.steam_id = mafile.get("Session", {}).get("SteamID", account.steam_id)
+                db.session.add(account)
+                db.session.commit()
+
+                if result.get("error"):
+                    failures.append(f"{account.account_name}: {result['error']}")
+                else:
+                    ok_accounts += 1
+                    total_devices += result.get("revoked_count", 0)
+            except Exception as e:
+                logger.exception("Bulk logout failed for account %s", account_id)
+                failures.append(f"{account.account_name}: {e}")
+
+            job.processed = i + 1
+            time.sleep(1.0)  # pace between accounts to avoid Steam rate limits
+
+        msg = f"Logged out {ok_accounts}/{len(account_ids)} accounts, kicked {total_devices} devices"
+        if failures:
+            msg += f" ({len(failures)} failed)"
+        job.message = msg
+
+
 @admin_bp.route("/accounts/<int:account_id>/sync", methods=["POST"])
 @admin_required
 def sync_single_account(account_id: int):
