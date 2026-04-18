@@ -95,6 +95,7 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
       setLogoutConfirmOpen(false)
       setLogoutResult({ devices: data.devices, relogin: data.relogin_success })
       setSnackMsg(data.message)
+      queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
     },
     onError: (err: any) => {
       setLogoutConfirmOpen(false)
@@ -436,7 +437,7 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
           </Typography>
           <Box component='ul' sx={{ pl: 3, m: 0 }}>
             {logoutResult?.devices.map((d, i) => (
-              <li key={i}><Typography variant='body2'>{d}</Typography></li>
+              <li key={`${d}-${i}`}><Typography variant='body2'>{d}</Typography></li>
             ))}
           </Box>
         </DialogContent>
