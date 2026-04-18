@@ -237,3 +237,20 @@ def steam_account_login(mafile_data: dict, password: str) -> dict:
     shared_secret = mafile_data.get("shared_secret", "")
     new_session = steam_login(account_name, password, shared_secret)
     return new_session
+
+
+def enumerate_tokens(access_token: str) -> list[dict]:
+    """List active refresh tokens for the account tied to this access_token.
+
+    Calls IAuthenticationService/EnumerateTokens. Returns a list of dicts each
+    containing: token_id, token_description, time_updated, platform_type,
+    os_platform, logged_in. Raises on HTTP error.
+    """
+    resp = requests.post(
+        f"{AUTH_URL}/EnumerateTokens/v1",
+        params={"access_token": access_token},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json().get("response", {})
+    return data.get("refresh_tokens", [])
