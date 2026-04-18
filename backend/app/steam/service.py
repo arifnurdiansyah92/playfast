@@ -298,8 +298,6 @@ def logout_all_devices(mafile_data: dict, password: str) -> dict:
 
     Mutates mafile_data in place with fresh tokens after re-login.
     """
-    import time as _time
-
     token = ensure_valid_token(mafile_data, password)
     if not token:
         return {
@@ -351,7 +349,7 @@ def logout_all_devices(mafile_data: dict, password: str) -> dict:
             devices.append(name)
         else:
             failed += 1
-        _time.sleep(0.5)  # gentle rate-limit between revocations
+        time.sleep(0.5)  # gentle rate-limit between revocations
 
     # Re-login so Playfast's own session survives. This persists new tokens
     # back into mafile_data (see steam_account_login).
@@ -367,7 +365,8 @@ def logout_all_devices(mafile_data: dict, password: str) -> dict:
         )
         mafile_data["Session"] = session
         relogin_ok = True
-    except Exception:
+    except Exception as e:
+        logger.warning("logout_all_devices relogin failed for steam_id=%s: %r", steam_id, e)
         relogin_ok = False
 
     return {
