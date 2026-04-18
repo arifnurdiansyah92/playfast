@@ -37,6 +37,7 @@ from app.steam.service import (
     act_on_confirmation,
     steam_account_login,
     _force_new_token,
+    logout_all_devices,
 )
 
 logger = logging.getLogger(__name__)
@@ -440,6 +441,39 @@ def admin_login_account(account_id: int):
         return jsonify({"message": "Login successful, tokens updated"}), 200
     except Exception as e:
         return jsonify({"error": f"Login failed: {str(e)}"}), 400
+
+
+@admin_bp.route("/accounts/<int:account_id>/logout-all", methods=["POST"])
+@admin_required
+def admin_logout_all_devices(account_id: int):
+    """Revoke every active Steam session on this account, then re-login Playfast."""
+    account = db.session.get(SteamAccount, account_id)
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+
+    mafile = account.mafile_data.copy()
+    result = logout_all_devices(mafile, account.password)
+
+    # Persist updated tokens regardless of partial success
+    if mafile != account.mafile_data:
+        account.mafile_data = mafile
+        account.steam_id = mafile.get("Session", {}).get("SteamID", account.steam_id)
+        db.session.commit()
+
+    if result.get("error"):
+        return jsonify({
+            "error": result["error"],
+            "revoked_count": 0,
+            "relogin_success": False,
+        }), 502
+
+    return jsonify({
+        "message": f"Logged out {result['revoked_count']} device(s)",
+        "revoked_count": result["revoked_count"],
+        "failed_count": result["failed_count"],
+        "devices": result["devices"],
+        "relogin_success": result["relogin_success"],
+    }), 200
 
 
 @admin_bp.route("/accounts/<int:account_id>/confirmations", methods=["GET"])
