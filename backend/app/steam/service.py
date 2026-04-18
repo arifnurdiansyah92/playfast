@@ -255,3 +255,26 @@ def enumerate_tokens(access_token: str) -> list[dict]:
     resp.raise_for_status()
     data = resp.json().get("response", {})
     return data.get("refresh_tokens", [])
+
+
+def revoke_refresh_token(access_token: str, token_id: str, steam_id: str) -> bool:
+    """Revoke a single refresh token by ID.
+
+    Calls IAuthenticationService/RevokeRefreshToken with revoke_action=1
+    (permanent revoke — kicks the device at its next authenticated request).
+    Returns True on HTTP 200, False otherwise. Does not raise.
+    """
+    try:
+        resp = requests.post(
+            f"{AUTH_URL}/RevokeRefreshToken/v1",
+            params={"access_token": access_token},
+            data={
+                "token_id": str(token_id),
+                "steamid": str(steam_id),
+                "revoke_action": "1",
+            },
+            timeout=15,
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
