@@ -51,6 +51,7 @@ const AdminAccountsPage = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [editPwId, setEditPwId] = useState<{ id: number; name: string } | null>(null)
   const [editPwValue, setEditPwValue] = useState('')
+  const [logoutAllConfirmOpen, setLogoutAllConfirmOpen] = useState(false)
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['admin-accounts'],
@@ -151,6 +152,19 @@ const AdminAccountsPage = () => {
     onError: (err: any) => setSnackMsg(`Refresh failed: ${err.message}`)
   })
 
+  const logoutAllBulkMutation = useMutation({
+    mutationFn: () => adminApi.logoutAllBulk(),
+    onSuccess: (res) => {
+      setLogoutAllConfirmOpen(false)
+      if (res.job) { setActiveJob(res.job); startPolling() }
+      setSnackMsg(res.message)
+    },
+    onError: (err: any) => {
+      setLogoutAllConfirmOpen(false)
+      setSnackMsg(`Bulk logout failed: ${err.message}`)
+    }
+  })
+
   const syncOneMutation = useMutation({
     mutationFn: (id: number) => adminApi.syncAccount(id),
     onSuccess: (data) => {
@@ -182,6 +196,15 @@ const AdminAccountsPage = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant='outlined'
+            color='error'
+            startIcon={<i className='tabler-logout' />}
+            onClick={() => setLogoutAllConfirmOpen(true)}
+            disabled={!!activeJob?.status && activeJob.status === 'running'}
+          >
+            Logout All (All Accounts)
+          </Button>
           <Button variant='outlined' startIcon={<i className='tabler-refresh' />} onClick={() => refreshMutation.mutate()} disabled={!!activeJob?.status && activeJob.status === 'running'}>
             Refresh Metadata
           </Button>
@@ -200,7 +223,11 @@ const AdminAccountsPage = () => {
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
               <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                {activeJob.job_type === 'sync_games' ? 'Syncing Games' : 'Refreshing Metadata'}
+                {activeJob.job_type === 'sync_games'
+                  ? 'Syncing Games'
+                  : activeJob.job_type === 'logout_all_bulk'
+                    ? 'Logging Out All Devices'
+                    : 'Refreshing Metadata'}
                 {activeJob.status === 'running' && '...'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -352,6 +379,27 @@ const AdminAccountsPage = () => {
           <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
           <Button variant='contained' color='error' onClick={() => deleteConfirm !== null && deleteMutation.mutate(deleteConfirm)} disabled={deleteMutation.isPending}>
             {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={logoutAllConfirmOpen} onClose={() => setLogoutAllConfirmOpen(false)} maxWidth='xs' fullWidth>
+        <DialogTitle>Logout All Devices on All Accounts?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Ini akan kick semua session di <strong>{accounts?.filter(a => a.is_active).length ?? 0} akun aktif</strong>.
+            Proses berjalan di background. Pengguna Steam yang sedang main akan ke-logout.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setLogoutAllConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant='contained'
+            color='error'
+            onClick={() => logoutAllBulkMutation.mutate()}
+            disabled={logoutAllBulkMutation.isPending}
+          >
+            {logoutAllBulkMutation.isPending ? 'Starting...' : 'Logout All'}
           </Button>
         </DialogActions>
       </Dialog>
