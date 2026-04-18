@@ -26,6 +26,10 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
 
 import { adminApi } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
@@ -42,6 +46,8 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
   const [code, setCode] = useState('')
   const [codeRemaining, setCodeRemaining] = useState(0)
   const [codeLoading, setCodeLoading] = useState(false)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [logoutResult, setLogoutResult] = useState<null | { devices: string[]; relogin: boolean }>(null)
 
   const { data: accounts } = useQuery({
     queryKey: ['admin-accounts'],
@@ -81,6 +87,19 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
       queryClient.invalidateQueries({ queryKey: ['admin-games'] })
     },
     onError: (err: any) => setSnackMsg(`Sync failed: ${err.message}`)
+  })
+
+  const logoutAllMutation = useMutation({
+    mutationFn: () => adminApi.logoutAllDevices(Number(accountId)),
+    onSuccess: (data) => {
+      setLogoutConfirmOpen(false)
+      setLogoutResult({ devices: data.devices, relogin: data.relogin_success })
+      setSnackMsg(data.message)
+    },
+    onError: (err: any) => {
+      setLogoutConfirmOpen(false)
+      setSnackMsg(`Logout failed: ${err.message}`)
+    }
   })
 
   const confirmMutation = useMutation({
@@ -220,6 +239,16 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
                 onClick={() => refetchConfs()}
               >
                 Refresh Confirmations
+              </Button>
+              <Button
+                variant='outlined'
+                color='error'
+                fullWidth
+                startIcon={<i className='tabler-logout' />}
+                onClick={() => setLogoutConfirmOpen(true)}
+                disabled={logoutAllMutation.isPending}
+              >
+                {logoutAllMutation.isPending ? 'Logging out...' : 'Logout All Devices'}
               </Button>
             </CardContent>
           </Card>
@@ -372,6 +401,49 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
           </TableContainer>
         )}
       </Card>
+
+      <Dialog open={logoutConfirmOpen} onClose={() => setLogoutConfirmOpen(false)} maxWidth='xs' fullWidth>
+        <DialogTitle>Logout All Devices?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Ini akan kick semua device yang saat ini login ke <strong>{account.account_name}</strong>.
+            Pengguna Steam yang sedang main akan ke-logout pada request berikutnya.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setLogoutConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant='contained'
+            color='error'
+            onClick={() => logoutAllMutation.mutate()}
+            disabled={logoutAllMutation.isPending}
+          >
+            {logoutAllMutation.isPending ? 'Logging out...' : 'Logout All'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!logoutResult} onClose={() => setLogoutResult(null)} maxWidth='sm' fullWidth>
+        <DialogTitle>Logout Complete</DialogTitle>
+        <DialogContent>
+          {!logoutResult?.relogin && (
+            <Alert severity='warning' sx={{ mb: 2 }}>
+              Re-login otomatis gagal. Klik &quot;Force Login&quot; di atas untuk recovery manual.
+            </Alert>
+          )}
+          <Typography variant='body2' sx={{ mb: 1 }}>
+            Kicked {logoutResult?.devices.length ?? 0} device(s):
+          </Typography>
+          <Box component='ul' sx={{ pl: 3, m: 0 }}>
+            {logoutResult?.devices.map((d, i) => (
+              <li key={i}><Typography variant='body2'>{d}</Typography></li>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setLogoutResult(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar open={!!snackMsg} autoHideDuration={3000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>
