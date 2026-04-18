@@ -282,3 +282,98 @@ def revoke_refresh_token(access_token: str, token_id: str, steam_id: str) -> boo
     except Exception as e:
         logger.warning("revoke_refresh_token failed for token_id=%s: %r", token_id, e)
         return False
+
+
+def logout_all_devices(mafile_data: dict, password: str) -> dict:
+    """Kick every active session on this account, then re-login Playfast's own.
+
+    Returns:
+        {
+            "revoked_count": int,
+            "failed_count": int,
+            "devices": [str, ...],          # device_friendly_name / description
+            "relogin_success": bool,
+            "error": str | None,             # top-level failure before any revoke
+        }
+
+    Mutates mafile_data in place with fresh tokens after re-login.
+    """
+    import time as _time
+
+    token = ensure_valid_token(mafile_data, password)
+    if not token:
+        return {
+            "revoked_count": 0,
+            "failed_count": 0,
+            "devices": [],
+            "relogin_success": False,
+            "error": "Could not obtain a valid access token before revocation.",
+        }
+
+    steam_id = mafile_data.get("Session", {}).get("SteamID", "")
+
+    try:
+        tokens = enumerate_tokens(token)
+    except Exception as e:
+        # One retry with a forced refresh — token may be silently dead
+        new_token = _force_new_token(mafile_data, password)
+        if not new_token:
+            return {
+                "revoked_count": 0,
+                "failed_count": 0,
+                "devices": [],
+                "relogin_success": False,
+                "error": f"EnumerateTokens failed and token refresh failed: {e}",
+            }
+        token = new_token
+        try:
+            tokens = enumerate_tokens(token)
+        except Exception as retry_err:
+            return {
+                "revoked_count": 0,
+                "failed_count": 0,
+                "devices": [],
+                "relogin_success": False,
+                "error": f"EnumerateTokens failed after retry: {retry_err}",
+            }
+
+    revoked = 0
+    failed = 0
+    devices: list[str] = []
+    for t in tokens:
+        token_id = str(t.get("token_id", ""))
+        if not token_id:
+            continue
+        name = t.get("token_description") or t.get("device_friendly_name") or f"token:{token_id}"
+        ok = revoke_refresh_token(token, token_id, steam_id)
+        if ok:
+            revoked += 1
+            devices.append(name)
+        else:
+            failed += 1
+        _time.sleep(0.5)  # gentle rate-limit between revocations
+
+    # Re-login so Playfast's own session survives. This persists new tokens
+    # back into mafile_data (see steam_account_login).
+    relogin_ok = False
+    try:
+        new_session = steam_account_login(mafile_data, password)
+        session = mafile_data.get("Session", {})
+        session["SteamID"] = new_session["SteamID"]
+        session["AccessToken"] = new_session["AccessToken"]
+        session["RefreshToken"] = new_session["RefreshToken"]
+        session["SteamLoginSecure"] = (
+            f"{new_session['SteamID']}%7C%7C{new_session['AccessToken']}"
+        )
+        mafile_data["Session"] = session
+        relogin_ok = True
+    except Exception:
+        relogin_ok = False
+
+    return {
+        "revoked_count": revoked,
+        "failed_count": failed,
+        "devices": devices,
+        "relogin_success": relogin_ok,
+        "error": None,
+    }
