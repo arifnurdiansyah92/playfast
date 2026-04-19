@@ -31,7 +31,7 @@ Out of scope:
 
 ## Backend
 
-### New endpoint: `GET /api/subscription/<int:sub_id>`
+### New endpoint: `GET /api/store/subscription/<int:sub_id>`
 
 Single-subscription detail for the transaction detail page.
 
@@ -68,7 +68,7 @@ Auth: `@jwt_required()`. Ownership: 403 if `sub.user_id != current_user_id` (adm
 
 404 if subscription not found.
 
-### New endpoint: `GET /api/subscription/<int:sub_id>/status`
+### New endpoint: `GET /api/store/subscription/<int:sub_id>/status`
 
 Lightweight polling endpoint. Same auth + ownership checks.
 
@@ -81,9 +81,9 @@ Response 200:
 }
 ```
 
-Used by the detail page to poll every 2 seconds while status is `pending_payment`. Stops polling once status transitions to `active` or `expired`.
+Used by the detail page to poll every 8 seconds while status is `pending_payment`. Stops polling once status transitions to `active` or `expired`.
 
-### New endpoint: `GET /api/my-subscriptions`
+### New endpoint: `GET /api/store/my-subscriptions`
 
 List current user's subscriptions for the history tab. Ordered by `created_at DESC`.
 
@@ -106,7 +106,7 @@ Response 200:
 }
 ```
 
-### Existing `/api/subscription/subscribe` — no change
+### Existing `/api/store/subscription/subscribe` — no change
 
 The response already includes `subscription.id` via `sub.to_dict()`. Frontend will consume that to redirect.
 
@@ -120,8 +120,8 @@ File: `frontend/src/views/SubscriptionConfirmPage.tsx` — adapted from `OrderCo
 
 Behavior:
 
-1. On mount: `GET /api/subscription/{subId}` → render based on `subscription.status` and `payment_mode`
-2. Poll `/api/subscription/{subId}/status` every 2s while `status === 'pending_payment'`, stop otherwise
+1. On mount: `GET /api/store/subscription/{subId}` → render based on `subscription.status` and `payment_mode`
+2. Poll `/api/store/subscription/{subId}/status` every 8s while `status === 'pending_payment'`, stop otherwise
 3. **Manual mode, pending:** header with plan name + amount, QRIS image (from `manual_info.qris_image_url`), WhatsApp button (`href=https://wa.me/{number}?text=<pre-filled message with sub_id and plan>`), instructions text
 4. **Midtrans mode, pending:** "Pay with Midtrans" button that calls `window.snap.pay(snap_token, ...)`. If user closes Snap, button stays available for retry.
 5. **Status `active`:** success card, button "Browse Games" → `/store`, and info line "Subscription aktif hingga {expires_at}"
@@ -156,7 +156,7 @@ Add MUI `Tabs`:
 - Tab 1 "Pesanan Game" — existing content (orders list), default selected
 - Tab 2 "Subscription" — new content: table with columns Plan, Amount, Status, Paid At, Expires At, Action
   - Action column: link to `/subscription/{id}` (label: "Lihat Detail")
-  - Data source: `adminApi`-style `storeApi.getMySubscriptions()` → hits new `GET /api/my-subscriptions`
+  - Data source: `adminApi`-style `storeApi.getMySubscriptions()` → hits new `GET /api/store/my-subscriptions`
 
 Subscription rows are visually distinguished by a badge "Subscription Monthly" / "Subscription Yearly" etc., with status chip colored by state (pending=warning, active=success, expired=default).
 
@@ -170,13 +170,13 @@ getSubscription(subId: number | string) {
     subscription: { id: number; plan: string; plan_label: string; amount: number; status: string; midtrans_order_id: string; snap_token: string | null; payment_type: string | null; paid_at: string | null; expires_at: string | null; created_at: string }
     payment_mode: 'manual' | 'midtrans' | 'midtrans_production' | 'midtrans_sandbox'
     manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
-  }>(`/api/subscription/${subId}`)
+  }>(`/api/store/subscription/${subId}`)
 },
 getSubscriptionStatus(subId: number | string) {
-  return request<{ status: string; paid_at: string | null; expires_at: string | null }>(`/api/subscription/${subId}/status`)
+  return request<{ status: string; paid_at: string | null; expires_at: string | null }>(`/api/store/subscription/${subId}/status`)
 },
 getMySubscriptions() {
-  return request<{ subscriptions: Array<{ id: number; plan: string; plan_label: string; amount: number; status: string; paid_at: string | null; expires_at: string | null; created_at: string }> }>('/api/my-subscriptions')
+  return request<{ subscriptions: Array<{ id: number; plan: string; plan_label: string; amount: number; status: string; paid_at: string | null; expires_at: string | null; created_at: string }> }>('/api/store/my-subscriptions')
 },
 ```
 
@@ -185,17 +185,17 @@ getMySubscriptions() {
 ```
 User clicks "Subscribe" on /subscribe
   ↓
-POST /api/subscription/subscribe { plan: "monthly" }
+POST /api/store/subscription/subscribe { plan: "monthly" }
   ↓ 201 { subscription: { id: 42, ... }, payment_mode: "manual", manual_info: {...} }
 router.push('/subscription/42')
   ↓
 SubscriptionConfirmPage mounts
   ↓
-GET /api/subscription/42
+GET /api/store/subscription/42
   ↓ 200 { subscription, payment_mode: "manual", manual_info }
 Render: QRIS image, plan/amount header, WhatsApp button, status chip "pending_payment"
   ↓
-Status poll every 2s: GET /api/subscription/42/status
+Status poll every 8s: GET /api/store/subscription/42/status
   ↓ (user transfers and admin confirms via admin panel)
 Backend: sub.status = "active", sub.paid_at = now, sub.expires_at = paid_at + duration
   ↓ Next poll returns status="active"
@@ -234,7 +234,7 @@ Per project convention, no automated tests. Manual verification flow:
 4. **Ownership / 403:**
    - As user A, note one of A's subscription IDs
    - Login as user B, navigate to `/subscription/{A's sub id}` → expect error state
-   - Directly hit `GET /api/subscription/{A's sub id}` as user B → expect 403
+   - Directly hit `GET /api/store/subscription/{A's sub id}` as user B → expect 403
 
 5. **Edge cases:**
    - Clear `manual_qris_image_url` in admin settings → subscribe in manual mode → verify fallback message shows but WhatsApp button still works
@@ -243,7 +243,7 @@ Per project convention, no automated tests. Manual verification flow:
 ## Risk & Mitigation
 
 - **Dual-model confusion (`Order.type="subscription"` reference at `store/routes.py:120` vs. separate `Subscription` model):** This design does not resolve that ambiguity. The `type="subscription"` path appears to be legacy and unused by the subscribe endpoint, which goes through the `Subscription` model. No change here — flag for future cleanup.
-- **Polling load:** 2s polling per open detail page. Acceptable at current scale (<1k concurrent users); if traffic grows, switch to server-sent events or webhook-driven invalidation.
+- **Polling load:** 8s polling per open detail page. Acceptable at current scale (<1k concurrent users); if traffic grows, switch to server-sent events or webhook-driven invalidation.
 - **Snap token expiry:** Midtrans snap tokens can expire. If a user revisits a pending Midtrans subscription after the token expired, the Pay button will fail with a Midtrans error. Mitigation: on 4xx from Snap, show retry message + instruction to contact admin. Out of scope to auto-regenerate tokens.
 
 ## Open Questions
