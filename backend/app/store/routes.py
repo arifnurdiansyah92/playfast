@@ -289,6 +289,8 @@ def subscription_detail(sub_id: int):
     if not sub:
         return jsonify({"error": "Subscription not found"}), 404
     if sub.user_id != user_id:
+        # Return 403 with the same message as 404 to avoid leaking existence
+        # of other users' subscriptions via ID probing.
         return jsonify({"error": "Subscription not found"}), 403
 
     payment_mode = SiteSetting.get("payment_mode")
