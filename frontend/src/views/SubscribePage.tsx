@@ -55,6 +55,7 @@ const SubscribePage = () => {
 
       // All payment modes go through the detail page for consistent UX.
       // The detail page renders QR (manual) or Snap button (midtrans).
+      setBuying(null)
       router.push(`/subscription/${result.subscription.id}`)
     } catch (err) {
       const apiErr = err as ApiError
