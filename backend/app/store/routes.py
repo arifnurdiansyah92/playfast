@@ -327,6 +327,20 @@ def subscription_poll_status(sub_id: int):
     }), 200
 
 
+@store_bp.route("/my-subscriptions", methods=["GET"])
+@jwt_required()
+def my_subscriptions():
+    """Return all subscriptions for the current user, newest first."""
+    user_id = int(get_jwt_identity())
+    subs = (
+        Subscription.query
+        .filter_by(user_id=user_id)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+    return jsonify({"subscriptions": [s.to_dict() for s in subs]}), 200
+
+
 @store_bp.route("/games", methods=["GET"])
 def list_games():
     """List enabled games with optional search, genre filter, sorting, and pagination."""
