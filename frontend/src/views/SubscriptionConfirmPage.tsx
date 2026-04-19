@@ -125,7 +125,20 @@ const SubscriptionConfirmPage = ({ subId }: Props) => {
     )
   }
 
-  if (notFound || !data) return <Alert severity='error'>Subscription tidak ditemukan</Alert>
+  if (notFound || !data) return (
+    <Box sx={{ maxWidth: 600, mx: 'auto', mt: 4 }}>
+      <Alert severity='error' sx={{ mb: 3 }}>Subscription tidak ditemukan</Alert>
+      <Button
+        variant='contained'
+        component={Link}
+        href='/subscribe'
+        fullWidth
+        size='large'
+      >
+        Kembali ke Subscribe
+      </Button>
+    </Box>
+  )
 
   const sub = data.subscription
   const isPending = sub.status === 'pending_payment'
