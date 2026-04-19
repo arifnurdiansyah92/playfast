@@ -15,7 +15,6 @@ import Grid from '@mui/material/Grid'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
 import Skeleton from '@mui/material/Skeleton'
-import Snackbar from '@mui/material/Snackbar'
 
 import { storeApi, formatIDR } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
@@ -26,7 +25,6 @@ const SubscribePage = () => {
   const { user } = useAuth()
   const [buying, setBuying] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [snackMsg, setSnackMsg] = useState('')
 
   const { data: plansData, isLoading: plansLoading } = useQuery({
     queryKey: ['subscription-plans'],
@@ -54,21 +52,10 @@ const SubscribePage = () => {
 
     try {
       const result = await storeApi.subscribe(plan)
-      const { payment_mode, snap_token } = result
 
-      if (payment_mode === 'midtrans' && snap_token && typeof window !== 'undefined' && (window as any).snap) {
-        (window as any).snap.pay(snap_token, {
-          onSuccess: () => { setSnackMsg('Subscription activated!'); router.push('/my-games') },
-          onPending: () => setSnackMsg('Payment pending. You will get access once payment is confirmed.'),
-          onError: () => setError('Payment failed. Please try again.'),
-          onClose: () => setBuying(null),
-        })
-      } else if (payment_mode === 'manual') {
-        setSnackMsg('Subscription created! Please complete payment via QRIS/WhatsApp.')
-        setBuying(null)
-      } else {
-        setBuying(null)
-      }
+      // All payment modes go through the detail page for consistent UX.
+      // The detail page renders QR (manual) or Snap button (midtrans).
+      router.push(`/subscription/${result.subscription.id}`)
     } catch (err) {
       const apiErr = err as ApiError
       setError(apiErr.message || 'Failed to subscribe')
@@ -205,7 +192,6 @@ const SubscribePage = () => {
         ))}
       </Grid>
 
-      <Snackbar open={!!snackMsg} autoHideDuration={4000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>
   )
 }
