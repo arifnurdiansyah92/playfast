@@ -47,7 +47,7 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
   const [codeRemaining, setCodeRemaining] = useState(0)
   const [codeLoading, setCodeLoading] = useState(false)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
-  const [logoutResult, setLogoutResult] = useState<null | { devices: string[]; relogin: boolean }>(null)
+  const [logoutResult, setLogoutResult] = useState<null | { devices: string[]; failed: number; relogin: boolean }>(null)
 
   const { data: accounts } = useQuery({
     queryKey: ['admin-accounts'],
@@ -93,7 +93,7 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
     mutationFn: () => adminApi.logoutAllDevices(Number(accountId)),
     onSuccess: (data) => {
       setLogoutConfirmOpen(false)
-      setLogoutResult({ devices: data.devices, relogin: data.relogin_success })
+      setLogoutResult({ devices: data.devices, failed: data.failed_count, relogin: data.relogin_success })
       setSnackMsg(data.message)
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
     },
@@ -440,6 +440,11 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
               <li key={`${d}-${i}`}><Typography variant='body2'>{d}</Typography></li>
             ))}
           </Box>
+          {(logoutResult?.failed ?? 0) > 0 && (
+            <Typography variant='body2' color='warning.main' sx={{ mt: 2 }}>
+              {logoutResult?.failed} device(s) gagal di-revoke dan mungkin masih punya session aktif.
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
           <Button onClick={() => setLogoutResult(null)}>Close</Button>
