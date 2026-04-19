@@ -1368,7 +1368,7 @@ def list_subscriptions():
 
     subs = []
     for sub in pagination.items:
-        sd = sub.to_dict()
+        sd = sub.to_dict(include_snap_token=True)
         user = db.session.get(User, sub.user_id)
         sd["user_email"] = user.email if user else "Unknown"
         subs.append(sd)
@@ -1399,7 +1399,7 @@ def confirm_subscription_payment(sub_id: int):
 
     return jsonify({
         "message": "Subscription payment confirmed and activated",
-        "subscription": sub.to_dict(),
+        "subscription": sub.to_dict(include_snap_token=True),
     }), 200
 
 
@@ -1439,7 +1439,7 @@ def grant_lifetime_access():
 
     return jsonify({
         "message": f"Lifetime access granted to {target.email}",
-        "subscription": sub.to_dict(),
+        "subscription": sub.to_dict(include_snap_token=True),
     }), 201
 
 

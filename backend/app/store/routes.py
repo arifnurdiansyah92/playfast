@@ -177,7 +177,7 @@ def subscribe():
     # Check for existing active subscription
     active_sub = _get_active_subscription(user_id)
     if active_sub:
-        return jsonify({"error": "You already have an active subscription", "subscription": active_sub.to_dict()}), 409
+        return jsonify({"error": "You already have an active subscription", "subscription": active_sub.to_dict(include_snap_token=True)}), 409
 
     # Check for existing pending subscription
     pending_sub = Subscription.query.filter_by(
@@ -186,7 +186,7 @@ def subscribe():
     if pending_sub and pending_sub.snap_token:
         return jsonify({
             "message": "Existing pending subscription found",
-            "subscription": pending_sub.to_dict(),
+            "subscription": pending_sub.to_dict(include_snap_token=True),
             "snap_token": pending_sub.snap_token,
         }), 200
 
@@ -214,7 +214,7 @@ def subscribe():
         db.session.commit()
         return jsonify({
             "message": "Subscription created, awaiting manual payment",
-            "subscription": sub.to_dict(),
+            "subscription": sub.to_dict(include_snap_token=True),
             "payment_mode": "manual",
             "manual_info": {
                 "qris_image_url": SiteSetting.get("manual_qris_image_url"),
@@ -246,7 +246,7 @@ def subscribe():
 
             return jsonify({
                 "message": "Subscription created, awaiting payment",
-                "subscription": sub.to_dict(),
+                "subscription": sub.to_dict(include_snap_token=True),
                 "payment_mode": "midtrans",
                 "snap_token": snap_token,
             }), 201
@@ -266,7 +266,7 @@ def subscription_status():
     if active_sub:
         return jsonify({
             "is_subscribed": True,
-            "subscription": active_sub.to_dict(),
+            "subscription": active_sub.to_dict(include_snap_token=True),
         }), 200
 
     # Check for pending subscription
@@ -276,7 +276,7 @@ def subscription_status():
 
     return jsonify({
         "is_subscribed": False,
-        "subscription": pending_sub.to_dict() if pending_sub else None,
+        "subscription": pending_sub.to_dict(include_snap_token=True) if pending_sub else None,
     }), 200
 
 
@@ -295,7 +295,7 @@ def subscription_detail(sub_id: int):
 
     payment_mode = SiteSetting.get("payment_mode")
     response = {
-        "subscription": sub.to_dict(),
+        "subscription": sub.to_dict(include_snap_token=True),
         "payment_mode": payment_mode,
     }
     if payment_mode == "manual":

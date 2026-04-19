@@ -523,8 +523,8 @@ class Subscription(db.Model):
             and self.expires_at > datetime.now(timezone.utc)
         )
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_snap_token: bool = False):
+        data = {
             "id": self.id,
             "user_id": self.user_id,
             "plan": self.plan,
@@ -534,8 +534,10 @@ class Subscription(db.Model):
             "starts_at": self.starts_at.isoformat() if self.starts_at else None,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "midtrans_order_id": self.midtrans_order_id,
-            "snap_token": self.snap_token,
             "payment_type": self.payment_type,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
             "created_at": self.created_at.isoformat(),
         }
+        if include_snap_token:
+            data["snap_token"] = self.snap_token
+        return data
