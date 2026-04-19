@@ -27,7 +27,7 @@ import Divider from '@mui/material/Divider'
 import Pagination from '@mui/material/Pagination'
 
 import { storeApi, formatIDR, gameThumbnail, handleImageError } from '@/lib/api'
-import type { Order } from '@/lib/api'
+import type { Order, Subscription } from '@/lib/api'
 
 const statusConfig: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' | 'info' }> = {
   fulfilled: { label: 'Aktif', color: 'success' },
@@ -62,6 +62,91 @@ function formatDate(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+const subStatusConfig: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' }> = {
+  active: { label: 'Aktif', color: 'success' },
+  pending_payment: { label: 'Menunggu Bayar', color: 'warning' },
+  expired: { label: 'Kedaluwarsa', color: 'default' },
+  cancelled: { label: 'Dibatalkan', color: 'error' },
+}
+
+const SubscriptionHistorySection = ({ isLoading, subscriptions }: { isLoading: boolean; subscriptions: Subscription[] }) => {
+  if (isLoading) {
+    return (
+      <Box>
+        {[1, 2, 3].map(i => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}
+      </Box>
+    )
+  }
+
+  if (subscriptions.length === 0) {
+    return (
+      <Card variant='outlined'>
+        <CardContent sx={{ textAlign: 'center', py: 6 }}>
+          <i className='tabler-crown' style={{ fontSize: 48, opacity: 0.4 }} />
+          <Typography variant='body1' color='text.secondary' sx={{ mt: 2 }}>
+            Belum ada subscription.
+          </Typography>
+          <Button
+            component={Link}
+            href='/subscribe'
+            variant='contained'
+            sx={{ mt: 2 }}
+          >
+            Lihat Paket Subscription
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <TableContainer component={Card} variant='outlined'>
+      <Table size='small'>
+        <TableHead>
+          <TableRow>
+            <TableCell>Plan</TableCell>
+            <TableCell>Harga</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>Dibayar</TableCell>
+            <TableCell>Berlaku Sampai</TableCell>
+            <TableCell align='right'>Aksi</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {subscriptions.map(sub => {
+            const st = subStatusConfig[sub.status] ?? { label: sub.status, color: 'default' as const }
+
+            return (
+              <TableRow key={sub.id} hover>
+                <TableCell>
+                  <Typography variant='body2' sx={{ fontWeight: 600 }}>{sub.plan_label}</Typography>
+                  <Typography variant='caption' color='text.secondary'>#{sub.id}</Typography>
+                </TableCell>
+                <TableCell>{formatIDR(sub.amount)}</TableCell>
+                <TableCell>
+                  <Chip size='small' label={st.label} color={st.color} variant='tonal' />
+                </TableCell>
+                <TableCell>{sub.paid_at ? formatDate(sub.paid_at) : '—'}</TableCell>
+                <TableCell>{sub.expires_at ? formatDate(sub.expires_at) : '—'}</TableCell>
+                <TableCell align='right'>
+                  <Button
+                    component={Link}
+                    href={`/subscription/${sub.id}`}
+                    size='small'
+                    variant='outlined'
+                  >
+                    Lihat Detail
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )
 }
 
 /* ── Mobile Order Card ── */
@@ -124,6 +209,7 @@ const OrderCard = ({ order }: { order: Order }) => {
 }
 
 const OrderHistoryPage = () => {
+  const [topTab, setTopTab] = useState<'purchases' | 'subscriptions'>('purchases')
   const [tab, setTab] = useState(0)
   const [page, setPage] = useState(1)
   const theme = useTheme()
@@ -132,6 +218,12 @@ const OrderHistoryPage = () => {
   const { data: orders, isLoading } = useQuery({
     queryKey: ['my-orders'],
     queryFn: () => storeApi.getOrders(),
+  })
+
+  const { data: subsData, isLoading: subsLoading } = useQuery({
+    queryKey: ['my-subscriptions'],
+    queryFn: () => storeApi.getMySubscriptions(),
+    enabled: topTab === 'subscriptions',
   })
 
   const filterValue = tabFilters[tab].value
@@ -174,118 +266,136 @@ const OrderHistoryPage = () => {
         </Typography>
       </Box>
 
-      <Card>
-        <Tabs
-          value={tab}
-          onChange={handleTabChange}
-          variant={isMobile ? 'scrollable' : 'standard'}
-          scrollButtons={isMobile ? 'auto' : false}
-          sx={{ px: 3, borderBottom: '1px solid', borderColor: 'divider' }}
-        >
-          {tabFilters.map(t => (
-            <Tab key={t.value} label={t.label} />
-          ))}
-        </Tabs>
+      <Tabs
+        value={topTab}
+        onChange={(_, v) => setTopTab(v)}
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab label='Pesanan Game' value='purchases' />
+        <Tab label='Subscription' value='subscriptions' />
+      </Tabs>
 
-        {isLoading ? (
-          <CardContent>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} height={60} sx={{ mb: 1 }} />
+      {topTab === 'purchases' && (
+        <Card>
+          <Tabs
+            value={tab}
+            onChange={handleTabChange}
+            variant={isMobile ? 'scrollable' : 'standard'}
+            scrollButtons={isMobile ? 'auto' : false}
+            sx={{ px: 3, borderBottom: '1px solid', borderColor: 'divider' }}
+          >
+            {tabFilters.map(t => (
+              <Tab key={t.value} label={t.label} />
             ))}
-          </CardContent>
-        ) : paged.length === 0 ? (
-          renderEmpty()
-        ) : isMobile ? (
-          /* ── Mobile: card layout ── */
-          <CardContent sx={{ p: 2 }}>
-            {paged.map((order: Order) => (
-              <OrderCard key={order.id} order={order} />
-            ))}
-          </CardContent>
-        ) : (
-          /* ── Desktop: table layout ── */
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Game</TableCell>
-                  <TableCell>Tanggal</TableCell>
-                  <TableCell>Harga</TableCell>
-                  <TableCell>Pembayaran</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align='right'>Aksi</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paged.map((order: Order) => {
-                  const st = statusConfig[order.status] ?? { label: order.status, color: 'default' as const }
+          </Tabs>
 
-                  return (
-                    <TableRow key={order.id} hover>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          {order.game ? (
-                            <Box
-                              component='img'
-                              src={gameThumbnail(order.game.appid)}
-                              alt={order.game.name}
-                              sx={{ width: 64, height: 30, borderRadius: 0.5, objectFit: 'cover' }}
-                              onError={handleImageError}
-                            />
-                          ) : (
-                            <Box sx={{ width: 64, height: 30, borderRadius: 0.5, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <i className='tabler-device-gamepad' style={{ fontSize: 16, opacity: 0.4 }} />
+          {isLoading ? (
+            <CardContent>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} height={60} sx={{ mb: 1 }} />
+              ))}
+            </CardContent>
+          ) : paged.length === 0 ? (
+            renderEmpty()
+          ) : isMobile ? (
+            /* ── Mobile: card layout ── */
+            <CardContent sx={{ p: 2 }}>
+              {paged.map((order: Order) => (
+                <OrderCard key={order.id} order={order} />
+              ))}
+            </CardContent>
+          ) : (
+            /* ── Desktop: table layout ── */
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Game</TableCell>
+                    <TableCell>Tanggal</TableCell>
+                    <TableCell>Harga</TableCell>
+                    <TableCell>Pembayaran</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align='right'>Aksi</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paged.map((order: Order) => {
+                    const st = statusConfig[order.status] ?? { label: order.status, color: 'default' as const }
+
+                    return (
+                      <TableRow key={order.id} hover>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            {order.game ? (
+                              <Box
+                                component='img'
+                                src={gameThumbnail(order.game.appid)}
+                                alt={order.game.name}
+                                sx={{ width: 64, height: 30, borderRadius: 0.5, objectFit: 'cover' }}
+                                onError={handleImageError}
+                              />
+                            ) : (
+                              <Box sx={{ width: 64, height: 30, borderRadius: 0.5, bgcolor: 'action.hover', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <i className='tabler-device-gamepad' style={{ fontSize: 16, opacity: 0.4 }} />
+                              </Box>
+                            )}
+                            <Box>
+                              <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>
+                                {order.game?.name ?? `Game #${order.game_id}`}
+                              </Typography>
+                              <Typography variant='caption' color='text.secondary'>#{order.id}</Typography>
                             </Box>
-                          )}
-                          <Box>
-                            <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>
-                              {order.game?.name ?? `Game #${order.game_id}`}
-                            </Typography>
-                            <Typography variant='caption' color='text.secondary'>#{order.id}</Typography>
                           </Box>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant='body2'>{formatDate(order.created_at)}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                          {order.amount ? formatIDR(order.amount) : '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant='body2'>
-                          {order.payment_type ? (paymentTypeLabels[order.payment_type] ?? order.payment_type) : '-'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={st.label} color={st.color} size='small' variant='tonal' />
-                      </TableCell>
-                      <TableCell align='right'>
-                        {order.status === 'fulfilled' && !order.is_revoked ? (
-                          <Button component={Link} href={`/play/${order.id}`} size='small' variant='contained' startIcon={<i className='tabler-player-play' />}>
-                            Main
-                          </Button>
-                        ) : order.status === 'pending_payment' ? (
-                          <Button component={Link} href={`/order/${order.id}`} size='small' variant='outlined' startIcon={<i className='tabler-credit-card' />}>
-                            Bayar
-                          </Button>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2'>{formatDate(order.created_at)}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                            {order.amount ? formatIDR(order.amount) : '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2'>
+                            {order.payment_type ? (paymentTypeLabels[order.payment_type] ?? order.payment_type) : '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip label={st.label} color={st.color} size='small' variant='tonal' />
+                        </TableCell>
+                        <TableCell align='right'>
+                          {order.status === 'fulfilled' && !order.is_revoked ? (
+                            <Button component={Link} href={`/play/${order.id}`} size='small' variant='contained' startIcon={<i className='tabler-player-play' />}>
+                              Main
+                            </Button>
+                          ) : order.status === 'pending_payment' ? (
+                            <Button component={Link} href={`/order/${order.id}`} size='small' variant='outlined' startIcon={<i className='tabler-credit-card' />}>
+                              Bayar
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
 
-        {totalPages > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color='primary' />
-          </Box>
-        )}
-      </Card>
+          {totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color='primary' />
+            </Box>
+          )}
+        </Card>
+      )}
+
+      {topTab === 'subscriptions' && (
+        <SubscriptionHistorySection
+          isLoading={subsLoading}
+          subscriptions={subsData?.subscriptions ?? []}
+        />
+      )}
     </div>
   )
 }
