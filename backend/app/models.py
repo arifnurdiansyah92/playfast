@@ -533,6 +533,8 @@ class Subscription(db.Model):
             "amount": self.amount,
             "starts_at": self.starts_at.isoformat() if self.starts_at else None,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "midtrans_order_id": self.midtrans_order_id,
+            "snap_token": self.snap_token,
             "payment_type": self.payment_type,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
             "created_at": self.created_at.isoformat(),

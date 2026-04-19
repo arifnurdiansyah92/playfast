@@ -280,6 +280,31 @@ def subscription_status():
     }), 200
 
 
+@store_bp.route("/subscription/<int:sub_id>", methods=["GET"])
+@jwt_required()
+def subscription_detail(sub_id: int):
+    """Return full detail for a single subscription owned by the current user."""
+    user_id = int(get_jwt_identity())
+    sub = db.session.get(Subscription, sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+    if sub.user_id != user_id:
+        return jsonify({"error": "Subscription not found"}), 403
+
+    payment_mode = SiteSetting.get("payment_mode")
+    response = {
+        "subscription": sub.to_dict(),
+        "payment_mode": payment_mode,
+    }
+    if payment_mode == "manual":
+        response["manual_info"] = {
+            "qris_image_url": SiteSetting.get("manual_qris_image_url"),
+            "whatsapp_number": SiteSetting.get("manual_whatsapp_number"),
+            "instructions": SiteSetting.get("manual_payment_instructions"),
+        }
+    return jsonify(response), 200
+
+
 @store_bp.route("/games", methods=["GET"])
 def list_games():
     """List enabled games with optional search, genre filter, sorting, and pagination."""
