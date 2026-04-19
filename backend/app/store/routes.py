@@ -307,6 +307,26 @@ def subscription_detail(sub_id: int):
     return jsonify(response), 200
 
 
+@store_bp.route("/subscription/<int:sub_id>/status", methods=["GET"])
+@jwt_required()
+def subscription_poll_status(sub_id: int):
+    """Lightweight status poll for the detail page. Auth-checked."""
+    user_id = int(get_jwt_identity())
+    sub = db.session.get(Subscription, sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+    if sub.user_id != user_id:
+        # Return 403 with the same message as 404 to avoid leaking existence
+        # of other users' subscriptions via ID probing.
+        return jsonify({"error": "Subscription not found"}), 403
+
+    return jsonify({
+        "status": sub.status,
+        "paid_at": sub.paid_at.isoformat() if sub.paid_at else None,
+        "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
+    }), 200
+
+
 @store_bp.route("/games", methods=["GET"])
 def list_games():
     """List enabled games with optional search, genre filter, sorting, and pagination."""
