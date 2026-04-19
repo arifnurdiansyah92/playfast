@@ -65,6 +65,7 @@ const ManualPaymentSection = ({ subId, amount, planLabel, manualInfo }: {
             size='large'
             href={`https://wa.me/${waNumber}?text=${waMessage}`}
             target='_blank'
+            rel='noreferrer'
             startIcon={<i className='tabler-brand-whatsapp' />}
             sx={{ bgcolor: '#25D366', '&:hover': { bgcolor: '#1da851' }, fontWeight: 700, px: 4 }}
           >
@@ -99,8 +100,10 @@ const SubscriptionConfirmPage = ({ subId }: Props) => {
     fetchDetail()
   }, [fetchDetail])
 
+  const shouldPoll = data?.subscription.status === 'pending_payment'
+
   useEffect(() => {
-    if (!data || data.subscription.status !== 'pending_payment') return
+    if (!shouldPoll) return
 
     const interval = setInterval(() => {
       storeApi.pollSubscriptionStatus(subId).then(res => {
@@ -111,7 +114,7 @@ const SubscriptionConfirmPage = ({ subId }: Props) => {
     }, 8000)
 
     return () => clearInterval(interval)
-  }, [data?.subscription.status, subId, fetchDetail])
+  }, [shouldPoll, subId, fetchDetail])
 
   if (loading) {
     return (
@@ -167,6 +170,10 @@ const SubscriptionConfirmPage = ({ subId }: Props) => {
                 planLabel={sub.plan_label}
                 manualInfo={data.manual_info}
               />
+            ) : isMidtrans ? (
+              <Alert severity='warning' sx={{ mt: 3 }}>
+                Menunggu token pembayaran. Silakan refresh halaman dalam beberapa saat atau hubungi admin jika berlangsung lama.
+              </Alert>
             ) : null}
           </>
         )}
