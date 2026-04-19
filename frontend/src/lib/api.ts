@@ -258,6 +258,8 @@ export interface Subscription {
   amount: number
   starts_at: string | null
   expires_at: string | null
+  midtrans_order_id: string | null
+  snap_token?: string | null
   payment_type: string | null
   paid_at: string | null
   created_at: string
@@ -308,6 +310,19 @@ export const storeApi = {
   },
   getSubscriptionStatus() {
     return request<{ is_subscribed: boolean; subscription: Subscription | null }>('/api/store/subscription/status')
+  },
+  getSubscriptionById(subId: number | string) {
+    return request<{
+      subscription: Subscription
+      payment_mode: string
+      manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
+    }>(`/api/store/subscription/${subId}`)
+  },
+  pollSubscriptionStatus(subId: number | string) {
+    return request<{ status: string; paid_at: string | null; expires_at: string | null }>(`/api/store/subscription/${subId}/status`)
+  },
+  getMySubscriptions() {
+    return request<{ subscriptions: Subscription[] }>('/api/store/my-subscriptions')
   },
   async createOrder(appid: number | string) {
     return request<{
