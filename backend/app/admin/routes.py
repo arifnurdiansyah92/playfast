@@ -836,7 +836,7 @@ def _bg_logout_all_bulk(job, app, account_ids):
                     total_devices += result.get("revoked_count", 0)
             except Exception as e:
                 logger.exception("Bulk logout failed for account %s", account_id)
-                failures.append(f"{account.account_name}: {e}")
+                failures.append(f"account_id={account_id}: {e}")
 
             job.processed = i + 1
             time.sleep(1.0)  # pace between accounts to avoid Steam rate limits
