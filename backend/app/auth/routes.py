@@ -47,6 +47,23 @@ def register():
     db.session.add(user)
     db.session.flush()
 
+    # Generate unique referral code for this user
+    import secrets, string
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(20):
+        candidate = ''.join(secrets.choice(alphabet) for _ in range(6))
+        if not User.query.filter_by(referral_code=candidate).first():
+            user.referral_code = candidate
+            break
+
+    # Apply referrer link if referral_code was provided
+    input_ref = (data.get("referral_code") or "").strip().upper()
+    if input_ref:
+        referrer = User.query.filter_by(referral_code=input_ref).first()
+        if referrer and referrer.id != user.id and referrer.email != user.email:
+            user.referred_by_user_id = referrer.id
+        # If invalid/self/same-email, silently skip — soft error (don't block registration)
+
     # Send verification email
     token = EmailVerificationToken.create_for_user(user.id)
     db.session.commit()

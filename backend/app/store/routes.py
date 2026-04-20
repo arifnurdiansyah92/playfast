@@ -24,6 +24,7 @@ from app.models import (
     Order,
     PlayInstruction,
     PromoCodeUsage,
+    ReferralReward,
     SiteSetting,
     SteamAccount,
     Subscription,
@@ -1239,4 +1240,71 @@ def get_instructions(order_id: int):
             "content": DEFAULT_PLAY_INSTRUCTIONS,
             "is_custom": False,
         }
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# Referral (user-facing)
+# ---------------------------------------------------------------------------
+
+
+@store_bp.route("/referral/validate", methods=["POST"])
+def validate_referral():
+    """Validate a referral code at registration time. Does not require auth.
+
+    Body: { code }
+    Returns: { valid: bool, referrer_name?: str, error?: str }
+    """
+    data = request.get_json() or {}
+    code = (data.get("code") or "").strip().upper()
+    if not code:
+        return jsonify({"valid": False, "error": "Kode referral kosong"}), 400
+
+    referrer = User.query.filter_by(referral_code=code).first()
+    if not referrer:
+        return jsonify({"valid": False, "error": "Kode referral tidak ditemukan"}), 200
+
+    email = referrer.email
+    at_idx = email.find("@")
+    masked = email[0] + "***" + email[at_idx:] if at_idx > 1 else email
+
+    return jsonify({"valid": True, "referrer_name": masked}), 200
+
+
+@store_bp.route("/my-referral", methods=["GET"])
+@jwt_required()
+def my_referral():
+    """Return the current user's referral code, credit, and referral list."""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    referred_users = User.query.filter_by(referred_by_user_id=user_id).all()
+    rewards_by_referee = {
+        r.referee_user_id: r
+        for r in ReferralReward.query.filter_by(referrer_user_id=user_id).all()
+    }
+
+    referrals = []
+    total_earned = 0
+    for ref_user in referred_users:
+        reward = rewards_by_referee.get(ref_user.id)
+        at_idx = ref_user.email.find("@")
+        masked = ref_user.email[0] + "***" + ref_user.email[at_idx:] if at_idx > 1 else ref_user.email
+        status = "rewarded" if reward else "pending"
+        referrals.append({
+            "email_masked": masked,
+            "joined_at": ref_user.created_at.isoformat(),
+            "status": status,
+            "credit_awarded": reward.credit_awarded if reward else 0,
+        })
+        if reward:
+            total_earned += reward.credit_awarded
+
+    return jsonify({
+        "code": user.referral_code,
+        "credit": user.referral_credit,
+        "referrals": referrals,
+        "total_earned": total_earned,
     }), 200
