@@ -111,10 +111,10 @@ export const authApi = {
       body: JSON.stringify({ email, password })
     })
   },
-  register(email: string, password: string) {
+  register(email: string, password: string, referral_code?: string) {
     return request<AuthResponse>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password, ...(referral_code ? { referral_code } : {}) })
     })
   },
   logout() {
@@ -225,6 +225,10 @@ export interface Order {
   status: string
   type?: 'purchase' | 'subscription'
   created_at: string
+  amount_subtotal: number | null
+  promo_discount: number
+  credit_applied: number
+  promo_code_id: number | null
 }
 
 export interface SteamGuardCode {
@@ -264,6 +268,58 @@ export interface Subscription {
   paid_at: string | null
   created_at: string
   user_email?: string
+  amount_subtotal: number | null
+  promo_discount: number
+  credit_applied: number
+  promo_code_id: number | null
+}
+
+export interface PromoCode {
+  id: number
+  code: string
+  description: string | null
+  discount_type: 'percentage' | 'fixed'
+  discount_value: number
+  scope: string
+  min_order_amount: number
+  max_uses_total: number | null
+  max_uses_per_user: number
+  expires_at: string | null
+  is_active: boolean
+  created_at: string
+  uses_count?: number
+}
+
+export interface PromoCodeUsage {
+  id: number
+  promo_code_id: number
+  user_id: number
+  order_id: number | null
+  subscription_id: number | null
+  discount_amount: number
+  used_at: string
+  user_email?: string | null
+}
+
+export interface MyReferralResponse {
+  code: string
+  credit: number
+  total_earned: number
+  referrals: Array<{
+    email_masked: string
+    joined_at: string
+    status: 'pending' | 'rewarded'
+    credit_awarded: number
+  }>
+}
+
+export interface PromoValidateResponse {
+  valid: boolean
+  discount_amount?: number
+  code?: string
+  discount_type?: 'percentage' | 'fixed'
+  discount_value?: number
+  error?: string
 }
 
 export const storeApi = {
@@ -297,7 +353,7 @@ export const storeApi = {
   getSubscriptionPlans() {
     return request<{ plans: SubscriptionPlan[] }>('/api/store/subscription/plans')
   },
-  subscribe(plan: string) {
+  subscribe(plan: string, options?: { promo_code?: string; apply_credit?: boolean }) {
     return request<{
       subscription: Subscription
       payment_mode: string
@@ -305,7 +361,7 @@ export const storeApi = {
       manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
     }>('/api/store/subscription/subscribe', {
       method: 'POST',
-      body: JSON.stringify({ plan })
+      body: JSON.stringify({ plan, ...(options || {}) })
     })
   },
   getSubscriptionStatus() {
@@ -324,7 +380,7 @@ export const storeApi = {
   getMySubscriptions() {
     return request<{ subscriptions: Subscription[] }>('/api/store/my-subscriptions')
   },
-  async createOrder(appid: number | string) {
+  async createOrder(appid: number | string, options?: { promo_code?: string; apply_credit?: boolean }) {
     return request<{
       order: Order
       payment_mode: string
@@ -332,7 +388,7 @@ export const storeApi = {
       manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
     }>('/api/store/orders', {
       method: 'POST',
-      body: JSON.stringify({ appid: Number(appid) })
+      body: JSON.stringify({ appid: Number(appid), ...(options || {}) })
     })
   },
   async getMyGames() {
@@ -357,7 +413,22 @@ export const storeApi = {
   },
   getInstructions(orderId: number | string) {
     return request<PlayInstructions>(`/api/store/orders/${orderId}/instructions`)
-  }
+  },
+  validatePromoCode(params: { code: string; order_type: 'game' | 'subscription'; subtotal: number; game_id?: number; plan?: string }) {
+    return request<PromoValidateResponse>('/api/store/promo-codes/validate', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
+  },
+  validateReferralCode(code: string) {
+    return request<{ valid: boolean; referrer_name?: string; error?: string }>('/api/store/referral/validate', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    })
+  },
+  getMyReferral() {
+    return request<MyReferralResponse>('/api/store/my-referral')
+  },
 }
 
 // ─── Admin ───────────────────────────────────────────────────────────────────
@@ -585,6 +656,30 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ user_id: userId })
     })
+  },
+  getPromoCodes() {
+    return request<{ promo_codes: PromoCode[] }>('/api/admin/promo-codes')
+  },
+  createPromoCode(data: Partial<PromoCode>) {
+    return request<{ promo_code: PromoCode }>('/api/admin/promo-codes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+  updatePromoCode(id: number, data: Partial<PromoCode>) {
+    return request<{ promo_code: PromoCode }>(`/api/admin/promo-codes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+  deletePromoCode(id: number) {
+    return request<{ message: string }>(`/api/admin/promo-codes/${id}`, { method: 'DELETE' })
+  },
+  getPromoCodeUsages(id: number) {
+    return request<{ usages: PromoCodeUsage[]; total_discount: number }>(`/api/admin/promo-codes/${id}/usages`)
+  },
+  getReferrals() {
+    return request<{ referrals: any[]; total_credit_awarded: number; total_count: number }>('/api/admin/referrals')
   },
 }
 
