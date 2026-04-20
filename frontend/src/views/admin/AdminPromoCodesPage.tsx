@@ -24,10 +24,26 @@ import InputLabel from '@mui/material/InputLabel'
 import Switch from '@mui/material/Switch'
 import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
+import Tooltip from '@mui/material/Tooltip'
 
 import { adminApi, formatIDR } from '@/lib/api'
 import type { PromoCode } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+
+function buildShareLink(code: string, scope: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const encodedCode = encodeURIComponent(code)
+  if (scope === 'subscriptions') return `${origin}/subscribe?code=${encodedCode}`
+  if (scope.startsWith('sub:')) {
+    const plan = scope.split(':', 2)[1]
+    return `${origin}/subscribe?code=${encodedCode}&plan=${encodeURIComponent(plan)}`
+  }
+  if (scope === 'games' || scope === 'all') return `${origin}/store?code=${encodedCode}`
+  if (scope.startsWith('game:')) {
+    return `${origin}/store?code=${encodedCode}`
+  }
+  return `${origin}/store?code=${encodedCode}`
+}
 
 const AdminPromoCodesPage = () => {
   const { user } = useAuth()
@@ -145,6 +161,15 @@ const AdminPromoCodesPage = () => {
                   </TableCell>
                   <TableCell align='right'>
                     <Button size='small' onClick={() => setUsagesOpen(c.id)}>Usages</Button>
+                    <Tooltip title='Copy share link'>
+                      <IconButton size='small' onClick={() => {
+                        const link = buildShareLink(c.code, c.scope)
+                        navigator.clipboard.writeText(link)
+                        setSnack(`Link disalin: ${link}`)
+                      }}>
+                        <i className='tabler-link' />
+                      </IconButton>
+                    </Tooltip>
                     <IconButton color='error' size='small' onClick={() => {
                       if (confirm(`Delete ${c.code}?`)) deleteMut.mutate(c.id)
                     }}>

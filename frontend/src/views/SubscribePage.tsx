@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import { useQuery } from '@tanstack/react-query'
 
@@ -28,6 +28,10 @@ const SubscribePage = () => {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  const searchParams = useSearchParams()
+  const urlCode = searchParams?.get('code') ?? undefined
+  const urlPlan = searchParams?.get('plan')
+
   const { data: plansData, isLoading: plansLoading } = useQuery({
     queryKey: ['subscription-plans'],
     queryFn: () => storeApi.getSubscriptionPlans(),
@@ -42,6 +46,17 @@ const SubscribePage = () => {
   const plans = plansData?.plans ?? []
   const isSubscribed = statusData?.is_subscribed ?? false
   const currentSub = statusData?.subscription
+
+  useEffect(() => {
+    if (urlPlan && plans.length > 0 && !modalOpen && !selectedPlan) {
+      const match = plans.find(p => p.plan === urlPlan)
+      if (match && user) {
+        setSelectedPlan(urlPlan)
+        setModalOpen(true)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlPlan, plans, user])
 
   const handleConfirmSubscribe = async ({ promo_code, apply_credit }: { promo_code: string | null; apply_credit: boolean }) => {
     if (!selectedPlan) return
@@ -204,6 +219,7 @@ const SubscribePage = () => {
             }}
             onConfirm={handleConfirmSubscribe}
             isSubmitting={submitting}
+            initialPromoCode={urlCode}
           />
         )
       })()}

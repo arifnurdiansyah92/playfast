@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import CheckoutReviewModal from '@/components/CheckoutReviewModal'
 
@@ -35,6 +35,8 @@ interface Props {
 const GameDetailPage = ({ appid }: Props) => {
   const router = useRouter()
   const { user } = useAuth()
+  const searchParams = useSearchParams()
+  const urlCode = searchParams?.get('code') ?? undefined
   const [buying, setBuying] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -511,6 +513,7 @@ const GameDetailPage = ({ appid }: Props) => {
           }}
           onConfirm={handleConfirmPurchase}
           isSubmitting={submitting}
+          initialPromoCode={urlCode}
         />
       )}
     </div>

@@ -33,9 +33,10 @@ interface Props {
   item: CheckoutItem
   onConfirm: (args: { promo_code: string | null; apply_credit: boolean }) => Promise<void>
   isSubmitting: boolean
+  initialPromoCode?: string
 }
 
-const CheckoutReviewModal = ({ open, onClose, item, onConfirm, isSubmitting }: Props) => {
+const CheckoutReviewModal = ({ open, onClose, item, onConfirm, isSubmitting, initialPromoCode }: Props) => {
   const [promoInput, setPromoInput] = useState('')
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null)
   const [promoError, setPromoError] = useState('')
@@ -62,6 +63,37 @@ const CheckoutReviewModal = ({ open, onClose, item, onConfirm, isSubmitting }: P
       setApplyCredit(true)
     }
   }, [open])
+
+  useEffect(() => {
+    if (open && initialPromoCode && !appliedPromo && !promoLoading) {
+      setPromoInput(initialPromoCode)
+      const code = initialPromoCode.trim().toUpperCase()
+      if (code) {
+        setPromoLoading(true)
+        setPromoError('')
+        storeApi.validatePromoCode({
+          code,
+          order_type: item.type,
+          subtotal: item.subtotal,
+          game_id: item.gameId,
+          plan: item.plan,
+        }).then(res => {
+          if (res.valid && res.discount_amount) {
+            setAppliedPromo({ code: res.code!, discount: res.discount_amount })
+            setPromoError('')
+          } else {
+            setPromoError(res.error || 'Kode promo tidak valid')
+            setAppliedPromo(null)
+          }
+        }).catch((e: any) => {
+          setPromoError(e?.message || 'Gagal validasi kode')
+        }).finally(() => {
+          setPromoLoading(false)
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPromoCode])
 
   const handleApplyPromo = async () => {
     const code = promoInput.trim()

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import { useQuery } from '@tanstack/react-query'
 
@@ -37,6 +37,10 @@ const SORT_OPTIONS = [
 
 const StorePage = () => {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const codeParam = searchParams?.get('code')
+  const buildGameHref = (appid: number) =>
+    codeParam ? `/game/${appid}?code=${encodeURIComponent(codeParam)}` : `/game/${appid}`
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -266,7 +270,7 @@ const StorePage = () => {
                   }}
                 >
                   <CardActionArea
-                    onClick={() => router.push(`/game/${game.appid}`)}
+                    onClick={() => router.push(buildGameHref(game.appid))}
                     sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
                   >
                     <Box sx={{ position: 'relative', overflow: 'hidden' }}>
@@ -393,7 +397,7 @@ const StorePage = () => {
                   }}
                 >
                   <CardActionArea
-                    onClick={() => router.push(`/game/${game.appid}`)}
+                    onClick={() => router.push(buildGameHref(game.appid))}
                     sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
                   >
                     <Box sx={{ position: 'relative', overflow: 'hidden' }}>
