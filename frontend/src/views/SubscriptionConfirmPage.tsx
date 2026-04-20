@@ -255,6 +255,18 @@ const SubscriptionConfirmPage = ({ subId }: Props) => {
               <Typography color='text.secondary'>Harga</Typography>
               <Typography sx={{ fontWeight: 600 }}>{formatIDR(sub.amount)}</Typography>
             </Box>
+            {(sub.promo_discount ?? 0) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', color: 'error.main' }}>
+                <Typography color='text.secondary'>Diskon Promo</Typography>
+                <Typography>-{formatIDR(sub.promo_discount)}</Typography>
+              </Box>
+            )}
+            {(sub.credit_applied ?? 0) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', color: 'error.main' }}>
+                <Typography color='text.secondary'>Credit Dipakai</Typography>
+                <Typography>-{formatIDR(sub.credit_applied)}</Typography>
+              </Box>
+            )}
             {sub.payment_type && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography color='text.secondary'>Metode Pembayaran</Typography>

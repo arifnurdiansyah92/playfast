@@ -227,6 +227,18 @@ const OrderConfirmPage = ({ orderId }: Props) => {
               <Typography color='text.secondary'>Harga</Typography>
               <Typography sx={{ fontWeight: 600 }}>{formatIDR(order.amount ?? order.game?.price ?? 0)}</Typography>
             </Box>
+            {(order.promo_discount ?? 0) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', color: 'error.main' }}>
+                <Typography>Diskon Promo</Typography>
+                <Typography>-{formatIDR(order.promo_discount)}</Typography>
+              </Box>
+            )}
+            {(order.credit_applied ?? 0) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', color: 'error.main' }}>
+                <Typography>Credit Dipakai</Typography>
+                <Typography>-{formatIDR(order.credit_applied)}</Typography>
+              </Box>
+            )}
             {order.payment_type && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography color='text.secondary'>Metode Pembayaran</Typography>
