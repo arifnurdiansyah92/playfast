@@ -1,5 +1,7 @@
 """Shared pricing helpers for promo codes + referral credit."""
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from app.models import PromoCode, PromoCodeUsage, User
 
@@ -81,7 +83,14 @@ def compute_final_amount(subtotal: int, user_id: int, promo_code: str | None, ap
             promo_code, user_id, subtotal, order_type, game_id=game_id, plan=plan
         )
         if err:
-            return {"error": err}
+            return {
+                "subtotal": subtotal,
+                "promo_discount": 0,
+                "credit_applied": 0,
+                "total": subtotal,
+                "promo_code_id": None,
+                "error": err,
+            }
         promo_discount = discount
         promo_code_id = promo.id
 
@@ -89,7 +98,7 @@ def compute_final_amount(subtotal: int, user_id: int, promo_code: str | None, ap
 
     credit_applied = 0
     if apply_credit:
-        user = User.query.get(user_id)
+        user = User.query.filter_by(id=user_id).first()
         if user and user.referral_credit > 0:
             credit_applied = min(user.referral_credit, interim)
 
