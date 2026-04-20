@@ -1623,3 +1623,31 @@ def list_promo_code_usages(promo_id: int):
         ud["user_email"] = u.user.email if u.user else None
         result.append(ud)
     return jsonify({"usages": result, "total_discount": sum(u.discount_amount for u in usages)}), 200
+
+
+# ---------------------------------------------------------------------------
+# Referrals (admin view)
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/referrals", methods=["GET"])
+@admin_required
+def list_referrals():
+    """List all referral rewards with user info."""
+    rewards = ReferralReward.query.order_by(ReferralReward.awarded_at.desc()).all()
+    result = []
+    total_credit = 0
+    for r in rewards:
+        referrer = db.session.get(User, r.referrer_user_id)
+        referee = db.session.get(User, r.referee_user_id)
+        total_credit += r.credit_awarded
+        result.append({
+            **r.to_dict(),
+            "referrer_email": referrer.email if referrer else None,
+            "referee_email": referee.email if referee else None,
+        })
+    return jsonify({
+        "referrals": result,
+        "total_credit_awarded": total_credit,
+        "total_count": len(result),
+    }), 200
