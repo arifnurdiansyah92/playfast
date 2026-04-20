@@ -29,6 +29,7 @@ from app.models import (
     User,
 )
 from app.steam.service import get_guard_code
+from app.store.pricing import validate_promo_code
 
 store_bp = Blueprint("store", __name__, url_prefix="/api/store")
 
@@ -339,6 +340,44 @@ def my_subscriptions():
         .all()
     )
     return jsonify({"subscriptions": [s.to_dict() for s in subs]}), 200
+
+
+@store_bp.route("/promo-codes/validate", methods=["POST"])
+@jwt_required()
+def validate_promo():
+    """Validate a promo code without persisting a usage.
+
+    Body: { code, order_type: 'game'|'subscription', game_id?, plan?, subtotal }
+    Returns: { valid: bool, discount_amount?: int, error?: str }
+    """
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    code = (data.get("code") or "").strip()
+    order_type = data.get("order_type")
+    subtotal = data.get("subtotal")
+
+    if not code:
+        return jsonify({"valid": False, "error": "Kode promo kosong"}), 400
+    if order_type not in ("game", "subscription"):
+        return jsonify({"valid": False, "error": "order_type must be 'game' or 'subscription'"}), 400
+    if not isinstance(subtotal, int) or subtotal <= 0:
+        return jsonify({"valid": False, "error": "subtotal must be a positive integer"}), 400
+
+    promo, discount, err = validate_promo_code(
+        code, user_id, subtotal, order_type,
+        game_id=data.get("game_id"),
+        plan=data.get("plan"),
+    )
+    if err:
+        return jsonify({"valid": False, "error": err}), 200
+
+    return jsonify({
+        "valid": True,
+        "discount_amount": discount,
+        "code": promo.code,
+        "discount_type": promo.discount_type,
+        "discount_value": promo.discount_value,
+    }), 200
 
 
 @store_bp.route("/games", methods=["GET"])
