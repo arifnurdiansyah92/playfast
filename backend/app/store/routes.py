@@ -764,9 +764,13 @@ def create_order():
         .first()
     )
     if existing_order:
+        # User already has access to this game — don't create a duplicate order,
+        # return the existing one so the frontend can route them to it.
         return jsonify({
-            "error": "You already have an active order for this game"
-        }), 409
+            "message": "Kamu sudah punya akses ke game ini",
+            "order": existing_order.to_dict(),
+            "already_owned": True,
+        }), 200
 
     # Also check for an existing pending_payment order for this game
     existing_pending = Order.query.filter_by(

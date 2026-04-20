@@ -386,6 +386,7 @@ export const storeApi = {
       payment_mode: string
       snap_token?: string
       manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
+      already_owned?: boolean
     }>('/api/store/orders', {
       method: 'POST',
       body: JSON.stringify({ appid: Number(appid), ...(options || {}) })

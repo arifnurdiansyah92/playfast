@@ -100,6 +100,9 @@ const GameDetailPage = ({ appid }: Props) => {
         promo_code: promo_code ?? undefined,
         apply_credit,
       })
+      if (result.already_owned) {
+        setError('Kamu sudah punya akses ke game ini')
+      }
       router.push(`/order/${result.order.id}`)
     } catch (err: any) {
       setError(err?.message || 'Gagal membuat pesanan')
