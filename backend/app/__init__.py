@@ -139,6 +139,18 @@ def _run_schema_upgrades():
         "ALTER TABLE games ADD COLUMN custom_description TEXT",
         "ALTER TABLE games ADD COLUMN custom_header_image VARCHAR(500)",
         "ALTER TABLE games ADD COLUMN custom_screenshots JSON",
+        # Promo code + referral system (2026-04-20)
+        "ALTER TABLE users ADD COLUMN referral_code VARCHAR(12)",
+        "ALTER TABLE users ADD COLUMN referred_by_user_id INTEGER",
+        "ALTER TABLE users ADD COLUMN referral_credit INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE orders ADD COLUMN amount_subtotal INTEGER",
+        "ALTER TABLE orders ADD COLUMN promo_discount INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE orders ADD COLUMN credit_applied INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE orders ADD COLUMN promo_code_id INTEGER",
+        "ALTER TABLE subscriptions ADD COLUMN amount_subtotal INTEGER",
+        "ALTER TABLE subscriptions ADD COLUMN promo_discount INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE subscriptions ADD COLUMN credit_applied INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE subscriptions ADD COLUMN promo_code_id INTEGER",
     ]
     for stmt in alter_statements:
         try:
@@ -150,3 +162,24 @@ def _run_schema_upgrades():
     from app.models import EmailVerificationToken, Subscription
     Subscription.__table__.create(db.engine, checkfirst=True)
     EmailVerificationToken.__table__.create(db.engine, checkfirst=True)
+
+    from app.models import PromoCode, PromoCodeUsage, ReferralReward
+    PromoCode.__table__.create(db.engine, checkfirst=True)
+    PromoCodeUsage.__table__.create(db.engine, checkfirst=True)
+    ReferralReward.__table__.create(db.engine, checkfirst=True)
+
+    # Backfill referral_code for existing users that don't have one
+    from app.models import User
+    import secrets, string
+    users_without_code = User.query.filter_by(referral_code=None).all()
+    if users_without_code:
+        alphabet = string.ascii_uppercase + string.digits
+        used = set(u.referral_code for u in User.query.filter(User.referral_code.isnot(None)).all())
+        for u in users_without_code:
+            while True:
+                code = ''.join(secrets.choice(alphabet) for _ in range(6))
+                if code not in used:
+                    used.add(code)
+                    u.referral_code = code
+                    break
+        db.session.commit()

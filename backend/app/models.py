@@ -17,6 +17,9 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     email_verified = db.Column(db.Boolean, default=False, nullable=False)
+    referral_code = db.Column(db.String(12), unique=True, nullable=True, index=True)
+    referred_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    referral_credit = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -43,6 +46,9 @@ class User(db.Model):
             "is_active": self.is_active,
             "role": "admin" if self.is_admin else "user",
             "email_verified": self.email_verified,
+            "referral_code": self.referral_code,
+            "referred_by_user_id": self.referred_by_user_id,
+            "referral_credit": self.referral_credit,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -206,6 +212,10 @@ class Order(db.Model):
     payment_type = db.Column(db.String(50), nullable=True)
     paid_at = db.Column(db.DateTime(timezone=True), nullable=True)
     amount = db.Column(db.Integer, nullable=True)  # actual amount paid in IDR
+    amount_subtotal = db.Column(db.Integer, nullable=True)
+    promo_discount = db.Column(db.Integer, nullable=False, default=0)
+    credit_applied = db.Column(db.Integer, nullable=False, default=0)
+    promo_code_id = db.Column(db.Integer, db.ForeignKey("promo_codes.id"), nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -228,6 +238,10 @@ class Order(db.Model):
             "snap_token": self.snap_token,
             "payment_type": self.payment_type,
             "amount": self.amount,
+            "amount_subtotal": self.amount_subtotal,
+            "promo_discount": self.promo_discount,
+            "credit_applied": self.credit_applied,
+            "promo_code_id": self.promo_code_id,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
             "created_at": self.created_at.isoformat(),
             "assignment_id": self.assignment_id,
@@ -365,6 +379,9 @@ class SiteSetting(db.Model):
         "sub_price_monthly": "50000",
         "sub_price_3monthly": "120000",
         "sub_price_yearly": "400000",
+        "referral_referee_discount_pct": "10",
+        "referral_referrer_credit": "10000",
+        "referral_min_order": "50000",
     }
 
     @classmethod
@@ -465,6 +482,107 @@ class EmailVerificationToken(db.Model):
         return None
 
 
+class PromoCode(db.Model):
+    __tablename__ = "promo_codes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    description = db.Column(db.String(200), nullable=True)
+    discount_type = db.Column(db.String(20), nullable=False)  # 'percentage' | 'fixed'
+    discount_value = db.Column(db.Integer, nullable=False)
+    scope = db.Column(db.String(30), nullable=False, default="all")
+    min_order_amount = db.Column(db.Integer, nullable=False, default=0)
+    max_uses_total = db.Column(db.Integer, nullable=True)
+    max_uses_per_user = db.Column(db.Integer, nullable=False, default=1)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+
+    usages = db.relationship("PromoCodeUsage", backref="promo_code", lazy="dynamic", cascade="all, delete-orphan")
+
+    def to_dict(self, include_usage_count=False):
+        data = {
+            "id": self.id,
+            "code": self.code,
+            "description": self.description,
+            "discount_type": self.discount_type,
+            "discount_value": self.discount_value,
+            "scope": self.scope,
+            "min_order_amount": self.min_order_amount,
+            "max_uses_total": self.max_uses_total,
+            "max_uses_per_user": self.max_uses_per_user,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat(),
+        }
+        if include_usage_count:
+            data["uses_count"] = self.usages.count()
+        return data
+
+
+class PromoCodeUsage(db.Model):
+    __tablename__ = "promo_code_usages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    promo_code_id = db.Column(db.Integer, db.ForeignKey("promo_codes.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), nullable=True)
+    subscription_id = db.Column(db.Integer, db.ForeignKey("subscriptions.id"), nullable=True)
+    discount_amount = db.Column(db.Integer, nullable=False)
+    used_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = db.relationship("User")
+    order = db.relationship("Order")
+    subscription = db.relationship("Subscription")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "promo_code_id": self.promo_code_id,
+            "user_id": self.user_id,
+            "order_id": self.order_id,
+            "subscription_id": self.subscription_id,
+            "discount_amount": self.discount_amount,
+            "used_at": self.used_at.isoformat(),
+        }
+
+
+class ReferralReward(db.Model):
+    __tablename__ = "referral_rewards"
+
+    id = db.Column(db.Integer, primary_key=True)
+    referrer_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    referee_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    trigger_order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), nullable=True)
+    trigger_subscription_id = db.Column(db.Integer, db.ForeignKey("subscriptions.id"), nullable=True)
+    credit_awarded = db.Column(db.Integer, nullable=False)
+    awarded_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "referrer_user_id": self.referrer_user_id,
+            "referee_user_id": self.referee_user_id,
+            "trigger_order_id": self.trigger_order_id,
+            "trigger_subscription_id": self.trigger_subscription_id,
+            "credit_awarded": self.credit_awarded,
+            "awarded_at": self.awarded_at.isoformat(),
+        }
+
+
 class Subscription(db.Model):
     __tablename__ = "subscriptions"
 
@@ -507,6 +625,11 @@ class Subscription(db.Model):
 
     user = db.relationship("User", backref=db.backref("subscriptions", lazy="dynamic"))
 
+    amount_subtotal = db.Column(db.Integer, nullable=True)
+    promo_discount = db.Column(db.Integer, nullable=False, default=0)
+    credit_applied = db.Column(db.Integer, nullable=False, default=0)
+    promo_code_id = db.Column(db.Integer, db.ForeignKey("promo_codes.id"), nullable=True)
+
     def activate(self):
         """Activate this subscription, setting start/expiry dates."""
         now = datetime.now(timezone.utc)
@@ -531,6 +654,10 @@ class Subscription(db.Model):
             "plan_label": self.PLAN_LABELS.get(self.plan, self.plan),
             "status": self.status,
             "amount": self.amount,
+            "amount_subtotal": self.amount_subtotal,
+            "promo_discount": self.promo_discount,
+            "credit_applied": self.credit_applied,
+            "promo_code_id": self.promo_code_id,
             "starts_at": self.starts_at.isoformat() if self.starts_at else None,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "midtrans_order_id": self.midtrans_order_id,
