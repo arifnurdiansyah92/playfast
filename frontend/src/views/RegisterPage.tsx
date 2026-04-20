@@ -16,6 +16,7 @@ import Box from '@mui/material/Box'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { useAuth } from '@/contexts/AuthContext'
+import { storeApi } from '@/lib/api'
 
 const RegisterPage = () => {
   const [email, setEmail] = useState('')
@@ -24,10 +25,27 @@ const RegisterPage = () => {
   const [isPasswordShown, setIsPasswordShown] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [referralCode, setReferralCode] = useState('')
+  const [referralValidation, setReferralValidation] = useState<{ valid: boolean; message: string } | null>(null)
   const { register } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirect = searchParams.get('redirect')
+
+  const handleReferralBlur = async () => {
+    const code = referralCode.trim().toUpperCase()
+    if (!code) { setReferralValidation(null); return }
+    try {
+      const res = await storeApi.validateReferralCode(code)
+      if (res.valid) {
+        setReferralValidation({ valid: true, message: `Kode valid — kamu akan di-refer oleh ${res.referrer_name}` })
+      } else {
+        setReferralValidation({ valid: false, message: res.error || 'Kode tidak ditemukan' })
+      }
+    } catch {
+      setReferralValidation({ valid: false, message: 'Gagal validasi kode' })
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,7 +59,7 @@ const RegisterPage = () => {
     setLoading(true)
 
     try {
-      await register(email, password)
+      await register(email, password, referralCode.trim().toUpperCase() || undefined)
       router.push(redirect || '/store')
     } catch (err: any) {
       setError(err.message || 'Gagal mendaftar')
@@ -108,6 +126,17 @@ const RegisterPage = () => {
               type={isPasswordShown ? 'text' : 'password'}
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
+            />
+            <CustomTextField
+              label='Kode Referral (opsional)'
+              value={referralCode}
+              onChange={e => setReferralCode(e.target.value.toUpperCase())}
+              onBlur={handleReferralBlur}
+              fullWidth
+              placeholder='e.g. ARIF2X4K'
+              helperText={referralValidation?.message || 'Kalau kamu dapet kode dari temen, masukin di sini buat diskon first order'}
+              error={referralValidation?.valid === false}
+              FormHelperTextProps={{ sx: { color: referralValidation?.valid ? 'success.main' : undefined } }}
             />
             <Button fullWidth variant='contained' type='submit' disabled={loading}>
               {loading ? 'Membuat akun...' : 'Buat Akun'}
