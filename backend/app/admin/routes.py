@@ -24,6 +24,9 @@ from app.models import (
     Order,
     PasswordResetToken,
     PlayInstruction,
+    PromoCode,
+    PromoCodeUsage,
+    ReferralReward,
     SiteSetting,
     SteamAccount,
     Subscription,
@@ -1495,3 +1498,126 @@ def confirm_manual_payment(order_id: int):
         "message": "Payment confirmed and order fulfilled",
         "order": order.to_dict(include_credentials=True),
     }), 200
+
+
+# ---------------------------------------------------------------------------
+# Promo Codes (admin CRUD)
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/promo-codes", methods=["GET"])
+@admin_required
+def list_promo_codes():
+    """List all promo codes with usage counts."""
+    codes = PromoCode.query.order_by(PromoCode.created_at.desc()).all()
+    return jsonify({"promo_codes": [c.to_dict(include_usage_count=True) for c in codes]}), 200
+
+
+@admin_bp.route("/promo-codes", methods=["POST"])
+@admin_required
+def create_promo_code():
+    """Create a new promo code. Admin-only."""
+    data = request.get_json() or {}
+    code = (data.get("code") or "").strip().upper()
+    if not code:
+        return jsonify({"error": "code is required"}), 400
+    if PromoCode.query.filter_by(code=code).first():
+        return jsonify({"error": f"Code '{code}' already exists"}), 409
+
+    discount_type = data.get("discount_type")
+    if discount_type not in ("percentage", "fixed"):
+        return jsonify({"error": "discount_type must be 'percentage' or 'fixed'"}), 400
+
+    discount_value = data.get("discount_value")
+    if not isinstance(discount_value, int) or discount_value <= 0:
+        return jsonify({"error": "discount_value must be a positive integer"}), 400
+    if discount_type == "percentage" and discount_value > 100:
+        return jsonify({"error": "percentage discount cannot exceed 100"}), 400
+
+    expires_at = None
+    if data.get("expires_at"):
+        try:
+            expires_at = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            return jsonify({"error": "expires_at must be ISO datetime"}), 400
+
+    current_user_id = int(get_jwt_identity())
+    promo = PromoCode(
+        code=code,
+        description=data.get("description") or None,
+        discount_type=discount_type,
+        discount_value=discount_value,
+        scope=data.get("scope") or "all",
+        min_order_amount=int(data.get("min_order_amount") or 0),
+        max_uses_total=data.get("max_uses_total"),
+        max_uses_per_user=int(data.get("max_uses_per_user") or 1),
+        expires_at=expires_at,
+        is_active=bool(data.get("is_active", True)),
+        created_by_user_id=current_user_id,
+    )
+    db.session.add(promo)
+    db.session.commit()
+    return jsonify({"message": "Promo code created", "promo_code": promo.to_dict(include_usage_count=True)}), 201
+
+
+@admin_bp.route("/promo-codes/<int:promo_id>", methods=["PUT"])
+@admin_required
+def update_promo_code(promo_id: int):
+    promo = db.session.get(PromoCode, promo_id)
+    if not promo:
+        return jsonify({"error": "Promo code not found"}), 404
+    data = request.get_json() or {}
+
+    if "description" in data:
+        promo.description = data["description"] or None
+    if "scope" in data:
+        promo.scope = data["scope"]
+    if "min_order_amount" in data:
+        promo.min_order_amount = int(data["min_order_amount"])
+    if "max_uses_total" in data:
+        promo.max_uses_total = data["max_uses_total"]
+    if "max_uses_per_user" in data:
+        promo.max_uses_per_user = int(data["max_uses_per_user"])
+    if "expires_at" in data:
+        if data["expires_at"]:
+            try:
+                promo.expires_at = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                return jsonify({"error": "expires_at must be ISO datetime"}), 400
+        else:
+            promo.expires_at = None
+    if "is_active" in data:
+        promo.is_active = bool(data["is_active"])
+    # code/discount_type/discount_value intentionally NOT editable after creation
+    # (preserves usage-log accuracy; admin should deactivate + create new instead)
+
+    db.session.commit()
+    return jsonify({"message": "Promo code updated", "promo_code": promo.to_dict(include_usage_count=True)}), 200
+
+
+@admin_bp.route("/promo-codes/<int:promo_id>", methods=["DELETE"])
+@admin_required
+def delete_promo_code(promo_id: int):
+    promo = db.session.get(PromoCode, promo_id)
+    if not promo:
+        return jsonify({"error": "Promo code not found"}), 404
+    if promo.usages.count() > 0:
+        return jsonify({"error": "Cannot delete a promo code that has been used. Deactivate it instead."}), 409
+    db.session.delete(promo)
+    db.session.commit()
+    return jsonify({"message": "Promo code deleted"}), 200
+
+
+@admin_bp.route("/promo-codes/<int:promo_id>/usages", methods=["GET"])
+@admin_required
+def list_promo_code_usages(promo_id: int):
+    promo = db.session.get(PromoCode, promo_id)
+    if not promo:
+        return jsonify({"error": "Promo code not found"}), 404
+    usages = promo.usages.order_by(PromoCodeUsage.used_at.desc()).all()
+    result = []
+    for u in usages:
+        ud = u.to_dict()
+        ud["user_email"] = u.user.email if u.user else None
+        result.append(ud)
+    return jsonify({"usages": result, "total_discount": sum(u.discount_amount for u in usages)}), 200
