@@ -22,7 +22,7 @@ import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { authApi, storeApi, ApiError } from '@/lib/api'
+import { authApi, storeApi, ApiError, formatIDR } from '@/lib/api'
 
 const ProfilePage = () => {
   const router = useRouter()
@@ -43,10 +43,19 @@ const ProfilePage = () => {
     severity: 'success'
   })
 
+  // Referral copy snackbar
+  const [refSnack, setRefSnack] = useState('')
+
   // Fetch orders for summary
   const { data: orders } = useQuery({
     queryKey: ['my-orders'],
     queryFn: () => storeApi.getOrders()
+  })
+
+  // Fetch referral data
+  const { data: refData } = useQuery({
+    queryKey: ['my-referral'],
+    queryFn: () => storeApi.getMyReferral(),
   })
 
   const totalOrders = orders?.length ?? 0
@@ -106,6 +115,50 @@ const ProfilePage = () => {
         </Typography>
         <Typography color='text.secondary'>Kelola pengaturan akun kamu</Typography>
       </Box>
+
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant='h6' sx={{ mb: 2 }}>Program Referral</Typography>
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 3 }}>
+            <Box>
+              <Typography variant='caption' color='text.secondary'>Kode referral kamu</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant='h6' sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+                  {refData?.code ?? '…'}
+                </Typography>
+                <Button size='small' onClick={() => {
+                  if (refData?.code) {
+                    navigator.clipboard.writeText(refData.code)
+                    setRefSnack('Kode disalin')
+                  }
+                }}>Copy</Button>
+              </Box>
+            </Box>
+            <Box>
+              <Typography variant='caption' color='text.secondary'>Credit balance</Typography>
+              <Typography variant='h6'>{formatIDR(refData?.credit ?? 0)}</Typography>
+            </Box>
+            <Box>
+              <Typography variant='caption' color='text.secondary'>Total earned</Typography>
+              <Typography variant='h6'>{formatIDR(refData?.total_earned ?? 0)}</Typography>
+            </Box>
+          </Box>
+          <Typography variant='subtitle2' sx={{ mb: 1 }}>Orang yang kamu refer</Typography>
+          {(refData?.referrals?.length ?? 0) === 0 ? (
+            <Typography color='text.secondary' variant='body2'>Belum ada referral.</Typography>
+          ) : (
+            <Box component='ul' sx={{ pl: 3, m: 0 }}>
+              {refData!.referrals.map((r, i) => (
+                <li key={i}>
+                  <Typography variant='body2'>
+                    {r.email_masked} — {r.status === 'rewarded' ? `+${formatIDR(r.credit_awarded)}` : 'belum purchase'}
+                  </Typography>
+                </li>
+              ))}
+            </Box>
+          )}
+        </CardContent>
+      </Card>
 
       <Grid container spacing={3}>
         {/* Account Info */}
@@ -259,6 +312,9 @@ const ProfilePage = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Referral copy snackbar */}
+      <Snackbar open={!!refSnack} autoHideDuration={2500} onClose={() => setRefSnack('')} message={refSnack} />
 
       {/* Snackbar feedback */}
       <Snackbar
