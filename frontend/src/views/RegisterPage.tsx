@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -31,6 +31,25 @@ const RegisterPage = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirect = searchParams.get('redirect')
+
+  useEffect(() => {
+    const ref = searchParams?.get('ref')
+    if (ref) {
+      const code = ref.trim().toUpperCase()
+      setReferralCode(code)
+      // Auto-validate so user immediately sees "kode valid" message
+      storeApi.validateReferralCode(code).then(res => {
+        if (res.valid) {
+          setReferralValidation({ valid: true, message: `Kode valid — kamu akan di-refer oleh ${res.referrer_name}` })
+        } else {
+          setReferralValidation({ valid: false, message: res.error || 'Kode tidak ditemukan' })
+        }
+      }).catch(() => {
+        setReferralValidation({ valid: false, message: 'Gagal validasi kode' })
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleReferralBlur = async () => {
     const code = referralCode.trim().toUpperCase()
