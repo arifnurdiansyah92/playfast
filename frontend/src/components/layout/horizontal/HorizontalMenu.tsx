@@ -103,11 +103,23 @@ const HorizontalMenu = () => {
             <MenuItem href='/admin/orders' icon={<i className='tabler-receipt' />}>
               Pesanan
             </MenuItem>
+            <MenuItem href='/admin/subscriptions' icon={<i className='tabler-crown' />}>
+              Langganan
+            </MenuItem>
             <MenuItem href='/admin/users' icon={<i className='tabler-users' />}>
               Pengguna
             </MenuItem>
+            <MenuItem href='/admin/promo-codes' icon={<i className='tabler-discount' />}>
+              Promo Codes
+            </MenuItem>
+            <MenuItem href='/admin/referrals' icon={<i className='tabler-share' />}>
+              Referrals
+            </MenuItem>
             <MenuItem href='/admin/audit' icon={<i className='tabler-file-search' />}>
               Log Audit
+            </MenuItem>
+            <MenuItem href='/admin/settings' icon={<i className='tabler-settings-2' />}>
+              Settings
             </MenuItem>
           </SubMenu>
         )}
