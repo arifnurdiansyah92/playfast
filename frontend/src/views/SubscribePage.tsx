@@ -17,13 +17,15 @@ import Alert from '@mui/material/Alert'
 import Skeleton from '@mui/material/Skeleton'
 
 import { storeApi, formatIDR } from '@/lib/api'
-import type { ApiError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import CheckoutReviewModal from '@/components/CheckoutReviewModal'
 
 const SubscribePage = () => {
   const router = useRouter()
   const { user } = useAuth()
-  const [buying, setBuying] = useState<string | null>(null)
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
   const { data: plansData, isLoading: plansLoading } = useQuery({
@@ -41,26 +43,17 @@ const SubscribePage = () => {
   const isSubscribed = statusData?.is_subscribed ?? false
   const currentSub = statusData?.subscription
 
-  const handleSubscribe = async (plan: string) => {
-    if (!user) {
-      router.push('/register?redirect=/subscribe')
-      return
-    }
-
-    setError('')
-    setBuying(plan)
-
+  const handleConfirmSubscribe = async ({ promo_code, apply_credit }: { promo_code: string | null; apply_credit: boolean }) => {
+    if (!selectedPlan) return
+    setSubmitting(true)
     try {
-      const result = await storeApi.subscribe(plan)
-
-      // All payment modes go through the detail page for consistent UX.
-      // The detail page renders QR (manual) or Snap button (midtrans).
-      setBuying(null)
+      const result = await storeApi.subscribe(selectedPlan, { promo_code: promo_code ?? undefined, apply_credit })
       router.push(`/subscription/${result.subscription.id}`)
-    } catch (err) {
-      const apiErr = err as ApiError
-      setError(apiErr.message || 'Failed to subscribe')
-      setBuying(null)
+    } catch (err: any) {
+      setError(err.message || 'Failed to subscribe')
+    } finally {
+      setSubmitting(false)
+      setModalOpen(false)
     }
   }
 
@@ -151,11 +144,15 @@ const SubscribePage = () => {
                       variant={isBest ? 'contained' : 'outlined'}
                       size='large'
                       fullWidth
-                      disabled={isSubscribed || buying !== null}
-                      onClick={() => handleSubscribe(plan.plan)}
+                      disabled={isSubscribed || submitting}
+                      onClick={() => {
+                        if (!user) { router.push('/register?redirect=/subscribe'); return }
+                        setSelectedPlan(plan.plan)
+                        setModalOpen(true)
+                      }}
                       sx={{ fontWeight: 700, py: 1.5 }}
                     >
-                      {buying === plan.plan ? 'Processing...' : isSubscribed ? 'Already Subscribed' : 'Subscribe'}
+                      {isSubscribed ? 'Already Subscribed' : 'Subscribe'}
                     </Button>
                   </CardContent>
                 </Card>
@@ -193,6 +190,23 @@ const SubscribePage = () => {
         ))}
       </Grid>
 
+      {selectedPlan && (() => {
+        const plan = plans.find(p => p.plan === selectedPlan)
+        return (
+          <CheckoutReviewModal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            item={{
+              type: 'subscription',
+              label: `Playfast ${plan?.label ?? selectedPlan}`,
+              subtotal: plan?.price ?? 0,
+              plan: selectedPlan,
+            }}
+            onConfirm={handleConfirmSubscribe}
+            isSubmitting={submitting}
+          />
+        )
+      })()}
     </div>
   )
 }

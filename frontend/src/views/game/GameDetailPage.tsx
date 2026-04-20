@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+
+import CheckoutReviewModal from '@/components/CheckoutReviewModal'
 
 import { useQuery } from '@tanstack/react-query'
 
@@ -20,12 +22,9 @@ import Divider from '@mui/material/Divider'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
 import IconButton from '@mui/material/IconButton'
 import Dialog from '@mui/material/Dialog'
-import DialogTitle from '@mui/material/DialogTitle'
-import DialogContent from '@mui/material/DialogContent'
-import DialogActions from '@mui/material/DialogActions'
 import Grid from '@mui/material/Grid'
 
-import { storeApi, formatIDR, gameHeaderImage, gameThumbnail, handleImageError } from '@/lib/api'
+import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -37,7 +36,8 @@ const GameDetailPage = ({ appid }: Props) => {
   const router = useRouter()
   const { user } = useAuth()
   const [buying, setBuying] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [selectedMedia, setSelectedMedia] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -64,8 +64,8 @@ const GameDetailPage = ({ appid }: Props) => {
 
   const existingOrder = orders?.find(o => String(o.game?.appid) === String(appid))
 
+  // Used only for subscribed users playing via subscription (no payment needed)
   const handleBuy = async () => {
-    // Force register if not logged in
     if (!user) {
       router.push(`/register?redirect=/game/${appid}`)
       return
@@ -82,25 +82,28 @@ const GameDetailPage = ({ appid }: Props) => {
         return
       }
 
-      const { order, payment_mode, snap_token } = result
-
-      if (payment_mode === 'midtrans' && snap_token && typeof window !== 'undefined' && (window as any).snap) {
-        // Midtrans Snap popup
-        (window as any).snap.pay(snap_token, {
-          onSuccess: () => router.push(`/order/${order.id}`),
-          onPending: () => router.push(`/order/${order.id}`),
-          onError: () => setError('Pembayaran gagal. Silakan coba lagi.'),
-          onClose: () => setBuying(false)
-        })
-      } else {
-        // Manual mode or fallback — go to order page
-        router.push(`/order/${order.id}`)
-      }
+      router.push(`/order/${result.order.id}`)
     } catch (err) {
       const apiErr = err as ApiError
 
       setError(apiErr.message || 'Gagal membeli game')
       setBuying(false)
+    }
+  }
+
+  const handleConfirmPurchase = async ({ promo_code, apply_credit }: { promo_code: string | null; apply_credit: boolean }) => {
+    setSubmitting(true)
+    try {
+      const result = await storeApi.createOrder(game!.appid, {
+        promo_code: promo_code ?? undefined,
+        apply_credit,
+      })
+      router.push(`/order/${result.order.id}`)
+    } catch (err: any) {
+      setError(err?.message || 'Gagal membuat pesanan')
+    } finally {
+      setSubmitting(false)
+      setModalOpen(false)
     }
   }
 
@@ -277,7 +280,7 @@ const GameDetailPage = ({ appid }: Props) => {
                   variant='contained'
                   size='large'
                   disabled={buying}
-                  onClick={() => setConfirmOpen(true)}
+                  onClick={() => setModalOpen(true)}
                   startIcon={<i className='tabler-shopping-cart' />}
                   sx={{
                     minWidth: 220, py: 1.5, fontSize: '1rem', fontWeight: 700,
@@ -494,40 +497,21 @@ const GameDetailPage = ({ appid }: Props) => {
         ))}
       </Grid>
 
-      {/* Purchase confirmation dialog */}
+      {/* Checkout review modal */}
       {game && (
-        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth='xs' fullWidth>
-          <DialogTitle sx={{ fontWeight: 700 }}>Konfirmasi Pembelian</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-              <Box
-                component='img'
-                src={gameThumbnail(game.appid)}
-                alt={game.name}
-                onError={handleImageError}
-                sx={{ width: 80, height: 38, borderRadius: 0.5, objectFit: 'cover' }}
-              />
-              <Box>
-                <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>{game.name}</Typography>
-                <Typography variant='h6' color='primary.main' sx={{ fontWeight: 700 }}>{formatIDR(game.price)}</Typography>
-              </Box>
-            </Box>
-            <Typography variant='body2' color='text.secondary'>
-              Akses berlaku selamanya. Kode Steam Guard otomatis tersedia setelah pembayaran.
-            </Typography>
-          </DialogContent>
-          <DialogActions sx={{ p: 3, pt: 1 }}>
-            <Button onClick={() => setConfirmOpen(false)}>Batal</Button>
-            <Button
-              variant='contained'
-              disabled={buying}
-              onClick={() => { setConfirmOpen(false); handleBuy() }}
-              startIcon={<i className='tabler-shopping-cart' />}
-            >
-              {buying ? 'Memproses...' : 'Beli Sekarang'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <CheckoutReviewModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          item={{
+            type: 'game',
+            label: game.name,
+            imageUrl: gameHeaderImage(game.appid),
+            subtotal: game.price,
+            gameId: game.id,
+          }}
+          onConfirm={handleConfirmPurchase}
+          isSubmitting={submitting}
+        />
       )}
     </div>
   )
