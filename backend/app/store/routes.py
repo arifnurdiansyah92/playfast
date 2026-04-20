@@ -23,13 +23,14 @@ from app.models import (
     GameAccount,
     Order,
     PlayInstruction,
+    PromoCodeUsage,
     SiteSetting,
     SteamAccount,
     Subscription,
     User,
 )
 from app.steam.service import get_guard_code
-from app.store.pricing import validate_promo_code
+from app.store.pricing import compute_final_amount, validate_promo_code
 
 store_bp = Blueprint("store", __name__, url_prefix="/api/store")
 
@@ -196,6 +197,24 @@ def subscribe():
     if price <= 0:
         return jsonify({"error": "Subscription plan not available"}), 400
 
+    # ----- Compute pricing with promo + referral credit -----
+    subtotal = price
+    promo_code_input = (data.get("promo_code") or "").strip() or None
+    apply_credit = bool(data.get("apply_credit", True))
+
+    pricing = compute_final_amount(
+        subtotal=subtotal,
+        user_id=user_id,
+        promo_code=promo_code_input,
+        apply_credit=apply_credit,
+        order_type="subscription",
+        plan=plan,
+    )
+    if pricing.get("error"):
+        return jsonify({"error": pricing["error"]}), 400
+
+    final_amount = pricing["total"]
+
     user = db.session.get(User, user_id)
     timestamp = int(datetime.now(timezone.utc).timestamp())
     midtrans_order_id = f"SUB-{user_id}-{plan}-{timestamp}"
@@ -203,11 +222,38 @@ def subscribe():
     sub = Subscription(
         user_id=user_id,
         plan=plan,
-        amount=price,
+        amount=final_amount,
+        amount_subtotal=subtotal,
+        promo_discount=pricing["promo_discount"],
+        credit_applied=pricing["credit_applied"],
+        promo_code_id=pricing["promo_code_id"],
         midtrans_order_id=midtrans_order_id,
     )
     db.session.add(sub)
     db.session.flush()
+
+    user_obj = db.session.get(User, user_id)
+    if pricing["credit_applied"] > 0:
+        user_obj.referral_credit = max(0, user_obj.referral_credit - pricing["credit_applied"])
+    if pricing["promo_code_id"]:
+        usage = PromoCodeUsage(
+            promo_code_id=pricing["promo_code_id"],
+            user_id=user_id,
+            subscription_id=sub.id,
+            discount_amount=pricing["promo_discount"],
+        )
+        db.session.add(usage)
+
+    if final_amount == 0:
+        sub.payment_type = "credit"
+        sub.paid_at = datetime.now(timezone.utc)
+        sub.activate()
+        db.session.commit()
+        return jsonify({
+            "message": "Subscription activated via credit/discount",
+            "subscription": sub.to_dict(include_snap_token=True),
+            "payment_mode": "credit",
+        }), 201
 
     payment_mode = SiteSetting.get("payment_mode")
 
@@ -229,11 +275,11 @@ def subscribe():
             transaction = snap.create_transaction({
                 "transaction_details": {
                     "order_id": midtrans_order_id,
-                    "gross_amount": price,
+                    "gross_amount": final_amount,
                 },
                 "item_details": [{
                     "id": f"sub_{plan}",
-                    "price": price,
+                    "price": final_amount,
                     "quantity": 1,
                     "name": f"Playfast {Subscription.PLAN_LABELS.get(plan, plan)} Subscription",
                 }],
@@ -724,8 +770,35 @@ def create_order():
             "payment_mode": "subscription",
         }), 201
 
+    # ----- Compute pricing with promo + referral credit -----
+    subtotal = game.price
+    promo_code_input = (data.get("promo_code") or "").strip() or None
+    apply_credit = bool(data.get("apply_credit", True))
+
+    # First-order referee auto-discount (applied before promo)
+    user_obj = db.session.get(User, user_id)
+    first_order_discount = 0
+    if user_obj and user_obj.referred_by_user_id and not Order.query.filter_by(user_id=user_id, status="fulfilled").first():
+        referee_pct = int(SiteSetting.get("referral_referee_discount_pct") or "10")
+        first_order_discount = int(subtotal * referee_pct / 100)
+
+    subtotal_after_first_order = subtotal - first_order_discount
+
+    pricing = compute_final_amount(
+        subtotal=subtotal_after_first_order,
+        user_id=user_id,
+        promo_code=promo_code_input,
+        apply_credit=apply_credit,
+        order_type="game",
+        game_id=game.id,
+    )
+    if pricing.get("error"):
+        return jsonify({"error": pricing["error"]}), 400
+
+    final_amount = pricing["total"]
+
     # Fetch user for Midtrans customer details
-    user = db.session.get(User, user_id)
+    user = user_obj
 
     # Generate unique Midtrans order ID
     timestamp = int(datetime.now(timezone.utc).timestamp())
@@ -736,11 +809,42 @@ def create_order():
         user_id=user_id,
         game_id=game.id,
         status="pending_payment",
+        type="purchase",
         midtrans_order_id=midtrans_order_id,
-        amount=game.price,
+        amount_subtotal=subtotal,
+        promo_discount=pricing["promo_discount"] + first_order_discount,
+        credit_applied=pricing["credit_applied"],
+        amount=final_amount,
+        promo_code_id=pricing["promo_code_id"],
     )
     db.session.add(order)
     db.session.flush()
+
+    # Deduct credit from user + insert PromoCodeUsage row (if promo applied)
+    if pricing["credit_applied"] > 0:
+        user_obj.referral_credit = max(0, user_obj.referral_credit - pricing["credit_applied"])
+    if pricing["promo_code_id"]:
+        usage = PromoCodeUsage(
+            promo_code_id=pricing["promo_code_id"],
+            user_id=user_id,
+            order_id=order.id,
+            discount_amount=pricing["promo_discount"],
+        )
+        db.session.add(usage)
+
+    # If credit + discounts cover the full price, auto-fulfill without payment
+    if final_amount == 0:
+        order.payment_type = "credit"
+        order.paid_at = datetime.now(timezone.utc)
+        success = _fulfill_order(order)
+        if not success:
+            order.status = "fulfilled"
+        db.session.commit()
+        return jsonify({
+            "message": "Order fulfilled via credit/discount",
+            "order": order.to_dict(),
+            "payment_mode": "credit",
+        }), 201
 
     payment_mode = SiteSetting.get("payment_mode")
 
@@ -764,11 +868,11 @@ def create_order():
             transaction = snap.create_transaction({
                 "transaction_details": {
                     "order_id": midtrans_order_id,
-                    "gross_amount": game.price,
+                    "gross_amount": final_amount,
                 },
                 "item_details": [{
                     "id": str(game.id),
-                    "price": game.price,
+                    "price": final_amount,
                     "quantity": 1,
                     "name": game.name[:50],
                 }],
