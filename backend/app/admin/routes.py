@@ -1398,6 +1398,8 @@ def confirm_subscription_payment(sub_id: int):
     sub.payment_type = "manual"
     sub.paid_at = datetime.now(timezone.utc)
     sub.activate()
+    from app.store.routes import _maybe_award_referrer
+    _maybe_award_referrer(sub, is_subscription=True)
     db.session.commit()
 
     return jsonify({

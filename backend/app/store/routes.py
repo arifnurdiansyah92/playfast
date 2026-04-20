@@ -249,6 +249,7 @@ def subscribe():
         sub.payment_type = "credit"
         sub.paid_at = datetime.now(timezone.utc)
         sub.activate()
+        _maybe_award_referrer(sub, is_subscription=True)
         db.session.commit()
         return jsonify({
             "message": "Subscription activated via credit/discount",
@@ -598,6 +599,52 @@ def game_detail(appid: int):
     return jsonify({"game": game.to_dict()}), 200
 
 
+def _maybe_award_referrer(order_or_sub, is_subscription=False):
+    """If the order's user was referred AND this is their first fulfilled
+    payment above the min threshold, award the referrer.
+    """
+    user = db.session.get(User, order_or_sub.user_id)
+    if not user or not user.referred_by_user_id:
+        return
+
+    existing = ReferralReward.query.filter_by(referee_user_id=user.id).first()
+    if existing:
+        return
+
+    min_order = int(SiteSetting.get("referral_min_order") or "50000")
+    paid_amount = order_or_sub.amount_subtotal or order_or_sub.amount or 0
+    if paid_amount < min_order:
+        return
+
+    has_prior_order = Order.query.filter(
+        Order.user_id == user.id,
+        Order.status == "fulfilled",
+        Order.id != (order_or_sub.id if not is_subscription else -1),
+    ).first()
+    has_prior_sub = Subscription.query.filter(
+        Subscription.user_id == user.id,
+        Subscription.status == "active",
+        Subscription.id != (order_or_sub.id if is_subscription else -1),
+    ).first()
+    if has_prior_order or has_prior_sub:
+        return
+
+    credit_amount = int(SiteSetting.get("referral_referrer_credit") or "10000")
+    referrer = db.session.get(User, user.referred_by_user_id)
+    if not referrer:
+        return
+
+    referrer.referral_credit = (referrer.referral_credit or 0) + credit_amount
+    reward = ReferralReward(
+        referrer_user_id=referrer.id,
+        referee_user_id=user.id,
+        trigger_order_id=order_or_sub.id if not is_subscription else None,
+        trigger_subscription_id=order_or_sub.id if is_subscription else None,
+        credit_awarded=credit_amount,
+    )
+    db.session.add(reward)
+
+
 def _fulfill_order(order):
     """Assign a Steam account to a paid order using smart round-robin.
 
@@ -676,6 +723,7 @@ def _fulfill_order(order):
         "Order %s fulfilled: assigned account %s to user %s for game %s",
         order.id, steam_account.id, order.user_id, game.id,
     )
+    _maybe_award_referrer(order, is_subscription=False)
     return True
 
 
