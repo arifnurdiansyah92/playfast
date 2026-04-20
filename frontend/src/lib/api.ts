@@ -616,11 +616,14 @@ export const adminApi = {
     const res = await request<{ users: (User & { order_count: number; is_admin: boolean; is_active: boolean })[] }>('/api/admin/users')
     return res.users
   },
-  updateUser(id: number, data: Partial<{ is_admin: boolean; is_active: boolean; password: string }>) {
+  updateUser(id: number, data: Partial<{ is_admin: boolean; is_active: boolean; password: string; referral_code: string }>) {
     return request<{ user: User }>(`/api/admin/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
     })
+  },
+  regenerateUserReferralCode(id: number) {
+    return request<{ message: string; referral_code: string; user: any }>(`/api/admin/users/${id}/regenerate-referral-code`, { method: 'POST' })
   },
   deleteUser(id: number) {
     return request<{ message: string }>(`/api/admin/users/${id}`, { method: 'DELETE' })

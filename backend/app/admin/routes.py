@@ -219,6 +219,22 @@ def update_user(user_id: int):
     if "password" in data and data["password"]:
         target.set_password(data["password"])
 
+    if "referral_code" in data:
+        new_code = (data["referral_code"] or "").strip().upper()
+        if not new_code:
+            return jsonify({"error": "Referral code cannot be empty"}), 400
+        if len(new_code) > 12:
+            return jsonify({"error": "Referral code must be 12 characters or less"}), 400
+        if not new_code.isalnum():
+            return jsonify({"error": "Referral code must be alphanumeric"}), 400
+        existing = User.query.filter(
+            User.referral_code == new_code,
+            User.id != target.id
+        ).first()
+        if existing:
+            return jsonify({"error": f"Referral code '{new_code}' is already taken"}), 409
+        target.referral_code = new_code
+
     db.session.commit()
     return jsonify({"message": "User updated", "user": target.to_dict()}), 200
 
@@ -256,6 +272,32 @@ def admin_generate_reset(user_id: int):
         "token": token.token,
         "expires_at": token.expires_at.isoformat(),
     }), 200
+
+
+@admin_bp.route("/users/<int:user_id>/regenerate-referral-code", methods=["POST"])
+@admin_required
+def regenerate_user_referral_code(user_id: int):
+    """Generate a fresh unique 6-char referral code for the user."""
+    import secrets
+    import string
+
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(50):
+        candidate = ''.join(secrets.choice(alphabet) for _ in range(6))
+        if not User.query.filter_by(referral_code=candidate).first():
+            target.referral_code = candidate
+            db.session.commit()
+            return jsonify({
+                "message": "Referral code regenerated",
+                "referral_code": candidate,
+                "user": target.to_dict(),
+            }), 200
+
+    return jsonify({"error": "Could not generate a unique code after 50 attempts"}), 503
 
 
 # ---------------------------------------------------------------------------

@@ -39,6 +39,10 @@ const AdminUsersPage = () => {
   const [newPassword, setNewPassword] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; email: string } | null>(null)
   const [lifetimeConfirm, setLifetimeConfirm] = useState<{ id: number; email: string } | null>(null)
+  const [editReferralUser, setEditReferralUser] = useState<{ id: number; email: string; current_code: string } | null>(null)
+  const [editReferralCode, setEditReferralCode] = useState('')
+  const [editReferralError, setEditReferralError] = useState('')
+  const [regenConfirm, setRegenConfirm] = useState<{ id: number; email: string } | null>(null)
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -77,6 +81,39 @@ const AdminUsersPage = () => {
     onError: (err: any) => { setSnackMsg(err.message || 'Failed'); setLifetimeConfirm(null) }
   })
 
+  const editReferralMutation = useMutation({
+    mutationFn: ({ id, code }: { id: number; code: string }) =>
+      adminApi.updateUser(id, { referral_code: code }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      setEditReferralUser(null)
+      setEditReferralCode('')
+      setEditReferralError('')
+      setSnackMsg('Referral code updated')
+    },
+    onError: (err: any) => setEditReferralError(err.message || 'Failed to update referral code')
+  })
+
+  const regenMutation = useMutation({
+    mutationFn: (id: number) => adminApi.regenerateUserReferralCode(id),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      setRegenConfirm(null)
+      setSnackMsg(`New referral code: ${res.referral_code}`)
+    },
+    onError: (err: any) => { setSnackMsg(err.message || 'Failed'); setRegenConfirm(null) }
+  })
+
+  const handleEditReferralSubmit = () => {
+    if (!editReferralUser) return
+    const code = editReferralCode.trim().toUpperCase()
+    if (!code) { setEditReferralError('Referral code cannot be empty'); return }
+    if (code.length > 12) { setEditReferralError('Must be 12 characters or less'); return }
+    if (!/^[A-Z0-9]+$/.test(code)) { setEditReferralError('Must be alphanumeric (letters and digits only)'); return }
+    setEditReferralError('')
+    editReferralMutation.mutate({ id: editReferralUser.id, code })
+  }
+
   const handleResetPassword = () => {
     if (!resetPwUser || !newPassword) return
     updateMutation.mutate({ id: resetPwUser.id, data: { password: newPassword } })
@@ -110,6 +147,7 @@ const AdminUsersPage = () => {
                   <TableCell>Role</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Orders</TableCell>
+                  <TableCell>Referral Code</TableCell>
                   <TableCell>Joined</TableCell>
                   <TableCell align='right'>Actions</TableCell>
                 </TableRow>
@@ -143,6 +181,48 @@ const AdminUsersPage = () => {
                         />
                       </TableCell>
                       <TableCell>{u.order_count}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant='body2' sx={{ fontFamily: 'monospace', letterSpacing: 1 }}>
+                            {(u as any).referral_code ?? '—'}
+                          </Typography>
+                          {(u as any).referral_code && (
+                            <>
+                              <Tooltip title='Copy referral code'>
+                                <IconButton
+                                  size='small'
+                                  onClick={() => {
+                                    navigator.clipboard.writeText((u as any).referral_code)
+                                    setSnackMsg('Referral code copied')
+                                  }}
+                                >
+                                  <i className='tabler-copy' style={{ fontSize: 14 }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title='Edit referral code'>
+                                <IconButton
+                                  size='small'
+                                  onClick={() => {
+                                    setEditReferralUser({ id: u.id, email: u.email, current_code: (u as any).referral_code })
+                                    setEditReferralCode((u as any).referral_code)
+                                    setEditReferralError('')
+                                  }}
+                                >
+                                  <i className='tabler-pencil' style={{ fontSize: 14 }} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title='Regenerate referral code'>
+                                <IconButton
+                                  size='small'
+                                  onClick={() => setRegenConfirm({ id: u.id, email: u.email })}
+                                >
+                                  <i className='tabler-refresh' style={{ fontSize: 14 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
+                        </Box>
+                      </TableCell>
                       <TableCell>
                         {new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </TableCell>
@@ -256,6 +336,59 @@ const AdminUsersPage = () => {
             disabled={lifetimeMutation.isPending}
           >
             {lifetimeMutation.isPending ? 'Granting...' : 'Grant Lifetime'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Referral Code Dialog */}
+      <Dialog open={!!editReferralUser} onClose={() => { setEditReferralUser(null); setEditReferralError('') }} maxWidth='xs' fullWidth>
+        <DialogTitle>Edit Referral Code</DialogTitle>
+        <DialogContent>
+          <Typography color='text.secondary' sx={{ mb: 2 }}>
+            Set a custom referral code for <strong>{editReferralUser?.email}</strong>. Max 12 alphanumeric characters.
+          </Typography>
+          <CustomTextField
+            fullWidth
+            label='Referral Code'
+            value={editReferralCode}
+            onChange={e => {
+              setEditReferralCode(e.target.value.toUpperCase())
+              setEditReferralError('')
+            }}
+            inputProps={{ maxLength: 12 }}
+            placeholder='E.g. MYCODE42'
+            error={!!editReferralError}
+            helperText={editReferralError || `Current: ${editReferralUser?.current_code}`}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setEditReferralUser(null); setEditReferralError('') }}>Cancel</Button>
+          <Button
+            variant='contained'
+            onClick={handleEditReferralSubmit}
+            disabled={editReferralMutation.isPending || !editReferralCode.trim()}
+          >
+            {editReferralMutation.isPending ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Regenerate Referral Code Confirm Dialog */}
+      <Dialog open={!!regenConfirm} onClose={() => setRegenConfirm(null)} maxWidth='xs' fullWidth>
+        <DialogTitle>Regenerate Referral Code</DialogTitle>
+        <DialogContent>
+          <Typography color='text.secondary'>
+            Generate a new random referral code for <strong>{regenConfirm?.email}</strong>? Their current code will be replaced.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRegenConfirm(null)}>Cancel</Button>
+          <Button
+            variant='contained'
+            onClick={() => regenConfirm && regenMutation.mutate(regenConfirm.id)}
+            disabled={regenMutation.isPending}
+          >
+            {regenMutation.isPending ? 'Regenerating...' : 'Regenerate'}
           </Button>
         </DialogActions>
       </Dialog>
