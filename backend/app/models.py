@@ -379,6 +379,7 @@ class SiteSetting(db.Model):
         "sub_price_monthly": "50000",
         "sub_price_3monthly": "120000",
         "sub_price_yearly": "400000",
+        "sub_price_lifetime": "0",  # 0 = disabled (hidden from subscribe page and landing promo)
         "referral_referee_discount_pct": "10",
         "referral_referrer_credit": "10000",
         "referral_min_order": "50000",

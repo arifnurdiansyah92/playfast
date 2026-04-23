@@ -235,6 +235,17 @@ const AdminSettingsPage = () => {
                 placeholder='400000'
               />
             </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <CustomTextField
+                fullWidth
+                type='number'
+                label='Lifetime Price (IDR)'
+                value={form.sub_price_lifetime || ''}
+                onChange={e => handleChange('sub_price_lifetime', e.target.value)}
+                placeholder='250000'
+                helperText='Set 0 to disable. Drives the landing-page promo banner.'
+              />
+            </Grid>
           </Grid>
         </CardContent>
       </Card>
