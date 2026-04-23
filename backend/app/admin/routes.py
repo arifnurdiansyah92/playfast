@@ -1575,6 +1575,51 @@ def retry_fulfill_order(order_id: int):
     }), 200
 
 
+@admin_bp.route("/orders/retry-fulfill-all", methods=["POST"])
+@admin_required
+def retry_fulfill_all_orders():
+    """Bulk-heal every fulfilled order that has no active assignment.
+
+    Iterates all status='fulfilled' orders whose assignment is missing or
+    revoked and retries _fulfill_order on each. Returns per-order results
+    so the admin can see what healed vs. what still needs accounts added.
+    """
+    from app.store.routes import _fulfill_order
+
+    # Only zombies — fulfilled orders with no assignment at all. Intentionally
+    # excludes orders whose assignment is revoked, since admin revocations
+    # shouldn't be undone by a bulk heal.
+    candidates = (
+        Order.query.filter(
+            Order.status == "fulfilled",
+            Order.assignment_id.is_(None),
+        )
+        .all()
+    )
+
+    healed = []
+    failed = []
+    for order in candidates:
+        try:
+            success = _fulfill_order(order)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Retry-fulfill failed for order %s", order.id)
+            failed.append({"order_id": order.id, "reason": str(exc)})
+            db.session.rollback()
+            continue
+        if success:
+            healed.append(order.id)
+        else:
+            failed.append({"order_id": order.id, "reason": "no accounts available"})
+
+    return jsonify({
+        "message": f"Healed {len(healed)} order(s), {len(failed)} still need accounts",
+        "healed": healed,
+        "failed": failed,
+        "scanned": len(candidates),
+    }), 200
+
+
 # ---------------------------------------------------------------------------
 # Promo Codes (admin CRUD)
 # ---------------------------------------------------------------------------

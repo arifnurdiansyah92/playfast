@@ -660,6 +660,9 @@ return res.orders
   retryFulfillOrder(orderId: number) {
     return request<{ message: string; order: Order }>(`/api/admin/orders/${orderId}/retry-fulfill`, { method: 'POST' })
   },
+  retryFulfillAllOrders() {
+    return request<{ message: string; healed: number[]; failed: { order_id: number; reason: string }[]; scanned: number }>(`/api/admin/orders/retry-fulfill-all`, { method: 'POST' })
+  },
   async getUsers() {
     const res = await request<{ users: (User & { order_count: number; is_admin: boolean; is_active: boolean })[] }>('/api/admin/users')
 

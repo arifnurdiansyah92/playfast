@@ -60,6 +60,22 @@ const AdminOrdersPage = () => {
     onError: (err: any) => setSnackMsg(err?.message || 'Retry failed'),
   })
 
+  const retryFulfillAllMutation = useMutation({
+    mutationFn: () => adminApi.retryFulfillAllOrders(),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] })
+      const healed = res.healed.length
+      const failed = res.failed.length
+
+      if (res.scanned === 0) setSnackMsg('No unassigned orders found')
+      else if (failed === 0) setSnackMsg(`Healed ${healed} order(s)`)
+      else setSnackMsg(`Healed ${healed}, ${failed} still need accounts`)
+    },
+    onError: (err: any) => setSnackMsg(err?.message || 'Bulk retry failed'),
+  })
+
+  const unassignedCount = orders?.filter(o => o.status === 'fulfilled' && !o.credentials && !o.is_revoked).length ?? 0
+
   const filtered = useMemo(() => {
     if (!orders) return []
     let result = orders
@@ -108,6 +124,18 @@ return 'default' as const
           <Typography variant='h4' sx={{ mb: 1 }}>Orders</Typography>
           <Typography color='text.secondary'>{orders?.length ?? 0} total orders</Typography>
         </Box>
+        {unassignedCount > 0 && (
+          <Button
+            variant='contained'
+            color='warning'
+            startIcon={<i className={retryFulfillAllMutation.isPending ? 'tabler-loader-2' : 'tabler-refresh'} />}
+            onClick={() => retryFulfillAllMutation.mutate()}
+            disabled={retryFulfillAllMutation.isPending}
+            sx={{ fontWeight: 700 }}
+          >
+            {retryFulfillAllMutation.isPending ? 'Assigning...' : `Auto-Assign ${unassignedCount} Unassigned`}
+          </Button>
+        )}
       </Box>
 
       {/* Status filter chips */}
