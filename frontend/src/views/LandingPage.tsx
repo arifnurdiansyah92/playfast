@@ -21,6 +21,7 @@ import Skeleton from '@mui/material/Skeleton'
 import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 import type { Game } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import LandingPromoBanner from '@/components/LandingPromoBanner'
 
 /* ── Brand palette ─────────────────────────────────── */
 const gold = '#c9a84c'
@@ -497,6 +498,7 @@ const LandingPage = () => {
                 ))
                 : plans.map(plan => {
                   const isBest = plan.plan === 'yearly'
+
                   const monthlyEquiv = plan.plan === 'monthly'
                     ? plan.price
                     : plan.plan === '3monthly'
@@ -711,6 +713,8 @@ const LandingPage = () => {
           </Typography>
         </Box>
       </Box>
+
+      {!loading && !user && <LandingPromoBanner />}
     </Box>
   )
 }
