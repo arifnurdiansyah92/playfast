@@ -166,6 +166,7 @@ const PlayPage = ({ orderId }: Props) => {
   }
 
   const instructions = instructionsData?.instructions?.content
+
   const headerImage = order.game?.header_image
     || (order.game?.appid ? gameHeaderImage(order.game.appid) : null)
 
@@ -210,9 +211,11 @@ const PlayPage = ({ orderId }: Props) => {
             <Typography variant='h5' sx={{ fontWeight: 700 }} noWrap>
               {order.game?.name}
             </Typography>
-            <Typography variant='body2' color='text.secondary'>
-              Akun: <Box component='span' sx={{ fontFamily: 'monospace' }}>{order.credentials?.account_name}</Box>
-            </Typography>
+            {order.credentials?.account_name && (
+              <Typography variant='body2' color='text.secondary'>
+                Akun: <Box component='span' sx={{ fontFamily: 'monospace' }}>{order.credentials.account_name}</Box>
+              </Typography>
+            )}
           </Box>
         </CardContent>
       </Card>
@@ -228,8 +231,34 @@ const PlayPage = ({ orderId }: Props) => {
         </Alert>
       )}
 
+      {!order.is_revoked && !order.credentials && (
+        <Alert
+          severity='warning'
+          sx={{ fontSize: '1rem' }}
+          action={
+            <Button
+              size='small'
+              color='inherit'
+              href='https://wa.me/6282240708329'
+              target='_blank'
+              rel='noopener noreferrer'
+              startIcon={<i className='tabler-brand-whatsapp' />}
+            >
+              Hubungi Admin
+            </Button>
+          }
+        >
+          <Typography variant='subtitle1' sx={{ fontWeight: 700 }}>
+            Akun Belum Ditetapkan
+          </Typography>
+          <Typography variant='body2'>
+            Pembayaran kamu sudah kami terima, tapi akun Steam untuk game ini belum berhasil diassign otomatis. Admin akan segera mengatur akunnya — atau hubungi kami via WhatsApp untuk percepat.
+          </Typography>
+        </Alert>
+      )}
+
       {/* Credentials Section */}
-      <Card sx={{ border: '1px solid', borderColor: 'divider' }}>
+      <Card sx={{ border: '1px solid', borderColor: 'divider', display: order.credentials ? 'block' : 'none' }}>
         <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
           <Typography variant='h6' sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <i className='tabler-key' style={{ fontSize: 22 }} />
@@ -320,6 +349,7 @@ const PlayPage = ({ orderId }: Props) => {
           border: '2px solid',
           borderColor: code ? 'primary.main' : 'divider',
           transition: 'border-color 0.3s ease',
+          display: order.credentials ? 'block' : 'none',
         }}
       >
         <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
@@ -361,6 +391,7 @@ const PlayPage = ({ orderId }: Props) => {
                     '0%': { opacity: 0, transform: 'scale(0.9)' },
                     '100%': { opacity: 1, transform: 'scale(1)' },
                   },
+
                   // Pulsing glow when refreshing
                   ...(codeExpiresIn <= 3 && codeExpiresIn > 0 ? {
                     animation: 'codePulse 1s ease-in-out infinite',

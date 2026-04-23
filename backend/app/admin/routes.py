@@ -1535,11 +1535,42 @@ def confirm_manual_payment(order_id: int):
     success = _fulfill_order(order)
 
     if not success:
-        order.status = "fulfilled"
-        db.session.commit()
+        # Payment is confirmed but no Steam account is currently available.
+        # Keep the order as pending_payment so the admin can retry later via
+        # the retry-fulfill endpoint — marking it fulfilled here would leave
+        # the user staring at "N/A" on /play/<id>.
+        db.session.rollback()
+        return jsonify({"error": "No accounts available for this game. Retry once an account is free."}), 503
 
     return jsonify({
         "message": "Payment confirmed and order fulfilled",
+        "order": order.to_dict(include_credentials=True),
+    }), 200
+
+
+@admin_bp.route("/orders/<int:order_id>/retry-fulfill", methods=["POST"])
+@admin_required
+def retry_fulfill_order(order_id: int):
+    """Retry assignment for an order stuck in a fulfilled-but-unassigned state.
+
+    Heals zombie orders created before the no-accounts-available guard was
+    added, or orders fulfilled via the Midtrans webhook when no Steam account
+    was free. Safe to call on any order that's missing an active assignment.
+    """
+    order = db.session.get(Order, order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    if order.assignment and not order.assignment.is_revoked:
+        return jsonify({"error": "Order already has an active assignment"}), 409
+
+    from app.store.routes import _fulfill_order
+    success = _fulfill_order(order)
+    if not success:
+        return jsonify({"error": "No accounts available for this game"}), 503
+
+    return jsonify({
+        "message": "Order re-fulfilled",
         "order": order.to_dict(include_credentials=True),
     }), 200
 

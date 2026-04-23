@@ -14,7 +14,9 @@ async function refreshAccessToken(): Promise<boolean> {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' }
     })
-    return res.ok
+
+    
+return res.ok
   } catch {
     return false
   }
@@ -33,6 +35,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   // On 401, attempt a single token refresh and retry the original request
   // Skip for auth endpoints that are expected to fail when not logged in
   const skipRefreshUrls = ['/api/auth/refresh', '/api/auth/me', '/api/auth/login', '/api/auth/register']
+
   if (res.status === 401 && !skipRefreshUrls.some(u => url.includes(u))) {
     // Deduplicate concurrent refresh attempts
     if (!isRefreshing) {
@@ -58,25 +61,30 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
       if (!retryRes.ok) {
         const body = await retryRes.json().catch(() => ({ error: retryRes.statusText }))
+
         throw new ApiError(retryRes.status, body.error || body.message || retryRes.statusText)
       }
 
       if (retryRes.status === 204) return undefined as T
-      return retryRes.json()
+      
+return retryRes.json()
     }
 
     // Refresh failed — throw so callers can handle it
     const body = await res.json().catch(() => ({ error: 'Session expired' }))
+
     throw new ApiError(401, body.error || 'Session expired')
   }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }))
+
     throw new ApiError(res.status, body.error || body.message || res.statusText)
   }
 
   if (res.status === 204) return undefined as T
-  return res.json()
+  
+return res.json()
 }
 
 export class ApiError extends Error {
@@ -122,7 +130,9 @@ export const authApi = {
   },
   async me() {
     const res = await request<{ user: User }>('/api/auth/me')
-    return res.user
+
+    
+return res.user
   },
   updateProfile(data: { email?: string; password?: string; current_password: string }) {
     return request<AuthResponse>('/api/auth/profile', {
@@ -187,6 +197,7 @@ export interface Game {
   available_accounts?: number
   accounts?: { id: number; account_name: string }[]
   created_at: string
+
   // Admin-only: override fields
   steam_name?: string
   steam_description?: string
@@ -337,15 +348,21 @@ export const storeApi = {
   },
   async getGenres() {
     const res = await request<{ genres: string[] }>('/api/store/genres')
-    return res.genres
+
+    
+return res.genres
   },
   async getFeaturedGames() {
     const res = await request<{ games: Game[] }>('/api/store/games/featured')
-    return res.games
+
+    
+return res.games
   },
   async getGame(appid: number | string) {
     const res = await request<{ game: Game }>(`/api/store/games/${appid}`)
-    return res.game
+
+    
+return res.game
   },
   getPaymentConfig() {
     return request<{ payment_mode: string; client_key?: string; snap_url?: string; qris_image_url?: string; whatsapp_number?: string; instructions?: string }>('/api/store/payment-config')
@@ -394,18 +411,24 @@ export const storeApi = {
   },
   async getMyGames() {
     const res = await request<{ games: (Game & { type: 'purchased' | 'bonus' | 'subscription'; order_id: number; account_name: string; assignment_id: number })[] }>('/api/store/my-games')
-    return res.games
+
+    
+return res.games
   },
   getOrderStatus(orderId: number | string) {
     return request<{ status: string; payment_type?: string; paid_at?: string }>(`/api/store/orders/${orderId}/status`)
   },
   async getOrders() {
     const res = await request<{ orders: Order[] }>('/api/store/orders')
-    return res.orders
+
+    
+return res.orders
   },
   async getOrder(id: number | string) {
     const res = await request<{ order: Order }>(`/api/store/orders/${id}`)
-    return res.order
+
+    
+return res.order
   },
   getCode(orderId: number | string) {
     return request<SteamGuardCode>(`/api/store/orders/${orderId}/code`, {
@@ -485,7 +508,9 @@ export const adminApi = {
   },
   async getAccounts() {
     const res = await request<{ accounts: SteamAccount[] }>('/api/admin/accounts')
-    return res.accounts
+
+    
+return res.accounts
   },
   addAccount(formData: FormData) {
     return fetch(`/api/admin/accounts`, {
@@ -495,6 +520,7 @@ export const adminApi = {
     }).then(async res => {
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: res.statusText }))
+
         throw new ApiError(res.status, body.error || body.message || res.statusText)
       }
 
@@ -545,20 +571,25 @@ export const adminApi = {
   },
   async getAccountAssignments(id: number) {
     const res = await request<{ assignments: { id: number; user_email: string; user_id: number; game_name: string; game_appid: number; is_revoked: boolean; created_at: string }[] }>(`/api/admin/accounts/${id}/assignments`)
-    return res.assignments
+
+    
+return res.assignments
   },
   syncGames() {
     return request<{ message: string; job?: JobStatus }>('/api/admin/accounts/sync-games', { method: 'POST' })
   },
   refreshGameMetadata(scope?: string) {
     const qs = scope ? `?scope=${scope}` : ''
-    return request<{ message: string; job?: JobStatus }>(`/api/admin/games/refresh-metadata${qs}`, { method: 'POST' })
+
+    
+return request<{ message: string; job?: JobStatus }>(`/api/admin/games/refresh-metadata${qs}`, { method: 'POST' })
   },
   getJobStatus() {
     return request<{ job: JobStatus | null }>('/api/admin/jobs/current')
   },
   async getGames(params?: { q?: string; genre?: string; is_enabled?: string; is_featured?: string; year?: string; page?: number; per_page?: number }) {
     const searchParams = new URLSearchParams()
+
     if (params?.q) searchParams.set('q', params.q)
     if (params?.genre) searchParams.set('genre', params.genre)
     if (params?.is_enabled) searchParams.set('is_enabled', params.is_enabled)
@@ -567,29 +598,40 @@ export const adminApi = {
     if (params?.page) searchParams.set('page', String(params.page))
     if (params?.per_page) searchParams.set('per_page', String(params.per_page))
     const qs = searchParams.toString()
-    return request<{ games: Game[]; total: number; page: number; per_page: number; pages: number; genres: string[]; years: number[] }>(`/api/admin/games${qs ? `?${qs}` : ''}`)
+
+    
+return request<{ games: Game[]; total: number; page: number; per_page: number; pages: number; genres: string[]; years: number[] }>(`/api/admin/games${qs ? `?${qs}` : ''}`)
   },
   async updateGame(id: number, data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean; custom_name: string | null; custom_description: string | null; custom_header_image: string | null; custom_screenshots: GameScreenshot[] | null }>) {
     const res = await request<{ game: Game }>(`/api/admin/games/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
     })
-    return res.game
+
+    
+return res.game
   },
   async uploadGameImage(gameId: number, file: File): Promise<string> {
     const formData = new FormData()
+
     formData.append('file', file)
+
     const res = await fetch(`${API_BASE}/api/admin/games/${gameId}/upload-image`, {
       method: 'POST',
       credentials: 'include',
       body: formData,
     })
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: 'Upload failed' }))
+
       throw new ApiError(res.status, err.error || 'Upload failed')
     }
+
     const data = await res.json()
-    return data.url
+
+    
+return data.url
   },
   bulkUpdateGames(ids: number[], data: Partial<{ price: number; is_enabled: boolean; is_featured: boolean }>) {
     return request<{ message: string; updated: number }>('/api/admin/games/bulk-update', {
@@ -605,7 +647,9 @@ export const adminApi = {
   },
   async getOrders() {
     const res = await request<{ orders: Order[] }>('/api/admin/orders')
-    return res.orders
+
+    
+return res.orders
   },
   revokeAccess(orderId: number) {
     return request<{ message: string }>(`/api/admin/orders/${orderId}/revoke`, { method: 'POST' })
@@ -613,9 +657,14 @@ export const adminApi = {
   restoreAccess(orderId: number) {
     return request<{ message: string }>(`/api/admin/orders/${orderId}/restore`, { method: 'POST' })
   },
+  retryFulfillOrder(orderId: number) {
+    return request<{ message: string; order: Order }>(`/api/admin/orders/${orderId}/retry-fulfill`, { method: 'POST' })
+  },
   async getUsers() {
     const res = await request<{ users: (User & { order_count: number; is_admin: boolean; is_active: boolean })[] }>('/api/admin/users')
-    return res.users
+
+    
+return res.users
   },
   updateUser(id: number, data: Partial<{ is_admin: boolean; is_active: boolean; password: string; referral_code: string }>) {
     return request<{ user: User }>(`/api/admin/users/${id}`, {
@@ -643,14 +692,19 @@ export const adminApi = {
   },
   async getAuditCodes() {
     const res = await request<{ logs: AuditEntry[] }>('/api/admin/audit/codes')
-    return res.logs
+
+    
+return res.logs
   },
   async getSubscriptions(params?: { status?: string; page?: number }) {
     const search = new URLSearchParams()
+
     if (params?.status) search.set('status', params.status)
     if (params?.page) search.set('page', String(params.page))
     const qs = search.toString()
-    return request<{ subscriptions: Subscription[]; total: number; page: number; pages: number }>(`/api/admin/subscriptions${qs ? `?${qs}` : ''}`)
+
+    
+return request<{ subscriptions: Subscription[]; total: number; page: number; pages: number }>(`/api/admin/subscriptions${qs ? `?${qs}` : ''}`)
   },
   confirmSubscription(id: number) {
     return request<{ message: string; subscription: Subscription }>(`/api/admin/subscriptions/${id}/confirm`, { method: 'POST' })

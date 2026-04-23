@@ -837,8 +837,12 @@ def create_order():
         order.paid_at = datetime.now(timezone.utc)
         success = _fulfill_order(order)
         if not success:
-            order.status = "fulfilled"
-            db.session.commit()
+            # No Steam account is available for this game right now. Roll back
+            # the order we just staged so we don't leave a fulfilled-without-
+            # assignment zombie — the frontend has nothing to show for those
+            # (username renders as "N/A"). User can retry later.
+            db.session.rollback()
+            return jsonify({"error": "No accounts available for this game. Silakan coba lagi nanti."}), 503
 
         return jsonify({
             "message": "Game access granted via subscription",
@@ -914,7 +918,9 @@ def create_order():
         order.paid_at = datetime.now(timezone.utc)
         success = _fulfill_order(order)
         if not success:
-            order.status = "fulfilled"
+            # See note in the subscription branch — no zombie orders.
+            db.session.rollback()
+            return jsonify({"error": "No accounts available for this game. Silakan coba lagi nanti."}), 503
         db.session.commit()
         return jsonify({
             "message": "Order fulfilled via credit/discount",

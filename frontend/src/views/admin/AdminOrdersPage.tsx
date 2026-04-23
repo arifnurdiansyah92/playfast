@@ -22,7 +22,6 @@ import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 import Snackbar from '@mui/material/Snackbar'
-import Grid from '@mui/material/Grid'
 
 import { adminApi, gameThumbnail, handleImageError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
@@ -55,11 +54,19 @@ const AdminOrdersPage = () => {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-orders'] }); setSnackMsg('Payment confirmed & order fulfilled') }
   })
 
+  const retryFulfillMutation = useMutation({
+    mutationFn: (orderId: number) => adminApi.retryFulfillOrder(orderId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-orders'] }); setSnackMsg('Order re-fulfilled — account assigned') },
+    onError: (err: any) => setSnackMsg(err?.message || 'Retry failed'),
+  })
+
   const filtered = useMemo(() => {
     if (!orders) return []
     let result = orders
+
     if (search) {
       const q = search.toLowerCase()
+
       result = result.filter(o =>
         (o.user_email || '').toLowerCase().includes(q) ||
         (o.game?.name || '').toLowerCase().includes(q) ||
@@ -67,8 +74,10 @@ const AdminOrdersPage = () => {
         String(o.id).includes(q)
       )
     }
+
     if (statusFilter) result = result.filter(o => o.status === statusFilter)
-    return result
+    
+return result
   }, [orders, search, statusFilter])
 
   if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
@@ -77,7 +86,8 @@ const AdminOrdersPage = () => {
     if (status === 'revoked' || status === 'cancelled') return 'error' as const
     if (status === 'fulfilled') return 'success' as const
     if (status === 'pending_payment') return 'warning' as const
-    return 'default' as const
+    
+return 'default' as const
   }
 
   const pendingCount = orders?.filter(o => o.status === 'pending_payment').length ?? 0
@@ -163,7 +173,15 @@ const AdminOrdersPage = () => {
                         <Typography variant='subtitle2'>{order.game?.name}</Typography>
                       </Box>
                     </TableCell>
-                    <TableCell><Typography variant='body2' sx={{ fontFamily: 'monospace' }}>{order.credentials?.account_name || '-'}</Typography></TableCell>
+                    <TableCell>
+                      {order.credentials?.account_name ? (
+                        <Typography variant='body2' sx={{ fontFamily: 'monospace' }}>{order.credentials.account_name}</Typography>
+                      ) : order.status === 'fulfilled' && !order.is_revoked ? (
+                        <Chip size='small' color='warning' variant='tonal' label='unassigned' />
+                      ) : (
+                        <Typography variant='body2' sx={{ fontFamily: 'monospace' }}>-</Typography>
+                      )}
+                    </TableCell>
                     <TableCell>{new Date(order.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</TableCell>
                     <TableCell><Chip size='small' label={order.status} color={statusColor(order.status)} variant='tonal' /></TableCell>
                     <TableCell align='right'>
@@ -173,6 +191,10 @@ const AdminOrdersPage = () => {
                         </Button>
                       ) : order.is_revoked ? (
                         <Button size='small' variant='outlined' color='success' onClick={() => restoreMutation.mutate(order.id)} disabled={restoreMutation.isPending}>Restore</Button>
+                      ) : order.status === 'fulfilled' && !order.credentials ? (
+                        <Button size='small' variant='contained' color='warning' onClick={() => retryFulfillMutation.mutate(order.id)} disabled={retryFulfillMutation.isPending}>
+                          Retry Assign
+                        </Button>
                       ) : order.status === 'fulfilled' ? (
                         <Button size='small' variant='outlined' color='error' onClick={() => revokeMutation.mutate(order.id)} disabled={revokeMutation.isPending}>Revoke</Button>
                       ) : null}
