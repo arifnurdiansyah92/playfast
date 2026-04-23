@@ -48,3 +48,8 @@ backend/migrations/versions/__pycache__/
 # Misc
 *.log
 tmp/
+
+# Internal drafts & promo copy — never commit live codes
+docs/emails/
+design-fetch-tmp/
+design-fetch-landing-banner/

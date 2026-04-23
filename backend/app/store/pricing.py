@@ -16,13 +16,17 @@ def validate_promo_code(code: str, user_id: int, subtotal: int, order_type: str,
     if not code:
         return None, 0, "Kode promo kosong"
 
+    # Use a single generic message for non-existent / inactive / expired codes so
+    # attackers can't distinguish real-but-disabled codes from random guesses.
+    _INVALID = "Kode promo tidak berlaku"
+
     promo = PromoCode.query.filter_by(code=code.upper()).first()
     if not promo:
-        return None, 0, "Kode promo tidak ditemukan"
+        return None, 0, _INVALID
     if not promo.is_active:
-        return None, 0, "Kode promo tidak aktif"
+        return None, 0, _INVALID
     if promo.expires_at and promo.expires_at < datetime.now(timezone.utc):
-        return None, 0, "Kode promo sudah expired"
+        return None, 0, _INVALID
 
     scope = promo.scope or "all"
     if scope == "all":

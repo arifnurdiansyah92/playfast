@@ -94,6 +94,25 @@ def _check_code_rate_limit(user_id: int) -> bool:
         _code_rate_log[user_id].append(now)
         return True
 
+
+# Per-user rate limiter for promo validation — tighter since this is the
+# enumeration-attack surface. 10 attempts / minute is plenty for legit typos.
+_promo_rate_lock = threading.Lock()
+_promo_rate_log: dict[int, list[float]] = defaultdict(list)
+_PROMO_RATE_LIMIT = 10
+_PROMO_RATE_WINDOW = 60  # seconds
+
+
+def _check_promo_rate_limit(user_id: int) -> bool:
+    now = time.time()
+    with _promo_rate_lock:
+        timestamps = _promo_rate_log[user_id]
+        _promo_rate_log[user_id] = [t for t in timestamps if now - t < _PROMO_RATE_WINDOW]
+        if len(_promo_rate_log[user_id]) >= _PROMO_RATE_LIMIT:
+            return False
+        _promo_rate_log[user_id].append(now)
+        return True
+
 DEFAULT_PLAY_INSTRUCTIONS = """## Cara Main (Mode Offline)
 
 1. Buka Steam dan klik "Login"
@@ -399,6 +418,10 @@ def validate_promo():
     Returns: { valid: bool, discount_amount?: int, error?: str }
     """
     user_id = int(get_jwt_identity())
+
+    if not _check_promo_rate_limit(user_id):
+        return jsonify({"valid": False, "error": "Terlalu banyak percobaan. Coba lagi dalam 1 menit."}), 429
+
     data = request.get_json() or {}
     code = (data.get("code") or "").strip()
     order_type = data.get("order_type")

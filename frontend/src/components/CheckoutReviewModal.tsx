@@ -165,7 +165,7 @@ const CheckoutReviewModal = ({ open, onClose, item, onConfirm, isSubmitting, ini
                 size='small'
                 value={promoInput}
                 onChange={e => setPromoInput(e.target.value.toUpperCase())}
-                placeholder='DIKAMAIN'
+                placeholder='Masukkan kode promo'
                 fullWidth
                 disabled={promoLoading}
               />
