@@ -21,6 +21,8 @@ import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
+import Alert from '@mui/material/Alert'
+import Snackbar from '@mui/material/Snackbar'
 
 import { storeApi, gameHeaderImage, handleImageError } from '@/lib/api'
 
@@ -28,6 +30,8 @@ const MyGamesPage = () => {
   const router = useRouter()
   const [tab, setTab] = useState(0) // 0 = all, 1 = purchased, 2 = bonus
   const [bonusInfoOpen, setBonusInfoOpen] = useState(false)
+  const [claimingGameId, setClaimingGameId] = useState<number | null>(null)
+  const [claimError, setClaimError] = useState('')
 
   const { data: games, isLoading } = useQuery({
     queryKey: ['my-games'],
@@ -36,12 +40,36 @@ const MyGamesPage = () => {
 
   const purchasedCount = games?.filter(g => g.type === 'purchased').length ?? 0
   const bonusCount = games?.filter(g => g.type === 'bonus').length ?? 0
+  const claimableCount = games?.filter(g => g.claimable).length ?? 0
+  const isPremium = claimableCount > 0 || games?.some(g => g.type === 'subscription') === true
 
   const filtered = games?.filter(g => {
     if (tab === 1) return g.type === 'purchased'
     if (tab === 2) return g.type === 'bonus'
+
     return true
   }) ?? []
+
+  const handlePlayClick = async (game: (typeof filtered)[number]) => {
+    if (game.order_id) {
+      router.push(`/play/${game.order_id}`)
+
+      return
+    }
+
+    // Claim-on-click for premium subscribers
+    setClaimingGameId(game.id)
+    setClaimError('')
+
+    try {
+      const result = await storeApi.createOrder(game.appid)
+
+      router.push(`/play/${result.order.id}`)
+    } catch (err: any) {
+      setClaimError(err?.message || 'Gagal klaim game. Silakan coba lagi.')
+      setClaimingGameId(null)
+    }
+  }
 
   return (
     <div className='flex flex-col gap-6'>
@@ -50,9 +78,22 @@ const MyGamesPage = () => {
           Game Saya
         </Typography>
         <Typography color='text.secondary'>
-          {purchasedCount} game dibeli{bonusCount > 0 ? ` · ${bonusCount} bonus tersedia` : ''}
+          {purchasedCount} game dibeli
+          {bonusCount > 0 ? ` · ${bonusCount} bonus tersedia` : ''}
+          {claimableCount > 0 ? ` · ${claimableCount} game Premium siap diklaim` : ''}
         </Typography>
       </Box>
+
+      {isPremium && claimableCount > 0 && (
+        <Alert severity='info' icon={<i className='tabler-crown' style={{ fontSize: 20 }} />}>
+          <Typography variant='subtitle2' sx={{ fontWeight: 700 }}>
+            Langganan Premium aktif
+          </Typography>
+          <Typography variant='body2'>
+            Semua game di katalog tersedia untuk kamu. Klik &quot;Klaim & Main&quot; pada game yang belum kamu klaim — akun otomatis diatur.
+          </Typography>
+        </Alert>
+      )}
 
       {isLoading ? (
         <Grid container spacing={3}>
@@ -123,6 +164,8 @@ const MyGamesPage = () => {
             {filtered.map((game, idx) => {
               const isBonus = game.type === 'bonus'
               const isSubscription = game.type === 'subscription'
+              const isClaimable = !!game.claimable
+              const isClaiming = claimingGameId === game.id
               const headerImage = game.header_image || gameHeaderImage(game.appid)
 
               return (
@@ -134,11 +177,13 @@ const MyGamesPage = () => {
                       flexDirection: 'column',
                       border: '1px solid',
                       borderColor: isBonus ? 'rgba(201,168,76,0.3)' : 'divider',
+                      opacity: isClaimable ? 0.85 : 1,
                       transition: 'all 0.25s ease',
                       '&:hover': {
                         transform: 'translateY(-3px)',
-                        borderColor: isBonus ? 'primary.main' : 'primary.main',
+                        borderColor: 'primary.main',
                         boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                        opacity: 1,
                       },
                     }}
                   >
@@ -154,7 +199,20 @@ const MyGamesPage = () => {
                       />
                       {/* Badge */}
                       <Box sx={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 0.5 }}>
-                        {isBonus ? (
+                        {isClaimable ? (
+                          <Chip
+                            label='Premium · Belum Diklaim'
+                            size='small'
+                            color='warning'
+                            variant='tonal'
+                            icon={<i className='tabler-crown' style={{ fontSize: 14 }} />}
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: '0.7rem',
+                              backdropFilter: 'blur(4px)',
+                            }}
+                          />
+                        ) : isBonus ? (
                           <Chip
                             label='Bonus'
                             size='small'
@@ -200,20 +258,28 @@ const MyGamesPage = () => {
                         {game.name}
                       </Typography>
 
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                        <i className='tabler-user' style={{ fontSize: 14, color: '#8f98a0' }} />
-                        <Typography variant='body2' sx={{ fontFamily: 'monospace', color: '#8f98a0' }} noWrap>
-                          {game.account_name || 'N/A'}
-                        </Typography>
-                      </Box>
+                      {game.account_name && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <i className='tabler-user' style={{ fontSize: 14, color: '#8f98a0' }} />
+                          <Typography variant='body2' sx={{ fontFamily: 'monospace', color: '#8f98a0' }} noWrap>
+                            {game.account_name}
+                          </Typography>
+                        </Box>
+                      )}
 
-                      {isBonus && (
+                      {isClaimable && (
+                        <Typography variant='caption' sx={{ color: 'warning.main', fontWeight: 600, mb: 'auto' }}>
+                          Termasuk dalam langganan Premium kamu
+                        </Typography>
+                      )}
+
+                      {!isClaimable && isBonus && (
                         <Typography variant='caption' sx={{ color: 'primary.main', fontWeight: 600, mb: 'auto' }}>
                           Bonus · Selama akun tersedia
                         </Typography>
                       )}
 
-                      {!isBonus && (
+                      {!isClaimable && !isBonus && (
                         <Typography variant='caption' color='text.secondary' sx={{ mb: 'auto' }}>
                           {game.price ? `${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(game.price)}` : ''}
                         </Typography>
@@ -224,11 +290,13 @@ const MyGamesPage = () => {
                         variant='contained'
                         size='small'
                         fullWidth
-                        startIcon={<i className='tabler-player-play' />}
-                        onClick={() => router.push(`/play/${game.order_id}`)}
+                        color={isClaimable ? 'warning' : 'primary'}
+                        startIcon={<i className={isClaiming ? 'tabler-loader-2' : isClaimable ? 'tabler-crown' : 'tabler-player-play'} />}
+                        onClick={() => handlePlayClick(game)}
+                        disabled={isClaiming}
                         sx={{ fontWeight: 600, mt: 2 }}
                       >
-                        Main & Ambil Kode
+                        {isClaiming ? 'Mengklaim...' : isClaimable ? 'Klaim & Main' : 'Main & Ambil Kode'}
                       </Button>
                     </CardContent>
                   </Card>
@@ -287,6 +355,14 @@ const MyGamesPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={!!claimError}
+        autoHideDuration={4000}
+        onClose={() => setClaimError('')}
+        message={claimError}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </div>
   )
 }

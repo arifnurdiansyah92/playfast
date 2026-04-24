@@ -410,9 +410,17 @@ return res.game
     })
   },
   async getMyGames() {
-    const res = await request<{ games: (Game & { type: 'purchased' | 'bonus' | 'subscription'; order_id: number; account_name: string; assignment_id: number })[] }>('/api/store/my-games')
+    const res = await request<{
+      games: (Game & {
+        type: 'purchased' | 'bonus' | 'subscription'
+        order_id: number | null
+        account_name: string | null
+        assignment_id: number | null
+        claimable?: boolean
+      })[]
+    }>('/api/store/my-games')
 
-    
+
 return res.games
   },
   getOrderStatus(orderId: number | string) {

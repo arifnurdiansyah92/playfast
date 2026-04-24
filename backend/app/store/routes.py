@@ -1174,11 +1174,14 @@ def my_games():
     List all games the user has access to, including bonus games.
     For each fulfilled order with an assigned account, find ALL games
     that account owns and return them — purchased ones marked as 'purchased',
-    others as 'bonus'.
+    others as 'bonus'. For active premium subscribers, also append every
+    other enabled game in the catalog as 'subscription' with no order_id
+    yet — the frontend claims those on click (creates an order + assignment
+    via POST /orders, which auto-fulfills because the sub is active).
     """
     user_id = int(get_jwt_identity())
     # Trigger lazy expiry check for subscription
-    _get_active_subscription(user_id)
+    active_sub = _get_active_subscription(user_id)
 
     # Get all active (non-revoked) assignments for this user
     assignments = (
@@ -1235,8 +1238,46 @@ def my_games():
                 bg["assignment_id"] = a.id
                 games_result.append(bg)
 
-    # Sort: purchased first, then bonus, alphabetical within each group
-    games_result.sort(key=lambda g: (0 if g["type"] == "purchased" else 1, g["name"].lower()))
+    # Premium subscribers: show every other enabled game in the catalog as
+    # claimable. Only include games that currently have at least one active
+    # Steam account — otherwise clicking would 503.
+    if active_sub:
+        available_game_ids = {
+            gid for (gid,) in (
+                db.session.query(GameAccount.game_id)
+                .join(SteamAccount)
+                .filter(SteamAccount.is_active == True)  # noqa: E712
+                .group_by(GameAccount.game_id)
+                .all()
+            )
+        }
+        if available_game_ids:
+            claimable_query = (
+                Game.query.filter(
+                    Game.is_enabled == True,  # noqa: E712
+                    Game.price > 0,
+                    Game.id.in_(available_game_ids),
+                )
+            )
+            if seen_game_ids:
+                claimable_query = claimable_query.filter(~Game.id.in_(seen_game_ids))
+            for game in claimable_query.all():
+                gd = game.to_dict()
+                gd["type"] = "subscription"
+                gd["order_id"] = None
+                gd["account_name"] = None
+                gd["assignment_id"] = None
+                gd["claimable"] = True
+                games_result.append(gd)
+
+    # Sort: claimed games first (purchased / already-claimed subscription /
+    # bonus), then claimable subscription entries last.
+    def _sort_key(g):
+        claimable_flag = 1 if g.get("claimable") else 0
+        type_order = 0 if g["type"] == "purchased" else 1
+        return (claimable_flag, type_order, g["name"].lower())
+
+    games_result.sort(key=_sort_key)
 
     return jsonify({"games": games_result}), 200
 
