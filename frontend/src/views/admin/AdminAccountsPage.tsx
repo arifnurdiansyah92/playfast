@@ -148,12 +148,18 @@ return () => { if (pollRef.current) clearInterval(pollRef.current) }
   })
 
   const refreshMutation = useMutation({
-    mutationFn: () => adminApi.refreshGameMetadata('all'),
+    mutationFn: (scope: 'missing' | 'all' = 'missing') => adminApi.refreshGameMetadata(scope),
     onSuccess: (res) => {
       if (res.job) { setActiveJob(res.job); startPolling() }
       setSnackMsg(res.message)
     },
     onError: (err: any) => setSnackMsg(`Refresh failed: ${err.message}`)
+  })
+
+  const cancelJobMutation = useMutation({
+    mutationFn: () => adminApi.cancelJob(),
+    onSuccess: (res) => setSnackMsg(res.message),
+    onError: (err: any) => setSnackMsg(err?.message || 'Cancel failed'),
   })
 
   const logoutAllBulkMutation = useMutation({
@@ -215,8 +221,28 @@ return }
           >
             Logout All (All Accounts)
           </Button>
-          <Button variant='outlined' startIcon={<i className='tabler-refresh' />} onClick={() => refreshMutation.mutate()} disabled={!!activeJob?.status && activeJob.status === 'running'}>
-            Refresh Metadata
+          <Button
+            variant='outlined'
+            startIcon={<i className='tabler-refresh' />}
+            onClick={() => refreshMutation.mutate('missing')}
+            disabled={!!activeJob?.status && activeJob.status === 'running'}
+            title='Hanya re-fetch metadata untuk game yang masih kekurangan field'
+          >
+            Refresh Missing Metadata
+          </Button>
+          <Button
+            variant='text'
+            size='small'
+            startIcon={<i className='tabler-refresh-dot' />}
+            onClick={() => {
+              if (window.confirm('Refresh metadata semua game? Bisa makan waktu lama (≈1.5s/game) dan re-fetch yang sudah lengkap pun. Pakai "Refresh Missing" untuk hasil lebih cepat.')) {
+                refreshMutation.mutate('all')
+              }
+            }}
+            disabled={!!activeJob?.status && activeJob.status === 'running'}
+            title='Re-fetch metadata seluruh katalog (lambat)'
+          >
+            Refresh All
           </Button>
           <Button variant='outlined' startIcon={<i className='tabler-refresh' />} onClick={() => syncMutation.mutate()} disabled={!!activeJob?.status && activeJob.status === 'running'}>
             Sync All Games
@@ -228,39 +254,72 @@ return }
       </Box>
 
       {/* Background job progress */}
-      {activeJob && (
-        <Card sx={{ border: '1px solid', borderColor: activeJob.status === 'running' ? 'primary.main' : activeJob.status === 'completed' ? 'success.main' : 'warning.main' }}>
-          <CardContent sx={{ py: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                {activeJob.job_type === 'sync_games'
-                  ? 'Syncing Games'
-                  : activeJob.job_type === 'logout_all_bulk'
-                    ? 'Logging Out All Devices'
-                    : 'Refreshing Metadata'}
-                {activeJob.status === 'running' && '...'}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <Chip
-                  size='small'
-                  label={activeJob.status === 'running' ? `${activeJob.processed}/${activeJob.total}` : activeJob.status}
-                  color={activeJob.status === 'running' ? 'primary' : activeJob.status === 'completed' ? 'success' : 'warning'}
-                  variant='tonal'
-                />
-                {activeJob.status !== 'running' && (
-                  <IconButton size='small' onClick={() => setActiveJob(null)}><i className='tabler-x' /></IconButton>
-                )}
+      {activeJob && (() => {
+        const jobLabel =
+          activeJob.job_type === 'sync_games' ? 'Syncing All Games' :
+          activeJob.job_type === 'sync_account' ? 'Syncing Account' :
+          activeJob.job_type === 'logout_all_bulk' ? 'Logging Out All Devices' :
+          activeJob.job_type === 'refresh_metadata' ? 'Refreshing Metadata' :
+          activeJob.job_type
+
+        const isRunning = activeJob.status === 'running'
+        const cancelRequested = !!activeJob.cancel_requested
+
+        // ETA based on processing pace so far
+        let etaText: string | null = null
+
+        if (isRunning && activeJob.total > 0 && activeJob.processed > 0) {
+          const elapsedMs = Date.now() - new Date(activeJob.started_at).getTime()
+          const perItem = elapsedMs / activeJob.processed
+          const remainingMs = perItem * (activeJob.total - activeJob.processed)
+          const mins = Math.floor(remainingMs / 60000)
+          const secs = Math.floor((remainingMs % 60000) / 1000)
+
+          etaText = mins > 0 ? `~${mins}m ${secs}s left` : `~${secs}s left`
+        }
+
+        return (
+          <Card sx={{ border: '1px solid', borderColor: isRunning ? 'primary.main' : activeJob.status === 'completed' ? 'success.main' : 'warning.main' }}>
+            <CardContent sx={{ py: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 2, flexWrap: 'wrap' }}>
+                <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                  {jobLabel}
+                  {isRunning && (cancelRequested ? ' (cancelling…)' : '…')}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Chip
+                    size='small'
+                    label={isRunning ? `${activeJob.processed}/${activeJob.total}${etaText ? ` · ${etaText}` : ''}` : activeJob.status}
+                    color={isRunning ? 'primary' : activeJob.status === 'completed' ? 'success' : activeJob.status === 'cancelled' ? 'warning' : 'warning'}
+                    variant='tonal'
+                  />
+                  {isRunning && !cancelRequested && (
+                    <Button
+                      size='small'
+                      color='warning'
+                      variant='outlined'
+                      startIcon={<i className='tabler-player-stop' />}
+                      onClick={() => cancelJobMutation.mutate()}
+                      disabled={cancelJobMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  {!isRunning && (
+                    <IconButton size='small' onClick={() => setActiveJob(null)}><i className='tabler-x' /></IconButton>
+                  )}
+                </Box>
               </Box>
-            </Box>
-            {activeJob.status === 'running' && activeJob.total > 0 && (
-              <LinearProgress variant='determinate' value={(activeJob.processed / activeJob.total) * 100} />
-            )}
-            {activeJob.message && (
-              <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, display: 'block' }}>{activeJob.message}</Typography>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              {isRunning && activeJob.total > 0 && (
+                <LinearProgress variant='determinate' value={(activeJob.processed / activeJob.total) * 100} />
+              )}
+              {activeJob.message && (
+                <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5, display: 'block' }}>{activeJob.message}</Typography>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {isLoading ? (
         <Card><CardContent>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</CardContent></Card>

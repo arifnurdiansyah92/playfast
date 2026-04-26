@@ -16,7 +16,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.jobs import get_current_job, start_job
+from app.jobs import get_current_job, request_cancel, start_job
 from app.models import (
     AccountFlag,
     Assignment,
@@ -883,6 +883,10 @@ def _bg_sync_games(job, app, account_ids):
     with app.app_context():
         results = []
         for i, account_id in enumerate(account_ids):
+            if job.cancelled:
+                success_count = sum(1 for r in results if r.get("success"))
+                job.message = f"Cancelled at {i}/{len(account_ids)} (synced {success_count} accounts)"
+                return
             account = db.session.get(SteamAccount, account_id)
             if account:
                 result = _sync_account_games(account)
@@ -925,6 +929,12 @@ def _bg_logout_all_bulk(job, app, account_ids):
         failures: list[str] = []
 
         for i, account_id in enumerate(account_ids):
+            if job.cancelled:
+                msg = f"Cancelled at {i}/{len(account_ids)} ({ok_accounts} done, {total_devices} devices kicked)"
+                if failures:
+                    msg += f" — {len(failures)} failures"
+                job.message = msg
+                return
             account = db.session.get(SteamAccount, account_id)
             if not account:
                 job.processed = i + 1
@@ -1052,6 +1062,11 @@ def _bg_refresh_metadata(job, app, game_ids):
     with app.app_context():
         updated = 0
         for i, game_id in enumerate(game_ids):
+            if job.cancelled:
+                db.session.commit()
+                job.message = f"Cancelled at {i}/{len(game_ids)} (refreshed {updated} games)"
+                return
+
             game = db.session.get(Game, game_id)
             if game:
                 metadata = _fetch_game_metadata(game.appid)
@@ -1088,6 +1103,17 @@ def current_job_status():
     if not job:
         return jsonify({"job": None}), 200
     return jsonify({"job": job}), 200
+
+
+@admin_bp.route("/jobs/cancel", methods=["POST"])
+@admin_required
+def cancel_current_job():
+    """Request cancellation of the running job. The worker checks the flag
+    between iterations, so cancellation takes effect at the next safe point
+    (could be a few seconds if mid-fetch)."""
+    if not request_cancel():
+        return jsonify({"error": "No running job to cancel"}), 404
+    return jsonify({"message": "Cancellation requested. Job will stop shortly."}), 202
 
 
 # ---------------------------------------------------------------------------

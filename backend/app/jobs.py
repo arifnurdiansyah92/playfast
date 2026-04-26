@@ -71,12 +71,25 @@ def start_job(job_type: str, target, args=(), total: int = 0) -> dict | None:
         "message": "",
         "started_at": datetime.now(timezone.utc).isoformat(),
         "finished_at": None,
+        "cancel_requested": False,
     }
     _save_state(state)
 
     thread = threading.Thread(target=_run_job, args=(state, target, args), daemon=True)
     thread.start()
     return state
+
+
+def request_cancel() -> bool:
+    """Mark the running job for cancellation. Returns True if a job was running."""
+    if not _running:
+        return False
+    state = _load_state()
+    if not state or state.get("status") != "running":
+        return False
+    state["cancel_requested"] = True
+    _save_state(state)
+    return True
 
 
 class JobProgress:
@@ -110,6 +123,18 @@ class JobProgress:
     def status(self):
         return self._state["status"]
 
+    @property
+    def cancelled(self) -> bool:
+        """True if an admin requested job cancellation. Workers should check
+        this between iterations and break early when set."""
+        # Re-load from DB on each check so the in-memory worker thread sees
+        # writes from the cancel endpoint (different request thread).
+        fresh = _load_state()
+        if fresh and fresh.get("cancel_requested"):
+            self._state["cancel_requested"] = True
+            return True
+        return bool(self._state.get("cancel_requested"))
+
 
 def _run_job(state: dict, target, args):
     global _running
@@ -117,7 +142,7 @@ def _run_job(state: dict, target, args):
     try:
         target(progress, *args)
         if state["status"] == "running":
-            state["status"] = "completed"
+            state["status"] = "cancelled" if state.get("cancel_requested") else "completed"
     except Exception as e:
         logger.exception("Background job %s failed: %s", state["job_type"], e)
         state["status"] = "failed"
