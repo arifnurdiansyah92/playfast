@@ -1,19 +1,20 @@
 // MUI Imports
-import { useTheme } from '@mui/material/styles'
 
 // Third-party Imports
-import PerfectScrollbar from 'react-perfect-scrollbar'
 
 // Type Imports
-import type { VerticalMenuContextProps } from '@menu/components/vertical-menu/Menu'
 
 // Next Imports
 import Link from 'next/link'
 
+import PerfectScrollbar from 'react-perfect-scrollbar'
+import { useTheme } from '@mui/material/styles'
+
 // MUI Imports
 import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
+
+import type { VerticalMenuContextProps } from '@menu/components/vertical-menu/Menu'
 
 // Component Imports
 import { Menu, MenuItem, SubMenu, MenuSection } from '@menu/vertical-menu'
@@ -121,6 +122,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
               </MenuItem>
               <MenuItem href='/admin/orders' icon={<i className='tabler-receipt' />}>
                 Pesanan
+              </MenuItem>
+              <MenuItem href='/admin/account-flags' icon={<i className='tabler-flag' />}>
+                Account Flags
               </MenuItem>
               <MenuItem href='/admin/subscriptions' icon={<i className='tabler-crown' />}>
                 Langganan

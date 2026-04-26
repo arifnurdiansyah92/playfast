@@ -103,6 +103,9 @@ const HorizontalMenu = () => {
             <MenuItem href='/admin/orders' icon={<i className='tabler-receipt' />}>
               Pesanan
             </MenuItem>
+            <MenuItem href='/admin/account-flags' icon={<i className='tabler-flag' />}>
+              Account Flags
+            </MenuItem>
             <MenuItem href='/admin/subscriptions' icon={<i className='tabler-crown' />}>
               Langganan
             </MenuItem>

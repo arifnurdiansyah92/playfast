@@ -19,9 +19,27 @@ import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import Snackbar from '@mui/material/Snackbar'
 
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
+import TextField from '@mui/material/TextField'
+import MenuItem from '@mui/material/MenuItem'
+
 import ReactMarkdown from 'react-markdown'
 
+import type { AccountFlagReason } from '@/lib/api'
 import { storeApi, gameHeaderImage, handleImageError } from '@/lib/api'
+
+const FLAG_REASONS: { value: AccountFlagReason; label: string }[] = [
+  { value: 'credentials_invalid', label: 'Username/password salah' },
+  { value: 'guard_code_failed', label: 'Kode Steam Guard ditolak' },
+  { value: 'locked', label: 'Akun ke-lock / minta verifikasi' },
+  { value: 'banned', label: 'Akun di-banned Steam (VAC dll)' },
+  { value: 'password_changed', label: 'Password berubah, gak bisa login' },
+  { value: 'slow_response', label: 'Akun lambat / lag' },
+  { value: 'other', label: 'Lainnya (jelasin di bawah)' },
+]
 
 interface Props {
   orderId: string
@@ -91,6 +109,11 @@ const PlayPage = ({ orderId }: Props) => {
   const [copySnack, setCopySnack] = useState('')
   const [justCopied, setJustCopied] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [flagOpen, setFlagOpen] = useState(false)
+  const [flagReason, setFlagReason] = useState<AccountFlagReason>('credentials_invalid')
+  const [flagDescription, setFlagDescription] = useState('')
+  const [flagSubmitting, setFlagSubmitting] = useState(false)
+  const [flagSubmitted, setFlagSubmitted] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const { data: order, isLoading: orderLoading } = useQuery({
@@ -149,6 +172,28 @@ const PlayPage = ({ orderId }: Props) => {
     setCopySnack(`${label} disalin!`)
     setJustCopied(label)
     setTimeout(() => setJustCopied(null), 1500)
+  }
+
+  const submitFlag = async () => {
+    setFlagSubmitting(true)
+
+    try {
+      await storeApi.flagOrder(orderId, {
+        reason: flagReason,
+        description: flagDescription.trim() || undefined,
+      })
+      setFlagSubmitted(true)
+      setCopySnack('Laporan terkirim. Admin akan segera cek.')
+      setTimeout(() => {
+        setFlagOpen(false)
+        setFlagSubmitted(false)
+        setFlagDescription('')
+      }, 1500)
+    } catch (err: any) {
+      setCopySnack(err?.message || 'Gagal kirim laporan')
+    } finally {
+      setFlagSubmitting(false)
+    }
   }
 
   if (orderLoading) {
@@ -340,6 +385,24 @@ const PlayPage = ({ orderId }: Props) => {
               </Box>
             </Box>
           </Box>
+
+          {order.credentials && (
+            <Box sx={{ mt: 3, pt: 2.5, borderTop: '1px dashed', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+              <Typography variant='caption' color='text.secondary' sx={{ flex: 1, minWidth: 200 }}>
+                Akun bermasalah? Login gagal, ke-banned, password berubah, dll.
+              </Typography>
+              <Button
+                variant='outlined'
+                color='warning'
+                size='small'
+                startIcon={<i className='tabler-flag' />}
+                onClick={() => setFlagOpen(true)}
+                sx={{ fontWeight: 600 }}
+              >
+                Laporkan Masalah
+              </Button>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -566,9 +629,76 @@ const PlayPage = ({ orderId }: Props) => {
         </Card>
       )}
 
+      {/* Flag account dialog */}
+      <Dialog
+        open={flagOpen}
+        onClose={() => !flagSubmitting && setFlagOpen(false)}
+        maxWidth='sm'
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <i className='tabler-flag' style={{ fontSize: 22, color: '#ff9800' }} />
+          Laporkan Masalah Akun
+        </DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: '8px !important' }}>
+          {flagSubmitted ? (
+            <Alert severity='success' icon={<i className='tabler-check' />}>
+              Laporan kamu sudah terkirim. Admin akan cek dan biasanya respond dalam 24 jam.
+            </Alert>
+          ) : (
+            <>
+              <Typography variant='body2' color='text.secondary'>
+                Pilih jenis masalah yang kamu alami. Laporan langsung masuk ke admin.
+              </Typography>
+              <TextField
+                select
+                label='Jenis masalah'
+                value={flagReason}
+                onChange={e => setFlagReason(e.target.value as AccountFlagReason)}
+                fullWidth
+                size='small'
+              >
+                {FLAG_REASONS.map(r => (
+                  <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                label='Detail (opsional)'
+                value={flagDescription}
+                onChange={e => setFlagDescription(e.target.value)}
+                multiline
+                minRows={3}
+                fullWidth
+                placeholder='Misal: error message yang muncul, kapan kejadian, langkah yang sudah dicoba...'
+                helperText={`${flagDescription.length}/500`}
+                inputProps={{ maxLength: 500 }}
+              />
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          {!flagSubmitted && (
+            <>
+              <Button onClick={() => setFlagOpen(false)} disabled={flagSubmitting}>
+                Batal
+              </Button>
+              <Button
+                variant='contained'
+                color='warning'
+                onClick={submitFlag}
+                disabled={flagSubmitting}
+                startIcon={<i className={flagSubmitting ? 'tabler-loader-2' : 'tabler-send'} />}
+              >
+                {flagSubmitting ? 'Mengirim...' : 'Kirim Laporan'}
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={!!copySnack}
-        autoHideDuration={1500}
+        autoHideDuration={2500}
         onClose={() => setCopySnack('')}
         message={copySnack}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}

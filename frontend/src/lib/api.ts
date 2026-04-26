@@ -247,6 +247,36 @@ export interface SteamGuardCode {
   remaining: number
 }
 
+export type AccountFlagReason =
+  | 'locked'
+  | 'banned'
+  | 'password_changed'
+  | 'credentials_invalid'
+  | 'guard_code_failed'
+  | 'slow_response'
+  | 'other'
+
+export interface AccountFlag {
+  id: number
+  user_id: number
+  steam_account_id: number
+  assignment_id: number | null
+  order_id: number | null
+  reason: AccountFlagReason
+  description: string | null
+  status: 'new' | 'resolved'
+  created_at: string
+  resolved_at: string | null
+
+  // admin-only enriched fields
+  user_email?: string | null
+  account_name?: string | null
+  game_name?: string | null
+  resolved_by_user_id?: number | null
+  resolved_by_email?: string | null
+  resolution_note?: string | null
+}
+
 export interface PlayInstructions {
   instructions: {
     game_id: number
@@ -445,6 +475,12 @@ return res.order
   },
   getInstructions(orderId: number | string) {
     return request<PlayInstructions>(`/api/store/orders/${orderId}/instructions`)
+  },
+  flagOrder(orderId: number | string, params: { reason: AccountFlagReason; description?: string }) {
+    return request<{ message: string; flag: AccountFlag }>(`/api/store/orders/${orderId}/flag`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
   },
   validatePromoCode(params: { code: string; order_type: 'game' | 'subscription'; subtotal: number; game_id?: number; plan?: string }) {
     return request<PromoValidateResponse>('/api/store/promo-codes/validate', {
@@ -700,6 +736,26 @@ return res.users
   },
   confirmManualPayment(orderId: number) {
     return request<{ message: string }>(`/api/admin/orders/${orderId}/confirm-manual`, { method: 'POST' })
+  },
+  async getAccountFlags(status: 'new' | 'resolved' | 'all' = 'new') {
+    return request<{ flags: AccountFlag[]; counts: { new: number; resolved: number; all: number } }>(
+      `/api/admin/account-flags?status=${status}`
+    )
+  },
+  resolveAccountFlag(flagId: number, resolutionNote?: string) {
+    return request<{ message: string; flag: AccountFlag }>(
+      `/api/admin/account-flags/${flagId}/resolve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ resolution_note: resolutionNote ?? null }),
+      }
+    )
+  },
+  reopenAccountFlag(flagId: number) {
+    return request<{ message: string; flag: AccountFlag }>(
+      `/api/admin/account-flags/${flagId}/reopen`,
+      { method: 'POST' }
+    )
   },
   async getAuditCodes() {
     const res = await request<{ logs: AuditEntry[] }>('/api/admin/audit/codes')

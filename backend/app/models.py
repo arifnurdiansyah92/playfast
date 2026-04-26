@@ -669,3 +669,72 @@ class Subscription(db.Model):
         if include_snap_token:
             data["snap_token"] = self.snap_token
         return data
+
+
+class AccountFlag(db.Model):
+    """User-reported issue with a Steam account they have access to."""
+    __tablename__ = "account_flags"
+
+    REASON_CHOICES = (
+        "locked",         # akun ke-lock / ke-banned Steam Guard
+        "banned",         # akun di-ban Steam (VAC, dll)
+        "password_changed",  # password berubah, gak bisa login
+        "credentials_invalid",  # username/password yang dikasih salah
+        "guard_code_failed",  # kode Steam Guard gak diterima
+        "slow_response",  # akun lambat / lag
+        "other",
+    )
+    STATUS_CHOICES = ("new", "resolved")
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    steam_account_id = db.Column(
+        db.Integer, db.ForeignKey("steam_accounts.id"), nullable=False, index=True
+    )
+    assignment_id = db.Column(
+        db.Integer, db.ForeignKey("assignments.id"), nullable=True
+    )
+    order_id = db.Column(db.Integer, db.ForeignKey("orders.id"), nullable=True)
+    reason = db.Column(db.String(40), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="new", index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    resolved_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    resolution_note = db.Column(db.Text, nullable=True)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    steam_account = db.relationship("SteamAccount", foreign_keys=[steam_account_id])
+    assignment = db.relationship("Assignment", foreign_keys=[assignment_id])
+    order = db.relationship("Order", foreign_keys=[order_id])
+    resolved_by = db.relationship("User", foreign_keys=[resolved_by_user_id])
+
+    def to_dict(self, include_admin_fields: bool = False):
+        data = {
+            "id": self.id,
+            "user_id": self.user_id,
+            "steam_account_id": self.steam_account_id,
+            "assignment_id": self.assignment_id,
+            "order_id": self.order_id,
+            "reason": self.reason,
+            "description": self.description,
+            "status": self.status,
+            "created_at": self.created_at.isoformat(),
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+        }
+        if include_admin_fields:
+            data["user_email"] = self.user.email if self.user else None
+            data["account_name"] = self.steam_account.account_name if self.steam_account else None
+            data["game_name"] = (
+                self.assignment.game.name
+                if self.assignment and self.assignment.game
+                else None
+            )
+            data["resolved_by_user_id"] = self.resolved_by_user_id
+            data["resolved_by_email"] = self.resolved_by.email if self.resolved_by else None
+            data["resolution_note"] = self.resolution_note
+        return data

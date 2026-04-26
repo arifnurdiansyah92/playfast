@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 from app.extensions import db
 from app.models import (
+    AccountFlag,
     Assignment,
     CodeRequestLog,
     Game,
@@ -1339,6 +1340,62 @@ def generate_code(order_id: int):
         "code": result["code"],
         "remaining": result["remaining"],
     }), 200
+
+
+@store_bp.route("/orders/<int:order_id>/flag", methods=["POST"])
+@jwt_required()
+def flag_account_from_order(order_id: int):
+    """User reports an issue with the Steam account assigned to this order.
+
+    Body: { reason: str, description?: str }
+    """
+    user_id = int(get_jwt_identity())
+    order = Order.query.filter_by(id=order_id, user_id=user_id).first()
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    if not order.assignment:
+        return jsonify({"error": "No account assigned to this order"}), 400
+
+    data = request.get_json() or {}
+    reason = (data.get("reason") or "").strip().lower()
+    description = (data.get("description") or "").strip() or None
+
+    if reason not in AccountFlag.REASON_CHOICES:
+        return jsonify({
+            "error": f"Invalid reason. Must be one of: {', '.join(AccountFlag.REASON_CHOICES)}"
+        }), 400
+
+    # Avoid duplicate spam: if the same user already has a 'new' flag for this
+    # account, just append the description to the existing one rather than
+    # creating a new row.
+    existing = AccountFlag.query.filter_by(
+        user_id=user_id,
+        steam_account_id=order.assignment.steam_account_id,
+        status="new",
+    ).first()
+    if existing:
+        if description and (not existing.description or description not in existing.description):
+            existing.description = (existing.description + "\n\n— " + description) if existing.description else description
+        existing.reason = reason
+        db.session.commit()
+        return jsonify({
+            "message": "Existing flag updated",
+            "flag": existing.to_dict(),
+        }), 200
+
+    flag = AccountFlag(
+        user_id=user_id,
+        steam_account_id=order.assignment.steam_account_id,
+        assignment_id=order.assignment.id,
+        order_id=order.id,
+        reason=reason,
+        description=description,
+        status="new",
+    )
+    db.session.add(flag)
+    db.session.commit()
+
+    return jsonify({"message": "Flag submitted", "flag": flag.to_dict()}), 201
 
 
 @store_bp.route("/orders/<int:order_id>/instructions", methods=["GET"])

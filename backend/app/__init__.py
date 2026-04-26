@@ -168,6 +168,9 @@ def _run_schema_upgrades():
     PromoCodeUsage.__table__.create(db.engine, checkfirst=True)
     ReferralReward.__table__.create(db.engine, checkfirst=True)
 
+    from app.models import AccountFlag
+    AccountFlag.__table__.create(db.engine, checkfirst=True)
+
     # Backfill referral_code for existing users that don't have one
     from app.models import User
     import secrets, string

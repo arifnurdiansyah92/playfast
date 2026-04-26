@@ -17,6 +17,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.extensions import db
 from app.jobs import get_current_job, start_job
 from app.models import (
+    AccountFlag,
     Assignment,
     CodeRequestLog,
     Game,
@@ -1617,6 +1618,79 @@ def retry_fulfill_all_orders():
         "healed": healed,
         "failed": failed,
         "scanned": len(candidates),
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# Account Flags (user-reported issues)
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/account-flags", methods=["GET"])
+@admin_required
+def list_account_flags():
+    """List user-reported account issues. Filter via ?status=new|resolved|all."""
+    status = (request.args.get("status") or "new").lower()
+    query = AccountFlag.query
+    if status in ("new", "resolved"):
+        query = query.filter(AccountFlag.status == status)
+    flags = query.order_by(AccountFlag.created_at.desc()).all()
+    counts = {
+        "new": AccountFlag.query.filter_by(status="new").count(),
+        "resolved": AccountFlag.query.filter_by(status="resolved").count(),
+    }
+    counts["all"] = counts["new"] + counts["resolved"]
+    return jsonify({
+        "flags": [f.to_dict(include_admin_fields=True) for f in flags],
+        "counts": counts,
+    }), 200
+
+
+@admin_bp.route("/account-flags/<int:flag_id>/resolve", methods=["POST"])
+@admin_required
+def resolve_account_flag(flag_id: int):
+    """Mark a flag as resolved. Optional body: { resolution_note: str }"""
+    flag = db.session.get(AccountFlag, flag_id)
+    if not flag:
+        return jsonify({"error": "Flag not found"}), 404
+    if flag.status == "resolved":
+        return jsonify({"error": "Flag already resolved"}), 409
+
+    data = request.get_json(silent=True) or {}
+    note = (data.get("resolution_note") or "").strip() or None
+
+    admin_id = int(get_jwt_identity())
+    flag.status = "resolved"
+    flag.resolved_at = datetime.now(timezone.utc)
+    flag.resolved_by_user_id = admin_id
+    flag.resolution_note = note
+    db.session.commit()
+
+    return jsonify({
+        "message": "Flag marked as resolved",
+        "flag": flag.to_dict(include_admin_fields=True),
+    }), 200
+
+
+@admin_bp.route("/account-flags/<int:flag_id>/reopen", methods=["POST"])
+@admin_required
+def reopen_account_flag(flag_id: int):
+    """Move a resolved flag back to 'new' (admin escape hatch)."""
+    flag = db.session.get(AccountFlag, flag_id)
+    if not flag:
+        return jsonify({"error": "Flag not found"}), 404
+    if flag.status == "new":
+        return jsonify({"error": "Flag already new"}), 409
+
+    flag.status = "new"
+    flag.resolved_at = None
+    flag.resolved_by_user_id = None
+    flag.resolution_note = None
+    db.session.commit()
+
+    return jsonify({
+        "message": "Flag reopened",
+        "flag": flag.to_dict(include_admin_fields=True),
     }), 200
 
 
