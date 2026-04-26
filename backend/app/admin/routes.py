@@ -6,6 +6,7 @@ import os
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 
@@ -645,23 +646,33 @@ def admin_act_confirmation(account_id: int, conf_id: str):
 
 
 _last_steam_api_call = 0.0
+_steam_api_rate_lock = threading.Lock()
+
+
+def _wait_for_steam_slot(min_gap: float):
+    """Block until enough time has passed since the last Steam Store API call,
+    then mark a fresh slot. Thread-safe — multiple workers serialize on the
+    lock so the overall request rate stays bounded even under parallelism."""
+    global _last_steam_api_call
+    with _steam_api_rate_lock:
+        now = time.time()
+        elapsed = now - _last_steam_api_call
+        if elapsed < min_gap:
+            time.sleep(min_gap - elapsed)
+        _last_steam_api_call = time.time()
 
 
 def _fetch_game_metadata(appid: int) -> dict | None:
     """
     Fetch metadata for a game from the Steam Store API.
     Returns dict with description, header_image, genres, screenshots, movies or None on failure.
-    Rate-limited to avoid Steam API throttling.
+    Rate-limited to avoid Steam API throttling. Thread-safe — workers share the
+    rate limiter so parallel fetches stay under Steam's per-IP limit.
     """
-    global _last_steam_api_call
-
     app_data = None
     for attempt in range(3):
-        elapsed = time.time() - _last_steam_api_call
         delay = 1.5 if attempt == 0 else 5.0
-        if elapsed < delay:
-            time.sleep(delay - elapsed)
-        _last_steam_api_call = time.time()
+        _wait_for_steam_slot(delay)
 
         try:
             resp = http_requests.get(
@@ -1057,37 +1068,83 @@ def refresh_game_metadata():
     return jsonify({"message": f"Refreshing metadata for {len(game_ids)} games in background", "job": job}), 202
 
 
+_REFRESH_METADATA_WORKERS = 4
+
+
 def _bg_refresh_metadata(job, app, game_ids):
-    """Background: refresh metadata for games."""
+    """Background: refresh metadata for games in parallel.
+
+    HTTP fetches run in a small thread pool (4 workers) sharing the global
+    Steam API rate-limiter, so wall-clock time scales with network latency
+    rather than with len(game_ids) × per-call gap. DB writes still happen
+    on this main thread (SQLAlchemy session is not thread-safe), batched
+    in commits every 20 applied results.
+    """
     with app.app_context():
+        # Look up games up-front so workers only need the appid (no DB access
+        # from worker threads). Maintains a stable id↔appid mapping.
+        games_by_id: dict[int, Game] = {}
+        for chunk_start in range(0, len(game_ids), 200):
+            chunk = game_ids[chunk_start:chunk_start + 200]
+            for g in Game.query.filter(Game.id.in_(chunk)).all():
+                games_by_id[g.id] = g
+
+        ordered_games = [games_by_id[gid] for gid in game_ids if gid in games_by_id]
+        if not ordered_games:
+            job.message = "No games to refresh"
+            return
+
         updated = 0
-        for i, game_id in enumerate(game_ids):
-            if job.cancelled:
-                db.session.commit()
-                job.message = f"Cancelled at {i}/{len(game_ids)} (refreshed {updated} games)"
-                return
+        applied = 0
+        executor = ThreadPoolExecutor(max_workers=_REFRESH_METADATA_WORKERS)
+        try:
+            future_to_game = {
+                executor.submit(_fetch_game_metadata, game.appid): game
+                for game in ordered_games
+            }
+            try:
+                for future in as_completed(future_to_game):
+                    if job.cancelled:
+                        # Stop scheduling new work; running ones finish naturally.
+                        for f in future_to_game:
+                            if not f.done():
+                                f.cancel()
+                        break
 
-            game = db.session.get(Game, game_id)
-            if game:
-                metadata = _fetch_game_metadata(game.appid)
-                if metadata:
-                    game.description = metadata.get("description") or game.description
-                    game.header_image = metadata.get("header_image") or game.header_image
-                    game.genres = metadata.get("genres") or game.genres
-                    game.screenshots = metadata.get("screenshots") or game.screenshots
-                    game.movies = metadata.get("movies") or game.movies
-                    if metadata.get("original_price") is not None:
-                        game.original_price = metadata["original_price"]
-                    updated += 1
+                    game = future_to_game[future]
+                    try:
+                        metadata = future.result()
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("Metadata fetch failed for appid %s: %s", game.appid, e)
+                        metadata = None
 
-            job.processed = i + 1
+                    if metadata:
+                        game.description = metadata.get("description") or game.description
+                        game.header_image = metadata.get("header_image") or game.header_image
+                        game.genres = metadata.get("genres") or game.genres
+                        game.screenshots = metadata.get("screenshots") or game.screenshots
+                        game.movies = metadata.get("movies") or game.movies
+                        if metadata.get("original_price") is not None:
+                            game.original_price = metadata["original_price"]
+                        updated += 1
 
-            # Commit every 20 games
-            if (i + 1) % 20 == 0:
-                db.session.commit()
+                    applied += 1
+                    job.processed = applied
 
-        db.session.commit()
-        job.message = f"Refreshed {updated}/{len(game_ids)} games"
+                    # Commit every 20 games to bound transaction size and
+                    # surface partial progress to other readers.
+                    if applied % 20 == 0:
+                        db.session.commit()
+            finally:
+                # Don't block shutdown on cancelled futures; they return None.
+                executor.shutdown(wait=not job.cancelled)
+        finally:
+            db.session.commit()
+
+        if job.cancelled:
+            job.message = f"Cancelled at {applied}/{len(ordered_games)} (refreshed {updated} games)"
+        else:
+            job.message = f"Refreshed {updated}/{len(ordered_games)} games"
 
 
 # ---------------------------------------------------------------------------
