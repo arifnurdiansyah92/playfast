@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import threading
 import time
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -463,6 +464,45 @@ def admin_get_code(account_id: int):
     return jsonify(result), 200
 
 
+# ---------------------------------------------------------------------------
+# Steam login throttle
+#
+# Steam returns HTTP 429 if the server's IP submits too many login attempts in
+# a short window. The block lasts 15-30 minutes, which means a single
+# trigger-happy admin can lock everyone out. We enforce two guards:
+#
+#   1. Min gap between consecutive login attempts globally (anti-rapid-click).
+#   2. Hard block once Steam returns 429 — no more login attempts for 15
+#      minutes regardless of who clicks.
+# ---------------------------------------------------------------------------
+_login_throttle_lock = threading.Lock()
+_last_login_attempt: float = 0.0
+_login_blocked_until: float = 0.0
+_LOGIN_MIN_GAP = 30.0  # seconds between consecutive attempts (any account)
+_LOGIN_429_BACKOFF = 15 * 60  # seconds to refuse all logins after a 429
+
+
+def _login_throttle_check() -> tuple[bool, int, str]:
+    """Returns (ok, retry_after_seconds, reason). reason is empty on ok."""
+    global _last_login_attempt
+    now = time.time()
+    with _login_throttle_lock:
+        if now < _login_blocked_until:
+            return False, int(_login_blocked_until - now), "steam_rate_limited"
+        elapsed = now - _last_login_attempt
+        if elapsed < _LOGIN_MIN_GAP:
+            return False, int(_LOGIN_MIN_GAP - elapsed) or 1, "min_gap"
+        _last_login_attempt = now
+        return True, 0, ""
+
+
+def _login_mark_429():
+    """Steam responded with 429 — block all login attempts for the backoff window."""
+    global _login_blocked_until
+    with _login_throttle_lock:
+        _login_blocked_until = time.time() + _LOGIN_429_BACKOFF
+
+
 @admin_bp.route("/accounts/<int:account_id>/login", methods=["POST"])
 @admin_required
 def admin_login_account(account_id: int):
@@ -471,22 +511,50 @@ def admin_login_account(account_id: int):
     if not account:
         return jsonify({"error": "Account not found"}), 404
 
+    ok, retry_after, reason = _login_throttle_check()
+    if not ok:
+        if reason == "steam_rate_limited":
+            mins = max(1, retry_after // 60)
+            msg = (
+                f"Steam memblokir login dari IP server (rate limit). "
+                f"Tunggu sekitar {mins} menit lagi sebelum mencoba ulang."
+            )
+        else:
+            msg = (
+                f"Login attempts terlalu cepat — tunggu {retry_after} detik lagi "
+                f"sebelum klik tombol Login berikutnya."
+            )
+        return jsonify({"error": msg, "retry_after": retry_after}), 429
+
     try:
         new_session = steam_account_login(account.mafile_data, account.password)
-        # Update tokens in DB
-        mafile = account.mafile_data.copy()
-        session = mafile.get("Session", {})
-        session["SteamID"] = new_session["SteamID"]
-        session["AccessToken"] = new_session["AccessToken"]
-        session["RefreshToken"] = new_session["RefreshToken"]
-        session["SteamLoginSecure"] = f"{new_session['SteamID']}%7C%7C{new_session['AccessToken']}"
-        mafile["Session"] = session
-        account.mafile_data = mafile
-        account.steam_id = new_session["SteamID"]
-        db.session.commit()
-        return jsonify({"message": "Login successful, tokens updated"}), 200
+    except http_requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 429:
+            _login_mark_429()
+            mins = _LOGIN_429_BACKOFF // 60
+            return jsonify({
+                "error": (
+                    f"Steam memblokir login dari IP server (rate limit). "
+                    f"Tunggu sekitar {mins} menit, lalu coba lagi."
+                ),
+                "retry_after": _LOGIN_429_BACKOFF,
+            }), 429
+        return jsonify({"error": f"Steam HTTP error: {e}"}), 502
     except Exception as e:
-        return jsonify({"error": f"Login failed: {str(e)}"}), 400
+        return jsonify({"error": str(e)}), 400
+
+    # Success — update tokens in DB
+    mafile = account.mafile_data.copy()
+    session = mafile.get("Session", {})
+    session["SteamID"] = new_session["SteamID"]
+    session["AccessToken"] = new_session["AccessToken"]
+    session["RefreshToken"] = new_session["RefreshToken"]
+    session["SteamLoginSecure"] = f"{new_session['SteamID']}%7C%7C{new_session['AccessToken']}"
+    mafile["Session"] = session
+    account.mafile_data = mafile
+    account.steam_id = new_session["SteamID"]
+    db.session.commit()
+    return jsonify({"message": "Login successful, tokens updated"}), 200
 
 
 @admin_bp.route("/accounts/<int:account_id>/logout-all", methods=["POST"])

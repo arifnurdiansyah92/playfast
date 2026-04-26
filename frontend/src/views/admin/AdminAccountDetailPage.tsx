@@ -76,7 +76,7 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
       setSnackMsg(data.message)
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
     },
-    onError: (err: any) => setSnackMsg(`Login failed: ${err.message}`)
+    onError: (err: any) => setSnackMsg(err?.message || 'Login failed')
   })
 
   const syncMutation = useMutation({
