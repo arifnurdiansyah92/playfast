@@ -81,10 +81,15 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
 
   const syncMutation = useMutation({
     mutationFn: () => adminApi.syncAccount(Number(accountId)),
-    onSuccess: (data) => {
-      setSnackMsg(data.success ? `Synced ${data.total_games} games` : `Sync failed: ${data.error}`)
-      queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['admin-games'] })
+    onSuccess: (res) => {
+      setSnackMsg(res.message)
+
+      // Best-effort: refresh in 3s; full result lands when the bg job completes
+      // and the user's next page visit re-fetches.
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+        queryClient.invalidateQueries({ queryKey: ['admin-games'] })
+      }, 3000)
     },
     onError: (err: any) => setSnackMsg(`Sync failed: ${err.message}`)
   })
@@ -115,8 +120,10 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
 
   const handleGetCode = useCallback(async () => {
     setCodeLoading(true)
+
     try {
       const result = await adminApi.getAccountCode(Number(accountId))
+
       setCode(result.code)
       setCodeRemaining(result.remaining)
     } catch (err: any) {

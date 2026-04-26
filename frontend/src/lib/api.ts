@@ -581,7 +581,7 @@ return res.accounts
     })
   },
   syncAccount(id: number) {
-    return request<{ success: boolean; total_games?: number; error?: string }>(`/api/admin/accounts/${id}/sync`, { method: 'POST' })
+    return request<{ message: string; job?: JobStatus }>(`/api/admin/accounts/${id}/sync`, { method: 'POST' })
   },
   getAccountCode(id: number) {
     return request<{ code: string; remaining: number }>(`/api/admin/accounts/${id}/code`, { method: 'POST' })

@@ -29,8 +29,9 @@ import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import Snackbar from '@mui/material/Snackbar'
 
-import CustomTextField from '@core/components/mui/TextField'
 import LinearProgress from '@mui/material/LinearProgress'
+
+import CustomTextField from '@core/components/mui/TextField'
 
 import { adminApi } from '@/lib/api'
 import type { JobStatus } from '@/lib/api'
@@ -106,8 +107,10 @@ const AdminAccountsPage = () => {
     pollRef.current = setInterval(async () => {
       try {
         const res = await adminApi.getJobStatus()
+
         if (res.job) {
           setActiveJob(res.job)
+
           if (res.job.status !== 'running') {
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
             queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
@@ -131,7 +134,8 @@ const AdminAccountsPage = () => {
         if (res.job.status === 'running') startPolling()
       }
     }).catch(() => {})
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+    
+return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [startPolling])
 
   const syncMutation = useMutation({
@@ -167,18 +171,24 @@ const AdminAccountsPage = () => {
 
   const syncOneMutation = useMutation({
     mutationFn: (id: number) => adminApi.syncAccount(id),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['admin-games'] })
-      setSnackMsg(data.success ? `Synced ${data.total_games} games` : `Sync failed: ${data.error}`)
+    onSuccess: (res) => {
+      if (res.job) { setActiveJob(res.job); startPolling() }
+      setSnackMsg(res.message)
     },
     onError: (err: any) => setSnackMsg(`Sync failed: ${err.message}`)
   })
 
   const handleAdd = () => {
-    if (!file) { setAddError('Please select a maFile'); return }
-    if (!password) { setAddError('Password is required'); return }
+    if (!file) { setAddError('Please select a maFile'); 
+
+return }
+
+    if (!password) { setAddError('Password is required'); 
+
+return }
+
     const formData = new FormData()
+
     formData.append('mafile', file)
     formData.append('password', password)
     addMutation.mutate(formData)

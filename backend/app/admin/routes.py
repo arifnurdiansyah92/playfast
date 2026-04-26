@@ -896,15 +896,55 @@ def _bg_logout_all_bulk(job, app, account_ids):
 @admin_bp.route("/accounts/<int:account_id>/sync", methods=["POST"])
 @admin_required
 def sync_single_account(account_id: int):
-    """Sync games for a single account."""
+    """Sync games for a single account in the background.
+
+    Used to be synchronous, but for accounts with many new games each game
+    triggers a Steam Store metadata fetch (rate-limited 1.5s+, plus 30s on
+    429). Total request time can exceed Cloudflare's 100-second timeout,
+    surfacing as a 502 Bad Gateway to the user. Now we kick off a job and
+    let the frontend poll /jobs/current — same pattern as the bulk sync.
+    """
     account = db.session.get(SteamAccount, account_id)
     if not account:
         return jsonify({"error": "Account not found"}), 404
 
-    result = _sync_account_games(account)
+    from flask import current_app
+    app = current_app._get_current_object()
 
-    status_code = 200 if result.get("success") else 502
-    return jsonify(result), status_code
+    job = start_job(
+        "sync_account",
+        _bg_sync_single_account,
+        args=(app, account_id),
+        total=1,
+    )
+    if not job:
+        return jsonify({"error": "A job is already running", "job": get_current_job()}), 409
+
+    return jsonify({"message": "Sync started in background", "job": job}), 202
+
+
+def _bg_sync_single_account(job, app, account_id):
+    """Background: sync games for a single account."""
+    with app.app_context():
+        account = db.session.get(SteamAccount, account_id)
+        if not account:
+            job.message = "Account not found"
+            job.processed = 1
+            return
+
+        result = _sync_account_games(account)
+        job.processed = 1
+        if result.get("success"):
+            job.message = (
+                f"Synced {result.get('account_name')}: "
+                f"{result.get('total_games', 0)} games "
+                f"({result.get('new_games', 0)} new)"
+            )
+        else:
+            job.message = (
+                f"Sync failed for {result.get('account_name', account_id)}: "
+                f"{result.get('error', 'unknown error')}"
+            )
 
 
 @admin_bp.route("/games/refresh-metadata", methods=["POST"])
