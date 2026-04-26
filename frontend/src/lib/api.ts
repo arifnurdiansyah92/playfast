@@ -196,6 +196,7 @@ export interface Game {
   movies?: GameMovie[]
   available_accounts?: number
   accounts?: { id: number; account_name: string }[]
+  release_date?: string | null
   created_at: string
 
   // Admin-only: override fields

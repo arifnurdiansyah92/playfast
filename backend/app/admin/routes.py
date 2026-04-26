@@ -735,6 +735,20 @@ def _fetch_game_metadata(appid: int) -> dict | None:
             usd_price = initial_cents / 100
             original_price = round(usd_price * 17000)
 
+    # Release date: best-effort parse. Steam returns various formats, e.g.
+    # "Apr 28, 2026", "April 28, 2026", "28 Apr, 2026", "2026", or "Q3 2026"
+    # for unreleased games. We skip what we can't parse cleanly.
+    release_date = None
+    rd = details.get("release_date") or {}
+    rd_str = (rd.get("date") or "").strip()
+    if rd_str and not rd.get("coming_soon"):
+        for fmt in ("%b %d, %Y", "%B %d, %Y", "%d %b, %Y", "%d %B, %Y", "%Y"):
+            try:
+                release_date = datetime.strptime(rd_str, fmt).date()
+                break
+            except ValueError:
+                continue
+
     return {
         "description": details.get("short_description", ""),
         "header_image": details.get("header_image", ""),
@@ -742,6 +756,7 @@ def _fetch_game_metadata(appid: int) -> dict | None:
         "screenshots": screenshots,
         "movies": movies,
         "original_price": original_price,
+        "release_date": release_date,
     }
 
 
@@ -830,6 +845,8 @@ def _sync_account_games(account: SteamAccount) -> dict:
                 game.movies = metadata.get("movies")
                 if metadata.get("original_price"):
                     game.original_price = metadata["original_price"]
+                if metadata.get("release_date"):
+                    game.release_date = metadata["release_date"]
         else:
             # Update name/icon if changed
             if game.name != g["name"]:
@@ -849,6 +866,8 @@ def _sync_account_games(account: SteamAccount) -> dict:
                     game.movies = metadata.get("movies") or game.movies
                     if metadata.get("original_price"):
                         game.original_price = metadata["original_price"]
+                    if metadata.get("release_date"):
+                        game.release_date = metadata["release_date"]
 
         # Upsert GameAccount link
         existing_link = GameAccount.query.filter_by(
@@ -1051,6 +1070,7 @@ def refresh_game_metadata():
                     Game.original_price.is_(None),
                     Game.screenshots.is_(None),
                     Game.description.is_(None),
+                    Game.release_date.is_(None),
                 )
             ).all()
         ]
@@ -1126,6 +1146,8 @@ def _bg_refresh_metadata(job, app, game_ids):
                         game.movies = metadata.get("movies") or game.movies
                         if metadata.get("original_price") is not None:
                             game.original_price = metadata["original_price"]
+                        if metadata.get("release_date"):
+                            game.release_date = metadata["release_date"]
                         updated += 1
 
                     applied += 1

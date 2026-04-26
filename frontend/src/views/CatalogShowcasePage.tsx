@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import Link from 'next/link'
 
@@ -33,14 +33,18 @@ const textSecondary = '#9aa0a6'
 
 interface Tier {
   label: string
-  count: number
+  min: number
 }
+
+const TIERS: Tier[] = [
+  { label: '> Rp 500K', min: 500_000 },
+  { label: '> Rp 200K', min: 200_000 },
+  { label: '> Rp 100K', min: 100_000 },
+  { label: '> Rp 50K', min: 50_000 },
+]
 
 const CatalogShowcasePage = () => {
   const [games, setGames] = useState<Game[]>([])
-  const [totalGames, setTotalGames] = useState(0)
-  const [totalValue, setTotalValue] = useState(0)
-  const [tiers, setTiers] = useState<Tier[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
@@ -49,17 +53,29 @@ const CatalogShowcasePage = () => {
       .then(r => r.json())
       .then(data => {
         setGames(data.games)
-        setTotalGames(data.total_games)
-        setTotalValue(data.total_value)
-        setTiers(data.tiers)
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
-  const filtered = search
-    ? games.filter(g => g.name.toLowerCase().includes(search.toLowerCase()))
-    : games
+  const filtered = useMemo(() => {
+    return search
+      ? games.filter(g => g.name.toLowerCase().includes(search.toLowerCase()))
+      : games
+  }, [search, games])
+
+  // Stats follow the visible list: when search filters down, totals update too.
+  const totalGames = filtered.length
+  const totalValue = useMemo(
+    () => filtered.reduce((sum, g) => sum + (g.original_price || 0), 0),
+    [filtered]
+  )
+  const tiers = useMemo(
+    () => TIERS
+      .map(t => ({ label: t.label, count: filtered.filter(g => (g.original_price || 0) >= t.min).length }))
+      .filter(t => t.count > 0),
+    [filtered]
+  )
 
   return (
     <Box
@@ -259,8 +275,10 @@ const CatalogShowcasePage = () => {
                         >
                           {game.name}
                         </Typography>
-                        {game.genres && (
+                        {(game.genres || game.release_date) && (
                           <Typography variant='caption' sx={{ color: textSecondary, fontSize: '0.65rem', mb: 0.5, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {game.release_date ? new Date(game.release_date).getFullYear() : ''}
+                            {game.release_date && game.genres ? ' · ' : ''}
                             {game.genres}
                           </Typography>
                         )}

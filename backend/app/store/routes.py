@@ -585,7 +585,19 @@ def catalog_showcase():
             Game.is_enabled == True,  # noqa: E712
             Game.id.in_(db.session.query(available_game_ids.c.game_id)),
         )
-        .order_by(Game.price.desc(), Game.name.asc())
+        # Newest first by release_date, then most expensive (Steam list price)
+        # first; games without a known release date sink to the bottom so the
+        # ones with real metadata lead the list. is_(None) returns False(0)
+        # before True(1) under .asc(), so non-null rows come first regardless
+        # of dialect's default NULL ordering.
+        .order_by(
+            Game.release_date.is_(None).asc(),
+            Game.release_date.desc(),
+            Game.original_price.is_(None).asc(),
+            Game.original_price.desc(),
+            Game.price.desc(),
+            Game.name.asc(),
+        )
         .all()
     )
 
