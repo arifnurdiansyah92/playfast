@@ -36,6 +36,24 @@ const FONT_HREF =
 
 const BANNER_CSS = `
 @keyframes pfPromoFade { from { opacity: 0 } to { opacity: 1 } }
+
+.pf-promo-overlay {
+  position: fixed; inset: 0; z-index: 1400;
+  background: rgba(7, 9, 15, 0.72);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  animation: pfPromoFade 0.25s ease-out;
+}
+.pf-promo-overlay-inner {
+  width: 100%;
+  display: flex; justify-content: center;
+  margin: auto 0;
+}
+
 .pf-promo-grid {
   position: relative; z-index: 2;
   display: grid; grid-template-columns: 1.05fr 1fr;
@@ -46,16 +64,73 @@ const BANNER_CSS = `
 .pf-promo-wordmark { font-size: 40px; }
 .pf-promo-headline { font-size: 56px; }
 .pf-promo-price-digits { font-size: 110px; }
+
+.pf-promo-close-btn {
+  position: absolute; top: 14px; right: 14px;
+  width: 40px; height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(212,165,58,0.4);
+  background: rgba(15,20,32,0.85);
+  color: #f6f4ef;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 5;
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.pf-promo-close-btn:hover, .pf-promo-close-btn:focus-visible {
+  background: rgba(224, 74, 59, 0.95);
+  transform: scale(1.05);
+  outline: none;
+}
+.pf-promo-close-btn svg { width: 18px; height: 18px; }
+
+.pf-promo-cta {
+  margin-top: 18px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 16px 28px;
+  border-radius: 12px;
+  border: none; cursor: pointer;
+  font-family: 'Nunito', sans-serif;
+  font-size: 18px; font-weight: 900;
+}
+
+.pf-promo-secondary-close {
+  margin-top: 10px;
+  background: none; border: none; cursor: pointer;
+  color: rgba(246,244,239,0.65);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 500;
+  padding: 8px 16px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pf-promo-secondary-close:hover { color: #f6f4ef; }
+
 @media (max-width: 900px) {
   .pf-promo-grid { grid-template-columns: 1fr; gap: 24px; padding: 32px 24px 28px; }
   .pf-promo-headline { font-size: 40px; }
   .pf-promo-wordmark { font-size: 34px; }
   .pf-promo-price-digits { font-size: 90px; }
 }
-@media (max-width: 480px) {
-  .pf-promo-grid { padding: 28px 18px 24px; }
+@media (max-width: 600px) {
+  .pf-promo-overlay { padding: 10px; }
+  .pf-promo-grid { padding: 68px 18px 24px; gap: 20px; }
   .pf-promo-headline { font-size: 34px; }
   .pf-promo-price-digits { font-size: 76px; }
+  .pf-promo-close-btn {
+    top: 10px; right: 10px;
+    width: 48px; height: 48px;
+    background: rgba(15,20,32,0.95);
+    border: 2px solid rgba(212,165,58,0.6);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .pf-promo-close-btn svg { width: 22px; height: 22px; }
+  .pf-promo-cta { width: 100%; padding: 16px 20px; font-size: 17px; }
+  .pf-promo-secondary-close { font-size: 14px; padding: 12px 16px; }
+}
+@media (max-width: 380px) {
+  .pf-promo-headline { font-size: 30px; }
+  .pf-promo-price-digits { font-size: 64px; }
 }
 `
 
@@ -260,31 +335,15 @@ return { digits: String(ribu), unit: 'RIBU' }
         }}
       />
 
-      {/* Close button */}
+      {/* Close button — bigger tap target on mobile via .pf-promo-close-btn */}
       <button
         type='button'
         onClick={onClose}
-        aria-label='Tutup'
-        style={{
-          position: 'absolute',
-          top: 14,
-          right: 14,
-          width: 36,
-          height: 36,
-          borderRadius: 999,
-          border: `1px solid ${PF.gold}55`,
-          background: 'rgba(15,20,32,0.65)',
-          color: PF.cream,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 3,
-          backdropFilter: 'blur(6px)',
-        }}
+        aria-label='Tutup promo'
+        className='pf-promo-close-btn'
       >
-        <svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
-          <path d='M6 6l12 12M18 6L6 18' stroke='currentColor' strokeWidth='2' strokeLinecap='round' />
+        <svg viewBox='0 0 24 24' fill='none' aria-hidden>
+          <path d='M6 6l12 12M18 6L6 18' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' />
         </svg>
       </button>
 
@@ -603,22 +662,15 @@ return { digits: String(ribu), unit: 'RIBU' }
             </div>
           </div>
 
-          {/* CTA button */}
+          {/* CTA button — full-width on mobile via .pf-promo-cta */}
           <button
             type='button'
             onClick={onCtaClick}
+            className='pf-promo-cta'
             style={{
-              marginTop: 18,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '16px 28px',
               background: `linear-gradient(180deg, ${PF.gold} 0%, ${PF.goldDeep} 100%)`,
-              borderRadius: 12,
               boxShadow: `0 6px 0 ${PF.goldDeep}, 0 12px 28px ${PF.gold}55`,
               transform: `scale(${btnPulse})`,
-              border: 'none',
-              cursor: 'pointer',
               color: PF.ink,
             }}
           >
@@ -653,6 +705,15 @@ return { digits: String(ribu), unit: 'RIBU' }
           <div style={{ marginTop: 14 }}>
             <Countdown />
           </div>
+
+          {/* Secondary close — clearer dismiss path on mobile */}
+          <button
+            type='button'
+            onClick={onClose}
+            className='pf-promo-secondary-close'
+          >
+            Tutup, lihat-lihat dulu
+          </button>
         </div>
       </div>
 
@@ -761,23 +822,11 @@ return () => {
   if (!open || promoPrice == null) return null
 
   return (
-    <div
-      onClick={close}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1400,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        background: 'rgba(7, 9, 15, 0.72)',
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-        animation: 'pfPromoFade 0.25s ease-out',
-      }}
-    >
-      <div onClick={e => e.stopPropagation()} style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+    <div onClick={close} className='pf-promo-overlay'>
+      <div
+        onClick={e => e.stopPropagation()}
+        className='pf-promo-overlay-inner'
+      >
         <BannerContent
           onClose={close}
           promoPrice={promoPrice}
