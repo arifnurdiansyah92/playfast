@@ -1505,11 +1505,12 @@ def my_referral():
 @store_bp.route("/my-promos", methods=["GET"])
 @jwt_required()
 def my_promos():
-    """Return promo codes specifically assigned to the current user.
+    """Return promo codes the current user "owns" for tracking purposes.
 
-    Excludes globally-public codes and codes assigned to someone else. Each
-    entry also reports whether the current user has already redeemed it
-    against their max_uses_per_user cap so the UI can grey out spent codes.
+    These are codes admin assigned to the user (e.g. a marketer / affiliate)
+    so they can see who's redeeming the code they share. The codes
+    themselves are public — any visitor can use them at checkout — but only
+    the owner sees aggregate usage stats here.
     """
     user_id = int(get_jwt_identity())
     promos = (
@@ -1521,15 +1522,32 @@ def my_promos():
 
     result = []
     for p in promos:
-        used_count = PromoCodeUsage.query.filter_by(
-            promo_code_id=p.id, user_id=user_id
-        ).count()
-        expired = bool(p.expires_at and p.expires_at < datetime.now(timezone.utc))
-        usable = (
-            p.is_active
-            and not expired
-            and used_count < p.max_uses_per_user
+        usages = (
+            PromoCodeUsage.query
+            .filter_by(promo_code_id=p.id)
+            .order_by(PromoCodeUsage.used_at.desc())
+            .all()
         )
+        total_uses = len(usages)
+        total_discount = sum(u.discount_amount for u in usages)
+
+        # Last 10 redemptions with masked emails for the owner's activity feed.
+        recent = []
+        for u in usages[:10]:
+            redeemer = db.session.get(User, u.user_id) if u.user_id else None
+            email = redeemer.email if redeemer else ""
+            at_idx = email.find("@")
+            masked = email[0] + "***" + email[at_idx:] if at_idx > 1 else (email or "anon")
+            recent.append({
+                "email_masked": masked,
+                "discount_amount": u.discount_amount,
+                "used_at": u.used_at.isoformat(),
+                "order_id": u.order_id,
+                "subscription_id": u.subscription_id,
+            })
+
+        expired = bool(p.expires_at and p.expires_at < datetime.now(timezone.utc))
+
         result.append({
             "id": p.id,
             "code": p.code,
@@ -1538,12 +1556,14 @@ def my_promos():
             "discount_value": p.discount_value,
             "scope": p.scope,
             "min_order_amount": p.min_order_amount,
+            "max_uses_total": p.max_uses_total,
             "max_uses_per_user": p.max_uses_per_user,
             "expires_at": p.expires_at.isoformat() if p.expires_at else None,
             "is_active": p.is_active,
-            "used_count": used_count,
-            "usable": usable,
             "expired": expired,
+            "total_uses": total_uses,
+            "total_discount_given": total_discount,
+            "recent_uses": recent,
         })
 
     return jsonify({"promos": result}), 200

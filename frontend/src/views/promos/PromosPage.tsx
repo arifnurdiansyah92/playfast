@@ -14,6 +14,10 @@ import Skeleton from '@mui/material/Skeleton'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
+import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
+import Collapse from '@mui/material/Collapse'
 
 import { storeApi, formatIDR } from '@/lib/api'
 import type { MyPromo } from '@/lib/api'
@@ -32,9 +36,27 @@ const formatScope = (s: string) => {
   return s
 }
 
+const formatDateTime = (iso: string) =>
+  new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+const buildShareLink = (code: string, scope: string) => {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://playfast.id'
+  const encoded = encodeURIComponent(code)
+
+  if (scope === 'subscriptions') return `${origin}/subscribe?code=${encoded}`
+  if (scope.startsWith('sub:')) {
+    const plan = scope.split(':', 2)[1]
+
+    return `${origin}/subscribe?code=${encoded}&plan=${encodeURIComponent(plan)}`
+  }
+
+  return `${origin}/store?code=${encoded}`
+}
+
 const PromosPage = () => {
   const { user } = useAuth()
   const [snack, setSnack] = useState('')
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-promos'],
@@ -42,32 +64,34 @@ const PromosPage = () => {
     enabled: !!user,
   })
 
-  if (!user) return <Alert severity='error'>Login dulu untuk lihat promo kamu.</Alert>
+  if (!user) return <Alert severity='error'>Login dulu untuk lihat promo tracker kamu.</Alert>
 
   const promos = data ?? []
-  const usableCount = promos.filter(p => p.usable).length
+  const totalUses = promos.reduce((sum, p) => sum + p.total_uses, 0)
+  const totalDiscount = promos.reduce((sum, p) => sum + p.total_discount_given, 0)
+  const activeCount = promos.filter(p => p.is_active && !p.expired).length
 
-  const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code)
-    setSnack(`Kode ${code} disalin — paste di kolom promo saat checkout.`)
+  const copy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+    setSnack(`${label} disalin`)
   }
 
   return (
     <div className='flex flex-col gap-6'>
       <Box>
         <Typography variant='h4' sx={{ fontWeight: 700, mb: 0.5 }}>
-          Promo Saya
+          Promo Tracker
         </Typography>
         <Typography color='text.secondary'>
-          Kode promo eksklusif yang admin-assign khusus untuk akun kamu. Pakai saat checkout buat dapet potongan.
+          Kode promo yang admin assign ke akun kamu untuk tracking. Kodenya tetap public — siapapun bisa pakai. Halaman ini buat lihat siapa aja yang sudah redeem & berapa kontribusinya.
         </Typography>
       </Box>
 
       {isLoading ? (
         <Grid container spacing={2}>
           {[1, 2, 3].map(i => (
-            <Grid size={{ xs: 12, sm: 6 }} key={i}>
-              <Skeleton variant='rounded' height={140} />
+            <Grid size={{ xs: 12 }} key={i}>
+              <Skeleton variant='rounded' height={180} />
             </Grid>
           ))}
         </Grid>
@@ -75,113 +99,209 @@ const PromosPage = () => {
         <Card sx={{ border: '1px solid', borderColor: 'divider' }}>
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
             <i className='tabler-discount' style={{ fontSize: 56, opacity: 0.3 }} />
-            <Typography variant='h6' sx={{ mt: 2 }}>Belum ada promo eksklusif</Typography>
-            <Typography variant='body2' color='text.secondary' sx={{ mt: 1, maxWidth: 420, mx: 'auto' }}>
-              Promo yang muncul di sini hanya kode yang admin assign khusus ke akun kamu. Promo umum tetap bisa dipakai langsung di checkout — gak perlu di-list di sini.
+            <Typography variant='h6' sx={{ mt: 2 }}>Belum ada kode yang di-assign</Typography>
+            <Typography variant='body2' color='text.secondary' sx={{ mt: 1, maxWidth: 460, mx: 'auto' }}>
+              Halaman ini muncul kalau admin sudah assign kode promo ke akun kamu untuk tracking. Hubungi admin kalau kamu marketer/affiliate yang butuh kode tracking sendiri.
             </Typography>
           </CardContent>
         </Card>
       ) : (
         <>
-          <Typography variant='body2' color='text.secondary'>
-            {usableCount} dari {promos.length} kode siap dipakai
-          </Typography>
+          {/* Aggregate stats across all owned codes */}
           <Grid container spacing={2}>
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+                  <Typography variant='h5' sx={{ fontWeight: 800, color: 'primary.main' }}>{promos.length}</Typography>
+                  <Typography variant='caption' color='text.secondary'>Total Kode</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+                  <Typography variant='h5' sx={{ fontWeight: 800, color: 'success.main' }}>{activeCount}</Typography>
+                  <Typography variant='caption' color='text.secondary'>Aktif</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+                  <Typography variant='h5' sx={{ fontWeight: 800, color: 'primary.main' }}>{totalUses}</Typography>
+                  <Typography variant='caption' color='text.secondary'>Total Redeem</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+                  <Typography variant='h6' sx={{ fontWeight: 800, color: 'primary.main' }}>{formatIDR(totalDiscount)}</Typography>
+                  <Typography variant='caption' color='text.secondary'>Total Diskon Diberikan</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Per-code cards with activity feed */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {promos.map(p => {
-              const expired = p.expired
-              const used = p.used_count >= p.max_uses_per_user
-              const inactive = !p.is_active
+              const inactive = !p.is_active || p.expired
+              const shareLink = buildShareLink(p.code, p.scope)
+              const isExpanded = !!expanded[p.id]
 
               return (
-                <Grid size={{ xs: 12, sm: 6 }} key={p.id}>
-                  <Card
-                    sx={{
-                      border: '1px solid',
-                      borderColor: p.usable ? 'primary.main' : 'divider',
-                      bgcolor: p.usable ? 'rgba(201,168,76,0.04)' : undefined,
-                      opacity: p.usable ? 1 : 0.65,
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                    <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, gap: 1 }}>
-                        <Chip
-                          size='small'
-                          color='primary'
-                          variant='tonal'
-                          icon={<i className='tabler-discount' style={{ fontSize: 14 }} />}
-                          label={formatDiscount(p)}
-                        />
-                        {!p.usable && (
-                          <Chip
-                            size='small'
-                            color='default'
-                            variant='outlined'
-                            label={inactive ? 'Tidak aktif' : expired ? 'Expired' : used ? 'Sudah dipakai' : 'Tidak bisa'}
-                          />
-                        )}
-                      </Box>
-
+                <Card
+                  key={p.id}
+                  sx={{
+                    border: '1px solid',
+                    borderColor: inactive ? 'divider' : 'primary.main',
+                    bgcolor: inactive ? undefined : 'rgba(201,168,76,0.03)',
+                    opacity: inactive ? 0.7 : 1,
+                  }}
+                >
+                  <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
+                    {/* Header: code + status + discount */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 1.5 }}>
                       <Typography
                         variant='h5'
                         sx={{
                           fontFamily: 'monospace',
                           fontWeight: 800,
-                          color: p.usable ? 'primary.main' : 'text.secondary',
+                          color: inactive ? 'text.secondary' : 'primary.main',
                           letterSpacing: 2,
-                          mb: 1,
-                          cursor: p.usable ? 'pointer' : 'default',
+                          cursor: 'pointer',
                           userSelect: 'all',
                         }}
-                        onClick={() => p.usable && copyCode(p.code)}
+                        onClick={() => copy(p.code, 'Kode')}
                       >
                         {p.code}
                       </Typography>
-
-                      {p.description && (
-                        <Typography variant='body2' color='text.secondary' sx={{ mb: 1.5 }}>
-                          {p.description}
-                        </Typography>
+                      <Chip
+                        size='small'
+                        color={inactive ? 'default' : 'primary'}
+                        variant='tonal'
+                        icon={<i className='tabler-discount' style={{ fontSize: 14 }} />}
+                        label={formatDiscount(p)}
+                      />
+                      <Chip
+                        size='small'
+                        color={p.is_active && !p.expired ? 'success' : 'default'}
+                        variant='outlined'
+                        label={p.expired ? 'Expired' : p.is_active ? 'Aktif' : 'Tidak aktif'}
+                      />
+                      <Box sx={{ flex: 1 }} />
+                      <Tooltip title='Salin kode'>
+                        <IconButton size='small' onClick={() => copy(p.code, 'Kode')}>
+                          <i className='tabler-copy' />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title='Salin link share'>
+                        <IconButton size='small' onClick={() => copy(shareLink, 'Link')}>
+                          <i className='tabler-link' />
+                        </IconButton>
+                      </Tooltip>
+                      {shareLink && (
+                        <Tooltip title='Share via WhatsApp'>
+                          <IconButton
+                            size='small'
+                            component='a'
+                            href={`https://wa.me/?text=${encodeURIComponent(`Pakai kode ${p.code} buat dapet diskon di Playfast: ${shareLink}`)}`}
+                            target='_blank'
+                            rel='noopener noreferrer'
+                          >
+                            <i className='tabler-brand-whatsapp' />
+                          </IconButton>
+                        </Tooltip>
                       )}
+                    </Box>
 
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
-                        <Typography variant='caption' color='text.secondary'>
-                          Berlaku untuk: <strong>{formatScope(p.scope)}</strong>
-                        </Typography>
-                      </Box>
+                    {p.description && (
+                      <Typography variant='body2' color='text.secondary' sx={{ mb: 1.5 }}>
+                        {p.description}
+                      </Typography>
+                    )}
 
+                    {/* Scope/limits */}
+                    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                      <Typography variant='caption' color='text.secondary'>
+                        Berlaku: <strong>{formatScope(p.scope)}</strong>
+                      </Typography>
                       {p.min_order_amount > 0 && (
-                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
-                          Min pembelian: {formatIDR(p.min_order_amount)}
+                        <Typography variant='caption' color='text.secondary'>
+                          Min order: <strong>{formatIDR(p.min_order_amount)}</strong>
                         </Typography>
                       )}
                       {p.expires_at && (
-                        <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
-                          Berakhir: {new Date(p.expires_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        <Typography variant='caption' color='text.secondary'>
+                          Berakhir: <strong>{new Date(p.expires_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
                         </Typography>
                       )}
+                    </Box>
 
-                      <Box sx={{ flexGrow: 1 }} />
+                    <Divider sx={{ my: 2 }} />
 
-                      <Button
-                        variant='contained'
-                        color='primary'
-                        startIcon={<i className='tabler-copy' />}
-                        onClick={() => copyCode(p.code)}
-                        disabled={!p.usable}
-                        sx={{ mt: 2, fontWeight: 600 }}
-                        fullWidth
-                      >
-                        {p.usable ? 'Salin Kode' : 'Tidak tersedia'}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </Grid>
+                    {/* Per-code stats */}
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 6, sm: 4 }}>
+                        <Typography variant='caption' color='text.secondary'>Total Redeem</Typography>
+                        <Typography variant='h6' sx={{ fontWeight: 700, color: 'primary.main' }}>
+                          {p.total_uses}
+                          {p.max_uses_total != null && (
+                            <Typography component='span' variant='body2' color='text.secondary' sx={{ ml: 0.5 }}>
+                              / {p.max_uses_total}
+                            </Typography>
+                          )}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 4 }}>
+                        <Typography variant='caption' color='text.secondary'>Total Diskon Diberikan</Typography>
+                        <Typography variant='h6' sx={{ fontWeight: 700, color: 'primary.main' }}>
+                          {formatIDR(p.total_discount_given)}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
+                        {p.recent_uses.length > 0 && (
+                          <Button
+                            size='small'
+                            variant='text'
+                            endIcon={<i className={isExpanded ? 'tabler-chevron-up' : 'tabler-chevron-down'} />}
+                            onClick={() => setExpanded(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                          >
+                            {isExpanded ? 'Sembunyikan aktivitas' : `Lihat ${p.recent_uses.length} redemption terakhir`}
+                          </Button>
+                        )}
+                      </Grid>
+                    </Grid>
+
+                    {/* Activity feed */}
+                    <Collapse in={isExpanded}>
+                      <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed', borderColor: 'divider' }}>
+                        {p.recent_uses.length === 0 ? (
+                          <Typography variant='body2' color='text.secondary'>Belum ada yang redeem</Typography>
+                        ) : (
+                          p.recent_uses.map((u, idx) => (
+                            <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.75, borderBottom: idx < p.recent_uses.length - 1 ? '1px solid' : undefined, borderColor: 'divider', gap: 2, flexWrap: 'wrap' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 200 }}>
+                                <i className='tabler-user' style={{ fontSize: 14, color: '#9aa0a6' }} />
+                                <Typography variant='body2' sx={{ fontFamily: 'monospace' }}>{u.email_masked}</Typography>
+                                <Typography variant='caption' color='text.secondary'>· {formatDateTime(u.used_at)}</Typography>
+                                {u.subscription_id != null && <Chip size='small' label='Sub' variant='outlined' />}
+                                {u.order_id != null && <Chip size='small' label='Game' variant='outlined' />}
+                              </Box>
+                              <Typography variant='body2' sx={{ fontWeight: 600, color: 'success.main' }}>
+                                −{formatIDR(u.discount_amount)}
+                              </Typography>
+                            </Box>
+                          ))
+                        )}
+                      </Box>
+                    </Collapse>
+                  </CardContent>
+                </Card>
               )
             })}
-          </Grid>
+          </Box>
         </>
       )}
 

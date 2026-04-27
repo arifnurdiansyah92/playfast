@@ -334,6 +334,14 @@ export interface PromoCode {
   uses_count?: number
 }
 
+export interface MyPromoUse {
+  email_masked: string
+  discount_amount: number
+  used_at: string
+  order_id: number | null
+  subscription_id: number | null
+}
+
 export interface MyPromo {
   id: number
   code: string
@@ -342,12 +350,14 @@ export interface MyPromo {
   discount_value: number
   scope: string
   min_order_amount: number
+  max_uses_total: number | null
   max_uses_per_user: number
   expires_at: string | null
   is_active: boolean
-  used_count: number
-  usable: boolean
   expired: boolean
+  total_uses: number
+  total_discount_given: number
+  recent_uses: MyPromoUse[]
 }
 
 export interface PromoCodeUsage {

@@ -153,7 +153,7 @@ const AdminPromoCodesPage = () => {
                 <TableCell>Code</TableCell>
                 <TableCell>Discount</TableCell>
                 <TableCell>Scope</TableCell>
-                <TableCell>Assigned</TableCell>
+                <TableCell>Owner (tracker)</TableCell>
                 <TableCell align='center'>Uses</TableCell>
                 <TableCell align='center'>Active</TableCell>
                 <TableCell align='right'>Actions</TableCell>
@@ -174,14 +174,14 @@ const AdminPromoCodesPage = () => {
                     {c.assigned_user_email ? (
                       <Chip
                         size='small'
-                        color='warning'
+                        color='info'
                         variant='tonal'
-                        icon={<i className='tabler-user' style={{ fontSize: 12 }} />}
+                        icon={<i className='tabler-target' style={{ fontSize: 12 }} />}
                         label={c.assigned_user_email}
                         sx={{ maxWidth: 200, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
                       />
                     ) : (
-                      <Typography variant='caption' color='text.secondary'>Public</Typography>
+                      <Typography variant='caption' color='text.secondary'>—</Typography>
                     )}
                   </TableCell>
                   <TableCell align='center'>
@@ -260,8 +260,8 @@ const AdminPromoCodesPage = () => {
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label='Assign to specific user (optional)'
-                  helperText='Kosongkan untuk public code. Diisi = hanya user itu yang bisa pakai.'
+                  label='Owner — untuk tracking (opsional)'
+                  helperText='Pilih user (misal marketer/affiliate) yang "memiliki" kode ini. Kode tetap public — siapapun bisa pakai. Owner cuma dapat akses ke statistik redemption di Promo Tracker mereka.'
                 />
               )}
               isOptionEqualToValue={(o, v) => o.id === v.id}
