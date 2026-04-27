@@ -51,5 +51,6 @@ tmp/
 
 # Internal drafts & promo copy — never commit live codes
 docs/emails/
+docs/hiring/
 design-fetch-tmp/
 design-fetch-landing-banner/
