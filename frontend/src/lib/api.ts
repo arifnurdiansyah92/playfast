@@ -337,6 +337,8 @@ export interface PromoCode {
 export interface MyPromoUse {
   email_masked: string
   discount_amount: number
+  revenue_amount: number
+  paid: boolean
   used_at: string
   order_id: number | null
   subscription_id: number | null
@@ -356,7 +358,9 @@ export interface MyPromo {
   is_active: boolean
   expired: boolean
   total_uses: number
+  paid_redemptions: number
   total_discount_given: number
+  total_revenue_contributed: number
   recent_uses: MyPromoUse[]
 }
 

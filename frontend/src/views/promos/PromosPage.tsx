@@ -68,7 +68,9 @@ const PromosPage = () => {
 
   const promos = data ?? []
   const totalUses = promos.reduce((sum, p) => sum + p.total_uses, 0)
+  const totalPaid = promos.reduce((sum, p) => sum + p.paid_redemptions, 0)
   const totalDiscount = promos.reduce((sum, p) => sum + p.total_discount_given, 0)
+  const totalRevenue = promos.reduce((sum, p) => sum + p.total_revenue_contributed, 0)
   const activeCount = promos.filter(p => p.is_active && !p.expired).length
 
   const copy = (text: string, label: string) => {
@@ -109,7 +111,7 @@ const PromosPage = () => {
         <>
           {/* Aggregate stats across all owned codes */}
           <Grid container spacing={2}>
-            <Grid size={{ xs: 6, sm: 3 }}>
+            <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
               <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
                 <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
                   <Typography variant='h5' sx={{ fontWeight: 800, color: 'primary.main' }}>{promos.length}</Typography>
@@ -117,7 +119,7 @@ const PromosPage = () => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid size={{ xs: 6, sm: 3 }}>
+            <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
               <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
                 <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
                   <Typography variant='h5' sx={{ fontWeight: 800, color: 'success.main' }}>{activeCount}</Typography>
@@ -125,19 +127,30 @@ const PromosPage = () => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid size={{ xs: 6, sm: 3 }}>
+            <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
               <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
                 <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
-                  <Typography variant='h5' sx={{ fontWeight: 800, color: 'primary.main' }}>{totalUses}</Typography>
-                  <Typography variant='caption' color='text.secondary'>Total Redeem</Typography>
+                  <Typography variant='h5' sx={{ fontWeight: 800, color: 'primary.main' }}>
+                    {totalPaid}
+                    <Typography component='span' variant='body2' color='text.secondary' sx={{ ml: 0.5 }}>/ {totalUses}</Typography>
+                  </Typography>
+                  <Typography variant='caption' color='text.secondary'>Redeem (paid / total)</Typography>
                 </CardContent>
               </Card>
             </Grid>
-            <Grid size={{ xs: 6, sm: 3 }}>
+            <Grid size={{ xs: 6, sm: 4, md: 2.4 }}>
               <Card sx={{ border: '1px solid', borderColor: 'divider', height: '100%' }}>
                 <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
-                  <Typography variant='h6' sx={{ fontWeight: 800, color: 'primary.main' }}>{formatIDR(totalDiscount)}</Typography>
-                  <Typography variant='caption' color='text.secondary'>Total Diskon Diberikan</Typography>
+                  <Typography variant='h6' sx={{ fontWeight: 800, color: 'warning.main' }}>{formatIDR(totalDiscount)}</Typography>
+                  <Typography variant='caption' color='text.secondary'>Total Diskon</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 8, md: 2.4 }}>
+              <Card sx={{ border: '1px solid', borderColor: 'success.main', bgcolor: 'rgba(76,175,80,0.05)', height: '100%' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2.5 }}>
+                  <Typography variant='h6' sx={{ fontWeight: 800, color: 'success.main' }}>{formatIDR(totalRevenue)}</Typography>
+                  <Typography variant='caption' color='text.secondary'>Revenue Kontribusi</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -243,24 +256,29 @@ const PromosPage = () => {
 
                     {/* Per-code stats */}
                     <Grid container spacing={2}>
-                      <Grid size={{ xs: 6, sm: 4 }}>
-                        <Typography variant='caption' color='text.secondary'>Total Redeem</Typography>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant='caption' color='text.secondary'>Redeem (paid/total)</Typography>
                         <Typography variant='h6' sx={{ fontWeight: 700, color: 'primary.main' }}>
-                          {p.total_uses}
-                          {p.max_uses_total != null && (
-                            <Typography component='span' variant='body2' color='text.secondary' sx={{ ml: 0.5 }}>
-                              / {p.max_uses_total}
-                            </Typography>
-                          )}
+                          {p.paid_redemptions}
+                          <Typography component='span' variant='body2' color='text.secondary' sx={{ ml: 0.5 }}>
+                            / {p.total_uses}
+                            {p.max_uses_total != null && ` (cap ${p.max_uses_total})`}
+                          </Typography>
                         </Typography>
                       </Grid>
-                      <Grid size={{ xs: 6, sm: 4 }}>
-                        <Typography variant='caption' color='text.secondary'>Total Diskon Diberikan</Typography>
-                        <Typography variant='h6' sx={{ fontWeight: 700, color: 'primary.main' }}>
+                      <Grid size={{ xs: 6, sm: 3 }}>
+                        <Typography variant='caption' color='text.secondary'>Total Diskon</Typography>
+                        <Typography variant='h6' sx={{ fontWeight: 700, color: 'warning.main' }}>
                           {formatIDR(p.total_discount_given)}
                         </Typography>
                       </Grid>
-                      <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
+                      <Grid size={{ xs: 12, sm: 3 }}>
+                        <Typography variant='caption' color='text.secondary'>Revenue Kontribusi</Typography>
+                        <Typography variant='h6' sx={{ fontWeight: 700, color: 'success.main' }}>
+                          {formatIDR(p.total_revenue_contributed)}
+                        </Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 3 }} sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
                         {p.recent_uses.length > 0 && (
                           <Button
                             size='small'
@@ -268,7 +286,7 @@ const PromosPage = () => {
                             endIcon={<i className={isExpanded ? 'tabler-chevron-up' : 'tabler-chevron-down'} />}
                             onClick={() => setExpanded(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                           >
-                            {isExpanded ? 'Sembunyikan aktivitas' : `Lihat ${p.recent_uses.length} redemption terakhir`}
+                            {isExpanded ? 'Tutup' : `Lihat ${p.recent_uses.length} terakhir`}
                           </Button>
                         )}
                       </Grid>
@@ -281,17 +299,29 @@ const PromosPage = () => {
                           <Typography variant='body2' color='text.secondary'>Belum ada yang redeem</Typography>
                         ) : (
                           p.recent_uses.map((u, idx) => (
-                            <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.75, borderBottom: idx < p.recent_uses.length - 1 ? '1px solid' : undefined, borderColor: 'divider', gap: 2, flexWrap: 'wrap' }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 200 }}>
+                            <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1, borderBottom: idx < p.recent_uses.length - 1 ? '1px solid' : undefined, borderColor: 'divider', gap: 2, flexWrap: 'wrap' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 200, flexWrap: 'wrap' }}>
                                 <i className='tabler-user' style={{ fontSize: 14, color: '#9aa0a6' }} />
                                 <Typography variant='body2' sx={{ fontFamily: 'monospace' }}>{u.email_masked}</Typography>
                                 <Typography variant='caption' color='text.secondary'>· {formatDateTime(u.used_at)}</Typography>
                                 {u.subscription_id != null && <Chip size='small' label='Sub' variant='outlined' />}
                                 {u.order_id != null && <Chip size='small' label='Game' variant='outlined' />}
+                                {!u.paid && <Chip size='small' label='pending' color='warning' variant='outlined' />}
                               </Box>
-                              <Typography variant='body2' sx={{ fontWeight: 600, color: 'success.main' }}>
-                                −{formatIDR(u.discount_amount)}
-                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <Box sx={{ textAlign: 'right' }}>
+                                  <Typography variant='caption' color='text.secondary' sx={{ display: 'block', lineHeight: 1 }}>diskon</Typography>
+                                  <Typography variant='body2' sx={{ fontWeight: 600, color: 'warning.main' }}>
+                                    −{formatIDR(u.discount_amount)}
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ textAlign: 'right', minWidth: 90 }}>
+                                  <Typography variant='caption' color='text.secondary' sx={{ display: 'block', lineHeight: 1 }}>revenue</Typography>
+                                  <Typography variant='body2' sx={{ fontWeight: 600, color: u.paid ? 'success.main' : 'text.disabled' }}>
+                                    {u.paid ? formatIDR(u.revenue_amount) : '—'}
+                                  </Typography>
+                                </Box>
+                              </Box>
                             </Box>
                           ))
                         )}

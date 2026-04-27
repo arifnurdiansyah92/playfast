@@ -1531,16 +1531,68 @@ def my_promos():
         total_uses = len(usages)
         total_discount = sum(u.discount_amount for u in usages)
 
-        # Last 10 redemptions with masked emails for the owner's activity feed.
+        # Bulk-fetch the orders / subscriptions referenced by these usages so
+        # we can compute revenue contribution without N round-trips.
+        order_ids = {u.order_id for u in usages if u.order_id}
+        sub_ids = {u.subscription_id for u in usages if u.subscription_id}
+        orders_by_id = {
+            o.id: o for o in (Order.query.filter(Order.id.in_(order_ids)).all() if order_ids else [])
+        }
+        subs_by_id = {
+            s.id: s for s in (Subscription.query.filter(Subscription.id.in_(sub_ids)).all() if sub_ids else [])
+        }
+
+        # "Revenue contribution" = net amount actually paid for orders /
+        # subscriptions that redeemed this code. Pending / unpaid records
+        # are excluded so the figure represents realised revenue, not just
+        # intent. paid_at IS NOT NULL is the proxy for "money came in".
+        total_revenue = 0
+        paid_redemptions = 0
+        for u in usages:
+            paid = False
+            amount = 0
+            if u.order_id and u.order_id in orders_by_id:
+                o = orders_by_id[u.order_id]
+                if o.paid_at is not None:
+                    paid = True
+                    amount = o.amount or 0
+            elif u.subscription_id and u.subscription_id in subs_by_id:
+                s = subs_by_id[u.subscription_id]
+                if s.paid_at is not None:
+                    paid = True
+                    amount = s.amount or 0
+            if paid:
+                total_revenue += amount
+                paid_redemptions += 1
+
+        # Last 10 redemptions with masked emails + per-row revenue for the
+        # owner's activity feed.
         recent = []
         for u in usages[:10]:
             redeemer = db.session.get(User, u.user_id) if u.user_id else None
             email = redeemer.email if redeemer else ""
             at_idx = email.find("@")
             masked = email[0] + "***" + email[at_idx:] if at_idx > 1 else (email or "anon")
+
+            order_amount = None
+            sub_amount = None
+            paid = False
+            if u.order_id and u.order_id in orders_by_id:
+                o = orders_by_id[u.order_id]
+                if o.paid_at is not None:
+                    paid = True
+                    order_amount = o.amount or 0
+            elif u.subscription_id and u.subscription_id in subs_by_id:
+                s = subs_by_id[u.subscription_id]
+                if s.paid_at is not None:
+                    paid = True
+                    sub_amount = s.amount or 0
+
             recent.append({
                 "email_masked": masked,
                 "discount_amount": u.discount_amount,
+                "revenue_amount": (order_amount if order_amount is not None else sub_amount) or 0,
+                "paid": paid,
                 "used_at": u.used_at.isoformat(),
                 "order_id": u.order_id,
                 "subscription_id": u.subscription_id,
@@ -1562,7 +1614,9 @@ def my_promos():
             "is_active": p.is_active,
             "expired": expired,
             "total_uses": total_uses,
+            "paid_redemptions": paid_redemptions,
             "total_discount_given": total_discount,
+            "total_revenue_contributed": total_revenue,
             "recent_uses": recent,
         })
 
