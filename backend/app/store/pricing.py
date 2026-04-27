@@ -27,6 +27,9 @@ def validate_promo_code(code: str, user_id: int, subtotal: int, order_type: str,
         return None, 0, _INVALID
     if promo.expires_at and promo.expires_at < datetime.now(timezone.utc):
         return None, 0, _INVALID
+    # Personal codes — only the assigned user may redeem.
+    if promo.assigned_user_id is not None and promo.assigned_user_id != user_id:
+        return None, 0, _INVALID
 
     scope = promo.scope or "all"
     if scope == "all":

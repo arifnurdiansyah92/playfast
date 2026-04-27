@@ -50,6 +50,7 @@ const SubscribePage = () => {
   useEffect(() => {
     if (urlPlan && plans.length > 0 && !modalOpen && !selectedPlan) {
       const match = plans.find(p => p.plan === urlPlan)
+
       if (match && user) {
         setSelectedPlan(urlPlan)
         setModalOpen(true)
@@ -61,8 +62,10 @@ const SubscribePage = () => {
   const handleConfirmSubscribe = async ({ promo_code, apply_credit }: { promo_code: string | null; apply_credit: boolean }) => {
     if (!selectedPlan) return
     setSubmitting(true)
+
     try {
       const result = await storeApi.subscribe(selectedPlan, { promo_code: promo_code ?? undefined, apply_credit })
+
       router.push(`/subscription/${result.subscription.id}`)
     } catch (err: any) {
       setError(err.message || 'Failed to subscribe')
@@ -110,11 +113,30 @@ const SubscribePage = () => {
         <Grid container spacing={3} justifyContent='center'>
           {plans.map(plan => {
             const isBest = plan.plan === bestValue
+            const isLifetime = plan.plan === 'lifetime'
+
             const monthlyEquiv = plan.plan === 'monthly'
               ? plan.price
               : plan.plan === '3monthly'
                 ? Math.round(plan.price / 3)
-                : Math.round(plan.price / 12)
+                : plan.plan === 'yearly'
+                  ? Math.round(plan.price / 12)
+                  : 0
+
+            const monthlyBaseline = plans.find(p => p.plan === 'monthly')?.price
+
+            const savingsPct = monthlyBaseline && plan.plan !== 'monthly' && plan.plan !== 'lifetime'
+              ? Math.round(((monthlyBaseline - monthlyEquiv) / monthlyBaseline) * 100)
+              : 0
+
+            const benefits = (() => {
+              if (plan.plan === 'monthly') return ['Akses 300+ game di katalog', 'Cancel kapan aja', 'Kode Steam Guard otomatis 24/7', 'Game baru otomatis bisa dimainkan']
+              if (plan.plan === '3monthly') return ['Semua benefit Monthly', savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat dari Monthly', 'Komitmen pendek tapi lebih murah']
+              if (plan.plan === 'yearly') return [savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat paling banyak', 'Akses penuh sepanjang tahun', 'Game baru otomatis tersedia', 'Priority WhatsApp support']
+              if (plan.plan === 'lifetime') return ['Bayar sekali, akses selamanya', 'Tidak ada renewal — pay-once', 'Semua game baru ke depannya gratis', 'Lifetime priority support']
+
+              return ['Akses semua game di katalog', 'Kode Steam Guard otomatis', 'Game baru otomatis tersedia']
+            })()
 
             return (
               <Grid size={{ xs: 12, sm: 6, md: 4 }} key={plan.plan}>
@@ -128,10 +150,10 @@ const SubscribePage = () => {
                     flexDirection: 'column',
                   }}
                 >
-                  {isBest && (
+                  {(isBest || isLifetime) && (
                     <Chip
-                      label='Best Value'
-                      color='primary'
+                      label={isLifetime ? 'Promo Lifetime' : 'Best Value'}
+                      color={isLifetime ? 'warning' : 'primary'}
                       size='small'
                       sx={{
                         position: 'absolute',
@@ -150,8 +172,20 @@ const SubscribePage = () => {
                       {formatIDR(plan.price)}
                     </Typography>
                     <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
-                      {plan.plan !== 'monthly' && `${formatIDR(monthlyEquiv)}/month · `}{plan.duration_days} days
+                      {plan.plan === 'monthly' && `${plan.duration_days} hari`}
+                      {plan.plan === '3monthly' && `${formatIDR(monthlyEquiv)}/bulan · ${plan.duration_days} hari`}
+                      {plan.plan === 'yearly' && `${formatIDR(monthlyEquiv)}/bulan · ${plan.duration_days} hari`}
+                      {plan.plan === 'lifetime' && 'Sekali bayar, akses selamanya'}
                     </Typography>
+
+                    <Box sx={{ textAlign: 'left', mb: 2 }}>
+                      {benefits.map(t => (
+                        <Box key={t} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+                          <i className='tabler-check' style={{ fontSize: 16, color: '#c9a84c', marginTop: 4 }} />
+                          <Typography variant='body2' color='text.secondary' sx={{ lineHeight: 1.5 }}>{t}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
 
                     <Box sx={{ flexGrow: 1 }} />
 
@@ -161,7 +195,10 @@ const SubscribePage = () => {
                       fullWidth
                       disabled={isSubscribed || submitting}
                       onClick={() => {
-                        if (!user) { router.push('/register?redirect=/subscribe'); return }
+                        if (!user) { router.push('/register?redirect=/subscribe'); 
+
+return }
+
                         setSelectedPlan(plan.plan)
                         setModalOpen(true)
                       }}
@@ -207,7 +244,9 @@ const SubscribePage = () => {
 
       {selectedPlan && (() => {
         const plan = plans.find(p => p.plan === selectedPlan)
-        return (
+
+        
+return (
           <CheckoutReviewModal
             open={modalOpen}
             onClose={() => setModalOpen(false)}

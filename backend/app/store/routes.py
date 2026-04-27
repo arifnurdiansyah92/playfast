@@ -24,6 +24,7 @@ from app.models import (
     GameAccount,
     Order,
     PlayInstruction,
+    PromoCode,
     PromoCodeUsage,
     ReferralReward,
     SiteSetting,
@@ -1499,3 +1500,51 @@ def my_referral():
         "referrals": referrals,
         "total_earned": total_earned,
     }), 200
+
+
+@store_bp.route("/my-promos", methods=["GET"])
+@jwt_required()
+def my_promos():
+    """Return promo codes specifically assigned to the current user.
+
+    Excludes globally-public codes and codes assigned to someone else. Each
+    entry also reports whether the current user has already redeemed it
+    against their max_uses_per_user cap so the UI can grey out spent codes.
+    """
+    user_id = int(get_jwt_identity())
+    promos = (
+        PromoCode.query
+        .filter(PromoCode.assigned_user_id == user_id)
+        .order_by(PromoCode.is_active.desc(), PromoCode.created_at.desc())
+        .all()
+    )
+
+    result = []
+    for p in promos:
+        used_count = PromoCodeUsage.query.filter_by(
+            promo_code_id=p.id, user_id=user_id
+        ).count()
+        expired = bool(p.expires_at and p.expires_at < datetime.now(timezone.utc))
+        usable = (
+            p.is_active
+            and not expired
+            and used_count < p.max_uses_per_user
+        )
+        result.append({
+            "id": p.id,
+            "code": p.code,
+            "description": p.description,
+            "discount_type": p.discount_type,
+            "discount_value": p.discount_value,
+            "scope": p.scope,
+            "min_order_amount": p.min_order_amount,
+            "max_uses_per_user": p.max_uses_per_user,
+            "expires_at": p.expires_at.isoformat() if p.expires_at else None,
+            "is_active": p.is_active,
+            "used_count": used_count,
+            "usable": usable,
+            "expired": expired,
+        })
+
+    return jsonify({"promos": result}), 200
+

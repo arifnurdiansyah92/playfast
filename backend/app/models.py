@@ -499,6 +499,9 @@ class PromoCode(db.Model):
     max_uses_per_user = db.Column(db.Integer, nullable=False, default=1)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    # When set, this code can ONLY be redeemed by the specified user. Otherwise
+    # it is a public code anyone can try (subject to scope + max_uses rules).
+    assigned_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -506,6 +509,7 @@ class PromoCode(db.Model):
     )
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
+    assigned_user = db.relationship("User", foreign_keys=[assigned_user_id])
     usages = db.relationship("PromoCodeUsage", backref="promo_code", lazy="dynamic", cascade="all, delete-orphan")
 
     def to_dict(self, include_usage_count=False):
@@ -521,6 +525,8 @@ class PromoCode(db.Model):
             "max_uses_per_user": self.max_uses_per_user,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "is_active": self.is_active,
+            "assigned_user_id": self.assigned_user_id,
+            "assigned_user_email": self.assigned_user.email if self.assigned_user else None,
             "created_at": self.created_at.isoformat(),
         }
         if include_usage_count:

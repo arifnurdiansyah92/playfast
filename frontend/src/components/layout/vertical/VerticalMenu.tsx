@@ -93,6 +93,12 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
               <MenuItem href='/orders' icon={<i className='tabler-receipt' />}>
                 Riwayat Pesanan
               </MenuItem>
+              <MenuItem href='/referrals' icon={<i className='tabler-share' />}>
+                Referral Saya
+              </MenuItem>
+              <MenuItem href='/promos' icon={<i className='tabler-discount' />}>
+                Promo Saya
+              </MenuItem>
             </>
           )}
         </MenuSection>

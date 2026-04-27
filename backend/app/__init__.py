@@ -154,6 +154,9 @@ def _run_schema_upgrades():
         # Catalog sort: release_date for "newest first" ordering
         "ALTER TABLE games ADD COLUMN release_date DATE",
         "CREATE INDEX IF NOT EXISTS ix_games_release_date ON games (release_date)",
+        # Per-user promo assignment
+        "ALTER TABLE promo_codes ADD COLUMN assigned_user_id INTEGER",
+        "CREATE INDEX IF NOT EXISTS ix_promo_codes_assigned_user_id ON promo_codes (assigned_user_id)",
     ]
     for stmt in alter_statements:
         try:

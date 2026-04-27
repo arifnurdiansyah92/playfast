@@ -1948,6 +1948,14 @@ def create_promo_code():
         except (ValueError, AttributeError):
             return jsonify({"error": "expires_at must be ISO datetime"}), 400
 
+    # Optional per-user assignment — when set, only that user can redeem.
+    assigned_user_id = data.get("assigned_user_id")
+    if assigned_user_id is not None:
+        target = db.session.get(User, int(assigned_user_id))
+        if not target:
+            return jsonify({"error": "assigned user not found"}), 404
+        assigned_user_id = target.id
+
     current_user_id = int(get_jwt_identity())
     promo = PromoCode(
         code=code,
@@ -1960,6 +1968,7 @@ def create_promo_code():
         max_uses_per_user=int(data.get("max_uses_per_user") or 1),
         expires_at=expires_at,
         is_active=bool(data.get("is_active", True)),
+        assigned_user_id=assigned_user_id,
         created_by_user_id=current_user_id,
     )
     db.session.add(promo)
@@ -1995,6 +2004,14 @@ def update_promo_code(promo_id: int):
             promo.expires_at = None
     if "is_active" in data:
         promo.is_active = bool(data["is_active"])
+    if "assigned_user_id" in data:
+        if data["assigned_user_id"] is None:
+            promo.assigned_user_id = None
+        else:
+            target = db.session.get(User, int(data["assigned_user_id"]))
+            if not target:
+                return jsonify({"error": "assigned user not found"}), 404
+            promo.assigned_user_id = target.id
     # code/discount_type/discount_value intentionally NOT editable after creation
     # (preserves usage-log accuracy; admin should deactivate + create new instead)
 

@@ -489,12 +489,65 @@ const LandingPage = () => {
                 ))
                 : plans.map(plan => {
                   const isBest = plan.plan === 'yearly'
+                  const isLifetime = plan.plan === 'lifetime'
 
                   const monthlyEquiv = plan.plan === 'monthly'
                     ? plan.price
                     : plan.plan === '3monthly'
                       ? Math.round(plan.price / 3)
-                      : Math.round(plan.price / 12)
+                      : plan.plan === 'yearly'
+                        ? Math.round(plan.price / 12)
+                        : 0
+
+                  const monthlyBaseline = plans.find(p => p.plan === 'monthly')?.price
+
+                  const savingsPct = monthlyBaseline && plan.plan !== 'monthly' && plan.plan !== 'lifetime'
+                    ? Math.round(((monthlyBaseline - monthlyEquiv) / monthlyBaseline) * 100)
+                    : 0
+
+                  const benefits = (() => {
+                    if (plan.plan === 'monthly') {
+                      return [
+                        'Akses 300+ game di katalog',
+                        'Tanpa kontrak — cancel kapan aja',
+                        'Kode Steam Guard otomatis 24/7',
+                        'Game baru otomatis bisa dimainkan',
+                      ]
+                    }
+
+                    if (plan.plan === '3monthly') {
+                      return [
+                        'Semua benefit Monthly',
+                        savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat dari Monthly',
+                        'Komitmen pendek tapi lebih murah',
+                        'Cocok untuk coba beberapa AAA dulu',
+                      ]
+                    }
+
+                    if (plan.plan === 'yearly') {
+                      return [
+                        savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat paling banyak',
+                        'Akses penuh sepanjang tahun',
+                        'Game baru otomatis tersedia',
+                        'Priority WhatsApp support',
+                      ]
+                    }
+
+                    if (plan.plan === 'lifetime') {
+                      return [
+                        'Bayar sekali, akses selamanya',
+                        'Tidak ada renewal — pay-once',
+                        'Semua game baru ke depannya gratis',
+                        'Lifetime priority support',
+                      ]
+                    }
+
+                    return [
+                      'Akses semua game di katalog',
+                      'Kode Steam Guard otomatis',
+                      'Game baru otomatis tersedia',
+                    ]
+                  })()
 
                   return (
                     <Grid size={{ xs: 12, sm: 6, md: 3 }} key={plan.plan}>
@@ -520,20 +573,25 @@ const LandingPage = () => {
                             background: `linear-gradient(135deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.04) 100%)`,
                             border: `1px solid rgba(201,168,76,0.25)`,
                           }}>
-                            <i className='tabler-crown' style={{ fontSize: 24, color: gold }} />
+                            <i className={isLifetime ? 'tabler-infinity' : 'tabler-crown'} style={{ fontSize: 24, color: gold }} />
                           </Box>
                           <Typography variant='h6' sx={{ fontWeight: 700, mb: 1 }}>{plan.label}</Typography>
                           <Typography variant='h4' sx={{ fontWeight: 800, color: gold, mb: 0.5 }}>
                             {formatIDR(plan.price)}
                           </Typography>
                           <Typography variant='body2' sx={{ color: textSecondary, mb: 2 }}>
-                            {plan.plan !== 'monthly' && `${formatIDR(monthlyEquiv)}/bulan · `}{plan.duration_days} hari
+                            {isLifetime
+                              ? 'Sekali bayar, akses selamanya'
+                              : plan.plan === 'monthly'
+                                ? `${plan.duration_days} hari`
+                                : `${formatIDR(monthlyEquiv)}/bulan · ${plan.duration_days} hari`
+                            }
                           </Typography>
                           <Box sx={{ textAlign: 'left', mb: 3 }}>
-                            {['Akses semua game di katalog', 'Kode Steam Guard otomatis', 'Game baru otomatis tersedia'].map(t => (
-                              <Box key={t} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                                <i className='tabler-check' style={{ fontSize: 16, color: gold }} />
-                                <Typography variant='body2' sx={{ color: textSecondary }}>{t}</Typography>
+                            {benefits.map(t => (
+                              <Box key={t} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1 }}>
+                                <i className='tabler-check' style={{ fontSize: 16, color: gold, marginTop: 4 }} />
+                                <Typography variant='body2' sx={{ color: textSecondary, lineHeight: 1.5 }}>{t}</Typography>
                               </Box>
                             ))}
                           </Box>

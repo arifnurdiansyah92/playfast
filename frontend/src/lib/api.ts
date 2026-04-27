@@ -328,8 +328,26 @@ export interface PromoCode {
   max_uses_per_user: number
   expires_at: string | null
   is_active: boolean
+  assigned_user_id: number | null
+  assigned_user_email: string | null
   created_at: string
   uses_count?: number
+}
+
+export interface MyPromo {
+  id: number
+  code: string
+  description: string | null
+  discount_type: 'percentage' | 'fixed'
+  discount_value: number
+  scope: string
+  min_order_amount: number
+  max_uses_per_user: number
+  expires_at: string | null
+  is_active: boolean
+  used_count: number
+  usable: boolean
+  expired: boolean
 }
 
 export interface PromoCodeUsage {
@@ -497,6 +515,9 @@ return res.order
   },
   getMyReferral() {
     return request<MyReferralResponse>('/api/store/my-referral')
+  },
+  getMyPromos() {
+    return request<{ promos: MyPromo[] }>('/api/store/my-promos').then(r => r.promos)
   },
 }
 

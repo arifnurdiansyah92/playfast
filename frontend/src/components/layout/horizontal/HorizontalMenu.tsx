@@ -89,6 +89,12 @@ const HorizontalMenu = () => {
         <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
           Game Saya
         </MenuItem>
+        <MenuItem href='/referrals' icon={<i className='tabler-share' />}>
+          Referral Saya
+        </MenuItem>
+        <MenuItem href='/promos' icon={<i className='tabler-discount' />}>
+          Promo Saya
+        </MenuItem>
         {isAdmin && (
           <SubMenu label='Admin' icon={<i className='tabler-shield' />}>
             <MenuItem href='/admin' icon={<i className='tabler-dashboard' />}>

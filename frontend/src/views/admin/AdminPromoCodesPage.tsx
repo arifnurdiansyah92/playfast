@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Card from '@mui/material/Card'
 import Typography from '@mui/material/Typography'
@@ -25,6 +26,8 @@ import Switch from '@mui/material/Switch'
 import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
 import Tooltip from '@mui/material/Tooltip'
+import Autocomplete from '@mui/material/Autocomplete'
+import Chip from '@mui/material/Chip'
 
 import { adminApi, formatIDR } from '@/lib/api'
 import type { PromoCode } from '@/lib/api'
@@ -33,16 +36,24 @@ import { useAuth } from '@/contexts/AuthContext'
 function buildShareLink(code: string, scope: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const encodedCode = encodeURIComponent(code)
+
   if (scope === 'subscriptions') return `${origin}/subscribe?code=${encodedCode}`
+
   if (scope.startsWith('sub:')) {
     const plan = scope.split(':', 2)[1]
-    return `${origin}/subscribe?code=${encodedCode}&plan=${encodeURIComponent(plan)}`
+
+    
+return `${origin}/subscribe?code=${encodedCode}&plan=${encodeURIComponent(plan)}`
   }
+
   if (scope === 'games' || scope === 'all') return `${origin}/store?code=${encodedCode}`
+
   if (scope.startsWith('game:')) {
     return `${origin}/store?code=${encodedCode}`
   }
-  return `${origin}/store?code=${encodedCode}`
+
+  
+return `${origin}/store?code=${encodedCode}`
 }
 
 const AdminPromoCodesPage = () => {
@@ -62,6 +73,7 @@ const AdminPromoCodesPage = () => {
     max_uses_total: number | null
     max_uses_per_user: number
     is_active: boolean
+    assigned_user_id: number | null
   }>({
     code: '',
     description: '',
@@ -72,6 +84,13 @@ const AdminPromoCodesPage = () => {
     max_uses_total: null,
     max_uses_per_user: 1,
     is_active: true,
+    assigned_user_id: null,
+  })
+
+  const { data: users } = useQuery({
+    queryKey: ['admin-users-light'],
+    queryFn: () => adminApi.getUsers(),
+    enabled: user?.role === 'admin',
   })
 
   const { data } = useQuery({
@@ -134,6 +153,7 @@ const AdminPromoCodesPage = () => {
                 <TableCell>Code</TableCell>
                 <TableCell>Discount</TableCell>
                 <TableCell>Scope</TableCell>
+                <TableCell>Assigned</TableCell>
                 <TableCell align='center'>Uses</TableCell>
                 <TableCell align='center'>Active</TableCell>
                 <TableCell align='right'>Actions</TableCell>
@@ -150,6 +170,20 @@ const AdminPromoCodesPage = () => {
                   </TableCell>
                   <TableCell>{formatValue(c)}</TableCell>
                   <TableCell>{c.scope}</TableCell>
+                  <TableCell>
+                    {c.assigned_user_email ? (
+                      <Chip
+                        size='small'
+                        color='warning'
+                        variant='tonal'
+                        icon={<i className='tabler-user' style={{ fontSize: 12 }} />}
+                        label={c.assigned_user_email}
+                        sx={{ maxWidth: 200, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+                      />
+                    ) : (
+                      <Typography variant='caption' color='text.secondary'>Public</Typography>
+                    )}
+                  </TableCell>
                   <TableCell align='center'>
                     {c.uses_count ?? 0}{c.max_uses_total ? `/${c.max_uses_total}` : ''}
                   </TableCell>
@@ -164,6 +198,7 @@ const AdminPromoCodesPage = () => {
                     <Tooltip title='Copy share link'>
                       <IconButton size='small' onClick={() => {
                         const link = buildShareLink(c.code, c.scope)
+
                         navigator.clipboard.writeText(link)
                         setSnack(`Link disalin: ${link}`)
                       }}>
@@ -216,6 +251,23 @@ const AdminPromoCodesPage = () => {
               <TextField label='Max Uses Total' type='number' value={newCode.max_uses_total ?? ''} onChange={e => setNewCode({ ...newCode, max_uses_total: e.target.value ? +e.target.value : null })} fullWidth helperText='Empty = unlimited' />
               <TextField label='Max Per User' type='number' value={newCode.max_uses_per_user} onChange={e => setNewCode({ ...newCode, max_uses_per_user: +e.target.value })} fullWidth />
             </Box>
+
+            <Autocomplete
+              options={users ?? []}
+              getOptionLabel={(u) => u.email}
+              value={users?.find(u => u.id === newCode.assigned_user_id) ?? null}
+              onChange={(_, picked) => setNewCode({ ...newCode, assigned_user_id: picked ? picked.id : null })}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label='Assign to specific user (optional)'
+                  helperText='Kosongkan untuk public code. Diisi = hanya user itu yang bisa pakai.'
+                />
+              )}
+              isOptionEqualToValue={(o, v) => o.id === v.id}
+              fullWidth
+              clearOnBlur
+            />
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
