@@ -76,8 +76,8 @@ const LandingPage = () => {
   const features = [
     { icon: 'tabler-bolt', title: 'Akses Instan', desc: 'Dapatkan kredensial Steam dan kode guard langsung setelah pembelian' },
     { icon: 'tabler-shield-lock', title: 'Kode Steam Guard', desc: 'Kode 2FA otomatis — nggak perlu nunggu seller bales' },
-    { icon: 'tabler-crown', title: 'Subscribe = Semua Game', desc: 'Satu subscription, akses semua game di katalog. Game baru otomatis tersedia' },
-    { icon: 'tabler-currency-dollar', title: 'Harga Terjangkau', desc: 'Beli satuan mulai Rp 50K, atau subscribe untuk akses semua' },
+    { icon: 'tabler-crown', title: 'Subscribe = Semua Game', desc: 'Satu langganan Premium = akses ke 300+ game di katalog. Game baru otomatis nambah' },
+    { icon: 'tabler-currency-dollar', title: 'Mulai Rp 50K/Bulan', desc: 'Premium bulanan terjangkau, atau hemat lebih banyak via paket tahunan / lifetime' },
   ]
 
   const steps = [
@@ -181,6 +181,29 @@ const LandingPage = () => {
             {/* Icon */}
             <Box component='img' src='/images/brand/icon.png' alt='' sx={{ width: { xs: 72, md: 88 }, height: 'auto', mx: 'auto', mb: 3, filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.5))' }} />
 
+            {/* Promo eyebrow — only shown when lifetime plan is configured */}
+            {(() => {
+              const lifetime = plans.find(p => p.plan === 'lifetime')
+
+              if (!lifetime || lifetime.price <= 0) return null
+
+              return (
+                <Box
+                  sx={{
+                    display: 'inline-flex', alignItems: 'center', gap: 1,
+                    px: 1.75, py: 0.6, mb: 2.5, borderRadius: 999,
+                    background: `linear-gradient(135deg, ${gold} 0%, #a67b1a 100%)`,
+                    boxShadow: `0 4px 14px rgba(201,168,76,0.4)`,
+                  }}
+                >
+                  <Box sx={{ width: 7, height: 7, borderRadius: 4, bgcolor: dark }} />
+                  <Typography variant='caption' sx={{ color: dark, fontWeight: 700, letterSpacing: '0.2em', fontSize: '0.7rem' }}>
+                    PROMO LIFETIME · {formatIDR(lifetime.price)}
+                  </Typography>
+                </Box>
+              )
+            })()}
+
             <Typography
               variant='h2'
               sx={{
@@ -189,7 +212,7 @@ const LandingPage = () => {
                 lineHeight: 1.15, letterSpacing: '-0.02em',
               }}
             >
-              Main Game Steam Apapun,{' '}
+              Subscribe Sekali,{' '}
               <Box
                 component='span'
                 sx={{
@@ -198,8 +221,9 @@ const LandingPage = () => {
                   WebkitTextFillColor: 'transparent',
                 }}
               >
-                Langsung Main!
-              </Box>
+                Main Semua
+              </Box>{' '}
+              Game Steam
             </Typography>
 
             <Typography
@@ -209,7 +233,7 @@ const LandingPage = () => {
                 fontWeight: 400, lineHeight: 1.7, fontSize: { xs: '1rem', md: '1.15rem' },
               }}
             >
-              Akses ribuan game Steam secara instan. Beli satuan atau subscribe untuk akses semua game. Kode Steam Guard otomatis — tanpa ribet.
+              Akses 300+ game Steam dengan satu langganan Premium — tanpa beli satu-satu. Kode Steam Guard otomatis 24/7, tanpa ribet.
             </Typography>
 
             {/* Social proof */}
@@ -220,8 +244,8 @@ const LandingPage = () => {
 
             <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
               <Button
-                component={Link} href='/store' variant='contained' size='large'
-                startIcon={<i className='tabler-search' />}
+                component={Link} href='/subscribe' variant='contained' size='large'
+                startIcon={<i className='tabler-crown' />}
                 sx={{
                   px: 4, py: 1.5, fontSize: '1rem', fontWeight: 700,
                   bgcolor: gold, color: dark,
@@ -229,17 +253,18 @@ const LandingPage = () => {
                   '&:hover': { bgcolor: goldLight, boxShadow: `0 6px 32px rgba(201,168,76,0.4)` },
                 }}
               >
-                Cari Game
+                Lihat Paket Premium
               </Button>
               <Button
-                component={Link} href='/register' variant='outlined' size='large'
+                component={Link} href='/store' variant='text' size='large'
+                endIcon={<i className='tabler-arrow-right' style={{ fontSize: 16 }} />}
                 sx={{
-                  px: 4, py: 1.5, fontSize: '1rem', fontWeight: 700,
-                  borderColor: 'rgba(201,168,76,0.35)', color: textPrimary,
-                  '&:hover': { borderColor: gold, bgcolor: goldGlow },
+                  px: 3, py: 1.5, fontSize: '0.95rem', fontWeight: 600,
+                  color: textSecondary,
+                  '&:hover': { color: gold, bgcolor: 'transparent' },
                 }}
               >
-                Buat Akun
+                atau beli satuan dari Rp 50K
               </Button>
             </Box>
           </Box>
@@ -252,8 +277,8 @@ const LandingPage = () => {
             }}
           >
             {[
-              { label: 'Per Game', value: 'Rp 50K' },
-              { label: 'Semua Game', value: 'Subscribe' },
+              { label: 'Game di Katalog', value: '300+' },
+              { label: 'Premium', value: 'Mulai 50K/bln' },
               { label: 'Kode Guard', value: 'Instan' },
             ].map(s => (
               <Box key={s.label} sx={{ textAlign: 'center', minWidth: 100 }}>
@@ -441,48 +466,14 @@ const LandingPage = () => {
         <Box sx={{ py: 10, bgcolor: 'rgba(0,0,0,0.2)' }}>
           <Container maxWidth='lg'>
             <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>
-              Pilih Cara Mainmu
+              Pilih Paket Premium-mu
             </Typography>
             <Typography variant='body1' sx={{ textAlign: 'center', color: textSecondary, mb: 6 }}>
-              Beli satuan per game, atau subscribe untuk akses semua game sekaligus
+              Subscribe sekali, akses semua game di katalog. Kalau cuma butuh satu game, beli satuan tetap tersedia di akhir.
             </Typography>
 
             <Grid container spacing={3} justifyContent='center'>
-              {/* Per-game card */}
-              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <Card sx={{ ...cardSx, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                  <CardContent sx={{ textAlign: 'center', py: 4, px: 3, display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-                    <Box sx={{
-                      width: 48, height: 48, borderRadius: '50%', mx: 'auto', mb: 2,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: `linear-gradient(135deg, rgba(201,168,76,0.15) 0%, rgba(201,168,76,0.04) 100%)`,
-                      border: `1px solid rgba(201,168,76,0.25)`,
-                    }}>
-                      <i className='tabler-shopping-cart' style={{ fontSize: 24, color: gold }} />
-                    </Box>
-                    <Typography variant='h6' sx={{ fontWeight: 700, mb: 1 }}>Beli Satuan</Typography>
-                    <Typography variant='h4' sx={{ fontWeight: 800, color: gold, mb: 0.5 }}>Rp 50K</Typography>
-                    <Typography variant='body2' sx={{ color: textSecondary, mb: 2 }}>mulai dari / game</Typography>
-                    <Box sx={{ textAlign: 'left', mb: 3 }}>
-                      {['Pilih game yang kamu mau', 'Bayar sekali, akses selamanya', 'Kode Steam Guard otomatis'].map(t => (
-                        <Box key={t} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                          <i className='tabler-check' style={{ fontSize: 16, color: gold }} />
-                          <Typography variant='body2' sx={{ color: textSecondary }}>{t}</Typography>
-                        </Box>
-                      ))}
-                    </Box>
-                    <Box sx={{ flexGrow: 1 }} />
-                    <Button
-                      component={Link} href='/store' variant='outlined' fullWidth size='large'
-                      sx={{ fontWeight: 700, borderColor: `rgba(201,168,76,0.35)`, color: textPrimary, '&:hover': { borderColor: gold, bgcolor: goldGlow } }}
-                    >
-                      Lihat Game
-                    </Button>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              {/* Subscription plan cards */}
+              {/* Subscription plan cards (lead with these — premium-first) */}
               {plansLoading
                 ? [1, 2, 3].map(i => (
                   <Grid size={{ xs: 12, sm: 6, md: 3 }} key={i}>
@@ -563,6 +554,50 @@ const LandingPage = () => {
                   )
                 })}
             </Grid>
+
+            {/* Per-game option — explicitly secondary, below the Premium tier */}
+            <Box sx={{ mt: 6, display: 'flex', justifyContent: 'center' }}>
+              <Card
+                sx={{
+                  ...cardSx,
+                  maxWidth: 560, width: '100%',
+                  borderStyle: 'dashed',
+                  borderColor: 'rgba(154,160,166,0.3)',
+                }}
+              >
+                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 2.5, px: 3, flexWrap: 'wrap' }}>
+                  <Box
+                    sx={{
+                      width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      bgcolor: 'rgba(154,160,166,0.1)',
+                    }}
+                  >
+                    <i className='tabler-shopping-cart' style={{ fontSize: 20, color: textSecondary }} />
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 200 }}>
+                    <Typography variant='subtitle2' sx={{ fontWeight: 700, color: textPrimary }}>
+                      Cuma butuh satu game?
+                    </Typography>
+                    <Typography variant='caption' sx={{ color: textSecondary, display: 'block' }}>
+                      Beli satuan mulai Rp 50K, bayar sekali — akses selamanya untuk game itu saja.
+                    </Typography>
+                  </Box>
+                  <Button
+                    component={Link} href='/store'
+                    variant='outlined' size='small'
+                    endIcon={<i className='tabler-arrow-right' style={{ fontSize: 14 }} />}
+                    sx={{
+                      fontWeight: 600,
+                      borderColor: 'rgba(154,160,166,0.4)', color: textSecondary,
+                      '&:hover': { borderColor: gold, color: gold, bgcolor: 'transparent' },
+                    }}
+                  >
+                    Lihat Toko
+                  </Button>
+                </CardContent>
+              </Card>
+            </Box>
           </Container>
         </Box>
 
