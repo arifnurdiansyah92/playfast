@@ -63,6 +63,15 @@ def start_job(job_type: str, target, args=(), total: int = 0) -> dict | None:
             return None
         _running = True
 
+    # Capture the Flask app reference now (we're in a request context).
+    # _run_job pushes its own app context for the worker thread so that the
+    # final _save_state/_running reset reliably run after `target` returns —
+    # otherwise the worker thread has no context and the finally-block save
+    # raises `Working outside of application context`, leaving _running=True
+    # and the DB state stuck at "running".
+    from flask import current_app
+    app = current_app._get_current_object()
+
     state = {
         "job_type": job_type,
         "status": "running",
@@ -75,7 +84,7 @@ def start_job(job_type: str, target, args=(), total: int = 0) -> dict | None:
     }
     _save_state(state)
 
-    thread = threading.Thread(target=_run_job, args=(state, target, args), daemon=True)
+    thread = threading.Thread(target=_run_job, args=(app, state, target, args), daemon=True)
     thread.start()
     return state
 
@@ -135,19 +144,35 @@ class JobProgress:
             return True
         return bool(self._state.get("cancel_requested"))
 
+    def reset_total(self, total: int):
+        """Reset total/processed once the worker knows the real item count
+        (e.g. after fetching the list). Persists immediately so the UI flips
+        from the placeholder count to the real count."""
+        self._state["total"] = total
+        self._state["processed"] = 0
+        self._counter = 0
+        try:
+            _save_state(self._state)
+        except Exception:
+            logger.exception("Failed to persist updated total for job %s", self._state.get("job_type"))
 
-def _run_job(state: dict, target, args):
+
+def _run_job(app, state: dict, target, args):
     global _running
     progress = JobProgress(state)
-    try:
-        target(progress, *args)
-        if state["status"] == "running":
-            state["status"] = "cancelled" if state.get("cancel_requested") else "completed"
-    except Exception as e:
-        logger.exception("Background job %s failed: %s", state["job_type"], e)
-        state["status"] = "failed"
-        state["message"] = str(e)
-    finally:
-        state["finished_at"] = datetime.now(timezone.utc).isoformat()
-        _save_state(state)
-        _running = False
+    with app.app_context():
+        try:
+            target(progress, *args)
+            if state["status"] == "running":
+                state["status"] = "cancelled" if state.get("cancel_requested") else "completed"
+        except Exception as e:
+            logger.exception("Background job %s failed: %s", state["job_type"], e)
+            state["status"] = "failed"
+            state["message"] = str(e)
+        finally:
+            state["finished_at"] = datetime.now(timezone.utc).isoformat()
+            try:
+                _save_state(state)
+            except Exception:
+                logger.exception("Failed to persist terminal state for job %s", state.get("job_type"))
+            _running = False

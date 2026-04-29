@@ -612,7 +612,7 @@ return res.accounts
     return request<{ message: string }>(`/api/admin/accounts/${id}`, { method: 'DELETE' })
   },
   updateAccount(id: number, data: Partial<{ password: string; is_active: boolean }>) {
-    return request<{ account: SteamAccount }>(`/api/admin/accounts/${id}`, {
+    return request<{ message: string; account: SteamAccount; reassigned_orders?: number[]; orphaned_orders?: number[] }>(`/api/admin/accounts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
     })

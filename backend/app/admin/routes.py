@@ -380,7 +380,15 @@ def add_account():
 @admin_bp.route("/accounts/<int:account_id>", methods=["PUT"])
 @admin_required
 def update_account(account_id: int):
-    """Update account password or active status."""
+    """Update account password or active status.
+
+    Deactivating an account also detaches it from every user it's currently
+    assigned to and tries to re-fulfill those orders against another active
+    account that owns the game. Orders that can't be reassigned right now
+    (no other active account has the game) are left as zombies — the admin
+    can heal them later via /orders/retry-fulfill-all once new accounts are
+    added or another account is reactivated.
+    """
     account = db.session.get(SteamAccount, account_id)
     if not account:
         return jsonify({"error": "Account not found"}), 404
@@ -389,13 +397,75 @@ def update_account(account_id: int):
 
     if "password" in data:
         account.password = data["password"]
+
+    reassigned: list[int] = []
+    orphaned: list[int] = []
     if "is_active" in data:
-        account.is_active = bool(data["is_active"])
+        new_active = bool(data["is_active"])
+        deactivating = account.is_active and not new_active
+        account.is_active = new_active
+
+        if deactivating:
+            from app.store.routes import _fulfill_order
+
+            affected = (
+                Assignment.query
+                .filter(
+                    Assignment.steam_account_id == account_id,
+                    Assignment.is_revoked == False,  # noqa: E712
+                )
+                .all()
+            )
+            for assignment in affected:
+                order = assignment.order
+                # Revoke the old assignment so user-facing queries that filter
+                # is_revoked=False stop returning the dead account. Don't set
+                # order.status to "revoked" — we want to re-fulfill, not lock
+                # the user out.
+                assignment.is_revoked = True
+                assignment.revoked_at = datetime.now(timezone.utc)
+                if order is not None:
+                    order.assignment_id = None
+                # Commit the detach (and the is_active=False flip on the first
+                # iteration) before _fulfill_order runs, so its candidate
+                # query sees the deactivated account excluded and the orphan
+                # state is durable even if reassignment fails.
+                db.session.commit()
+
+                if order is None:
+                    continue
+
+                try:
+                    success = _fulfill_order(order)
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "Reassignment failed for order %s after deactivating account %s",
+                        order.id, account_id,
+                    )
+                    db.session.rollback()
+                    success = False
+
+                if success:
+                    reassigned.append(order.id)
+                else:
+                    orphaned.append(order.id)
 
     db.session.commit()
+
+    msg = "Account updated"
+    if reassigned or orphaned:
+        parts = []
+        if reassigned:
+            parts.append(f"reassigned {len(reassigned)} order(s)")
+        if orphaned:
+            parts.append(f"{len(orphaned)} pending account availability")
+        msg = "Account deactivated. " + "; ".join(parts) + "."
+
     return jsonify({
-        "message": "Account updated",
+        "message": msg,
         "account": account.to_dict(),
+        "reassigned_orders": reassigned,
+        "orphaned_orders": orphaned,
     }), 200
 
 
@@ -760,10 +830,15 @@ def _fetch_game_metadata(appid: int) -> dict | None:
     }
 
 
-def _sync_account_games(account: SteamAccount) -> dict:
+def _sync_account_games(account: SteamAccount, progress=None) -> dict:
     """
     Sync games for a single SteamAccount.
     Returns a summary dict with counts.
+
+    If `progress` (a JobProgress) is supplied:
+      - total is set to the number of owned games once known
+      - processed is bumped after each game so the UI shows live progress
+      - progress.cancelled is checked between games for prompt cancellation
     """
     mafile_data = account.mafile_data.copy()
     token = ensure_valid_token(mafile_data, account.password)
@@ -821,8 +896,16 @@ def _sync_account_games(account: SteamAccount) -> dict:
 
     new_games = 0
     new_links = 0
+    cancelled = False
 
-    for g in games:
+    if progress is not None:
+        progress.reset_total(len(games))
+
+    for i, g in enumerate(games):
+        if progress is not None and progress.cancelled:
+            cancelled = True
+            break
+
         # Upsert Game
         game = Game.query.filter_by(appid=g["appid"]).first()
         if not game:
@@ -878,6 +961,9 @@ def _sync_account_games(account: SteamAccount) -> dict:
             db.session.add(link)
             new_links += 1
 
+        if progress is not None:
+            progress.processed = i + 1
+
     db.session.commit()
 
     return {
@@ -886,6 +972,7 @@ def _sync_account_games(account: SteamAccount) -> dict:
         "total_games": len(games),
         "new_games": new_games,
         "new_links": new_links,
+        "cancelled": cancelled,
     }
 
 
@@ -1040,14 +1127,19 @@ def _bg_sync_single_account(job, app, account_id):
             job.processed = 1
             return
 
-        result = _sync_account_games(account)
-        job.processed = 1
+        result = _sync_account_games(account, progress=job)
         if result.get("success"):
-            job.message = (
-                f"Synced {result.get('account_name')}: "
-                f"{result.get('total_games', 0)} games "
-                f"({result.get('new_games', 0)} new)"
-            )
+            if result.get("cancelled"):
+                job.message = (
+                    f"Cancelled while syncing {result.get('account_name')}: "
+                    f"{job.processed}/{result.get('total_games', 0)} games processed"
+                )
+            else:
+                job.message = (
+                    f"Synced {result.get('account_name')}: "
+                    f"{result.get('total_games', 0)} games "
+                    f"({result.get('new_games', 0)} new)"
+                )
         else:
             job.message = (
                 f"Sync failed for {result.get('account_name', account_id)}: "

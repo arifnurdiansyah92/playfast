@@ -84,10 +84,11 @@ const AdminAccountsPage = () => {
 
   const toggleActiveMutation = useMutation({
     mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) => adminApi.updateAccount(id, { is_active }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
       queryClient.invalidateQueries({ queryKey: ['admin-games'] })
-      setSnackMsg('Account updated')
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] })
+      setSnackMsg(res?.message || 'Account updated')
     },
     onError: (err: any) => setSnackMsg(`Update failed: ${err.message}`)
   })
