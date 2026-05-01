@@ -1,49 +1,43 @@
 #!/usr/bin/env python3
-"""One-off: replace mafile_data + password on an existing SteamAccount.
+"""Refresh the Session tokens inside a .mafile by re-logging into Steam.
 
-Use this when an account's session has gone stale and you have a fresh
-.mafile to upload. Matches the target account by steam_id (taken from
-the new mafile) so you can't accidentally clobber the wrong row.
+Reads the mafile, performs a full Steam login using the supplied password
+and the mafile's shared_secret (for the TOTP), and writes the new
+SteamID / AccessToken / RefreshToken / SteamLoginSecure back into the
+file's Session block. Touches no database — only the file.
+
+Use this when an account's session has expired (confirmations stop
+working, AccessToken JWT past its `exp`, etc.) and you have the current
+Steam password.
 
 Usage (from repo root):
 
-    python scripts/update_mafile.py --mafile path/to/account.mafile --password "newpass"
+    python scripts/update_mafile.py --mafile 231255319.mafile --password 'newpass!@#'
 
-Or specify the steam_id explicitly to override the one in the mafile:
-
-    python scripts/update_mafile.py --mafile path/to/account.mafile --password "newpass" \\
-        --steam-id 76561199245200478
-
-Run on the same host as the backend so it picks up the same .env / DB.
+The original mafile is backed up to <name>.mafile.bak before being
+overwritten. Use single quotes around passwords containing `!` in bash.
 """
 
 import argparse
 import json
 import os
+import shutil
 import sys
 
 
-def _bootstrap():
-    """Mirror backend/run.py's path setup so `from app import create_app` works."""
+def _bootstrap_imports():
+    """Make `steam_client` (project-root module) importable."""
     here = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(here)
-    backend_dir = os.path.join(project_root, "backend")
-    for p in [backend_dir, project_root]:
-        if p not in sys.path:
-            sys.path.insert(0, p)
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(backend_dir, ".env"))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Replace mafile_data + password on an existing SteamAccount.")
-    parser.add_argument("--mafile", required=True, help="Path to the new .mafile JSON")
-    parser.add_argument("--password", required=True, help="New Steam password")
-    parser.add_argument(
-        "--steam-id",
-        default=None,
-        help="Override the steam_id used to find the row (default: read from mafile Session.SteamID)",
-    )
+    parser = argparse.ArgumentParser(description="Refresh Session tokens inside a .mafile via Steam re-login.")
+    parser.add_argument("--mafile", required=True, help="Path to the .mafile to refresh")
+    parser.add_argument("--password", required=True, help="Current Steam password")
+    parser.add_argument("--no-backup", action="store_true", help="Skip writing <file>.bak before overwriting")
     args = parser.parse_args()
 
     if not os.path.isfile(args.mafile):
@@ -52,54 +46,64 @@ def main():
 
     with open(args.mafile, "r", encoding="utf-8") as f:
         try:
-            mafile_data = json.load(f)
+            mafile = json.load(f)
         except json.JSONDecodeError as e:
             print(f"ERROR: mafile is not valid JSON: {e}", file=sys.stderr)
             sys.exit(1)
 
-    required = ["identity_secret", "shared_secret", "device_id", "Session"]
-    missing = [k for k in required if k not in mafile_data]
-    if missing:
-        print(f"ERROR: mafile is missing required fields: {missing}", file=sys.stderr)
+    account_name = mafile.get("account_name")
+    shared_secret = mafile.get("shared_secret")
+    if not account_name or not shared_secret:
+        print("ERROR: mafile is missing account_name or shared_secret", file=sys.stderr)
         sys.exit(1)
 
-    session = mafile_data.get("Session") or {}
-    for key in ("SteamID", "AccessToken", "RefreshToken", "SteamLoginSecure"):
-        if not session.get(key):
-            print(f"ERROR: mafile Session is missing '{key}'", file=sys.stderr)
-            sys.exit(1)
-
-    steam_id = args.steam_id or session.get("SteamID")
-    if not steam_id:
-        print("ERROR: could not determine steam_id (mafile Session.SteamID is empty and --steam-id not given)", file=sys.stderr)
+    _bootstrap_imports()
+    try:
+        from steam_client import steam_login
+    except ImportError as e:
+        print(f"ERROR: could not import steam_client (run from repo root, with deps installed): {e}", file=sys.stderr)
         sys.exit(1)
 
-    _bootstrap()
-    from app import create_app
-    from app.extensions import db
-    from app.models import SteamAccount
+    print(f"Logging in as '{account_name}' to Steam...")
+    try:
+        new_session = steam_login(account_name, args.password, shared_secret)
+    except Exception as e:  # noqa: BLE001
+        print(f"ERROR: Steam login failed: {e}", file=sys.stderr)
+        sys.exit(2)
 
-    app = create_app()
-    with app.app_context():
-        account = SteamAccount.query.filter_by(steam_id=str(steam_id)).first()
-        if not account:
-            print(f"ERROR: no SteamAccount with steam_id={steam_id}", file=sys.stderr)
-            sys.exit(1)
+    steam_id = str(new_session.get("SteamID") or "")
+    access_token = new_session.get("AccessToken") or ""
+    refresh_token = new_session.get("RefreshToken") or ""
+    if not steam_id or not refresh_token:
+        print(f"ERROR: Steam login returned incomplete session: {new_session!r}", file=sys.stderr)
+        sys.exit(2)
 
-        old_account_name = account.account_name
-        new_account_name = mafile_data.get("account_name") or old_account_name
+    session = mafile.get("Session") or {}
+    old_steam_id = session.get("SteamID", "")
+    if old_steam_id and old_steam_id != steam_id:
+        print(
+            f"WARNING: SteamID changed: '{old_steam_id}' -> '{steam_id}'. "
+            "This usually means you logged into a different account.",
+            file=sys.stderr,
+        )
 
-        print(f"Found account #{account.id}: {old_account_name} (steam_id={account.steam_id}, active={account.is_active})")
-        if new_account_name != old_account_name:
-            print(f"  account_name in mafile differs: '{old_account_name}' -> '{new_account_name}' (will update)")
+    session["SteamID"] = steam_id
+    session["AccessToken"] = access_token
+    session["RefreshToken"] = refresh_token
+    # SteamLoginSecure is the cookie value the confirmations endpoint expects.
+    # Format: "{steam_id}||{access_token}" URL-encoded — `||` becomes `%7C%7C`.
+    session["SteamLoginSecure"] = f"{steam_id}%7C%7C{access_token}"
+    mafile["Session"] = session
 
-        account.mafile_data = mafile_data
-        account.password = args.password
-        if new_account_name != old_account_name:
-            account.account_name = new_account_name
-        db.session.commit()
+    if not args.no_backup:
+        backup_path = args.mafile + ".bak"
+        shutil.copy2(args.mafile, backup_path)
+        print(f"Backup written: {backup_path}")
 
-        print(f"OK: updated mafile_data + password for account #{account.id} ({account.account_name})")
+    with open(args.mafile, "w", encoding="utf-8") as f:
+        json.dump(mafile, f, separators=(",", ":"))
+
+    print(f"OK: refreshed Session for '{account_name}' (steam_id={steam_id}) in {args.mafile}")
 
 
 if __name__ == "__main__":
