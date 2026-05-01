@@ -727,6 +727,10 @@ def _fulfill_order(order):
             SteamAccount.is_active == True,  # noqa: E712
         )
         .order_by(
+            # Direct-owned (is_shared=False) wins over family-shared (True),
+            # since shared games inherit Steam Families' single-player-at-a-time
+            # constraint and the family owner can kick our customer.
+            GameAccount.is_shared.asc(),
             assignment_count.asc(),
             total_game_count.asc(),
             GameAccount.id.asc(),

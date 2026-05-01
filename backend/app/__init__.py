@@ -157,6 +157,9 @@ def _run_schema_upgrades():
         # Per-user promo assignment
         "ALTER TABLE promo_codes ADD COLUMN assigned_user_id INTEGER",
         "CREATE INDEX IF NOT EXISTS ix_promo_codes_assigned_user_id ON promo_codes (assigned_user_id)",
+        # Steam Families library sharing — flag links that come via shared
+        # library (admin-only signal, customer-facing routes ignore it).
+        "ALTER TABLE game_accounts ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     for stmt in alter_statements:
         try:

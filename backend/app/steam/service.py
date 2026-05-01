@@ -175,6 +175,68 @@ def fetch_owned_games(access_token: str, steam_id: str) -> list[dict]:
     return games
 
 
+def fetch_family_shared_games(access_token: str, steam_id: str) -> list[dict]:
+    """Fetch games shared to this account via a Steam Families group.
+
+    Returns the same shape as fetch_owned_games (list of {appid, name, icon}).
+    Returns [] when the account isn't in a family, the family has no shared
+    apps, or any underlying API call fails — sync should never break because
+    the family API is unhappy.
+    """
+    try:
+        resp = requests.get(
+            f"{STEAM_API}/IFamilyGroupsService/GetFamilyGroupForUser/v1",
+            params={"access_token": access_token, "steamid": steam_id},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        family_groupid = resp.json().get("response", {}).get("family_groupid")
+        if not family_groupid:
+            return []
+
+        resp = requests.get(
+            f"{STEAM_API}/IFamilyGroupsService/GetSharedLibraryApps/v1",
+            params={
+                "access_token": access_token,
+                "family_groupid": family_groupid,
+                "steamid": steam_id,
+                # Apps owned by *this* account come from GetOwnedGames; we only
+                # want the ones shared to us by other family members.
+                "include_own": "false",
+                "include_excluded": "false",
+                "include_non_games": "false",
+                "max_apps": "5000",
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json().get("response", {})
+
+        own_id = str(steam_id)
+        games: list[dict] = []
+        for app in data.get("apps", []):
+            appid = app.get("appid")
+            if not appid:
+                continue
+            owners = [str(o) for o in (app.get("owner_steamids") or [])]
+            # Belt-and-suspenders: even if include_own didn't filter on the
+            # server side, drop apps where this account is the owner.
+            if owners and all(o == own_id for o in owners):
+                continue
+            games.append({
+                "appid": appid,
+                "name": app.get("name") or f"App {appid}",
+                "icon": app.get("img_icon_url", ""),
+            })
+        return games
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "fetch_family_shared_games failed for steam_id=%s; sync continues with owned games only",
+            steam_id, exc_info=True,
+        )
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Steam Account Actions (confirmations, login, etc.)
 # ---------------------------------------------------------------------------

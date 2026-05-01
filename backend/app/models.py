@@ -184,6 +184,11 @@ class GameAccount(db.Model):
         db.ForeignKey("steam_accounts.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # True when this game reaches the account via Steam Families library
+    # sharing rather than a direct purchase. Admin-only signal — never
+    # exposed to customers — used by round-robin to prefer direct-owned
+    # links when both are available.
+    is_shared = db.Column(db.Boolean, default=False, nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint("game_id", "steam_account_id", name="uq_game_steam_account"),

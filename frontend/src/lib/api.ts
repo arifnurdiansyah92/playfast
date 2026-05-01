@@ -195,7 +195,7 @@ export interface Game {
   screenshots?: GameScreenshot[]
   movies?: GameMovie[]
   available_accounts?: number
-  accounts?: { id: number; account_name: string }[]
+  accounts?: { id: number; account_name: string; is_shared?: boolean }[]
   release_date?: string | null
   created_at: string
 

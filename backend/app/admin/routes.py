@@ -38,6 +38,7 @@ from app.models import (
 from app.steam.service import (
     ensure_valid_token,
     fetch_owned_games,
+    fetch_family_shared_games,
     get_guard_code,
     fetch_confirmations,
     act_on_confirmation,
@@ -894,14 +895,31 @@ def _sync_account_games(account: SteamAccount, progress=None) -> dict:
             "error": str(e),
         }
 
+    # Pull in Steam Families library-shared games. Failures here degrade
+    # gracefully (returns []), so a flaky family API never blocks the sync.
+    shared_games = fetch_family_shared_games(token, steam_id)
+
+    # Merge: owned wins on duplicates (we never want a direct-owned link to
+    # be re-tagged as shared). `is_shared` per entry tells the loop whether
+    # to mark a fresh GameAccount as shared, and whether to upgrade an
+    # existing shared link when the same appid now appears as owned.
+    owned_appids = {g["appid"] for g in games}
+    combined: list[dict] = [{**g, "is_shared": False} for g in games]
+    for g in shared_games:
+        if g["appid"] in owned_appids:
+            continue
+        combined.append({**g, "is_shared": True})
+
     new_games = 0
     new_links = 0
+    new_shared_links = 0
+    upgraded_links = 0
     cancelled = False
 
     if progress is not None:
-        progress.reset_total(len(games))
+        progress.reset_total(len(combined))
 
-    for i, g in enumerate(games):
+    for i, g in enumerate(combined):
         if progress is not None and progress.cancelled:
             cancelled = True
             break
@@ -957,9 +975,23 @@ def _sync_account_games(account: SteamAccount, progress=None) -> dict:
             game_id=game.id, steam_account_id=account.id
         ).first()
         if not existing_link:
-            link = GameAccount(game_id=game.id, steam_account_id=account.id)
+            link = GameAccount(
+                game_id=game.id,
+                steam_account_id=account.id,
+                is_shared=g["is_shared"],
+            )
             db.session.add(link)
-            new_links += 1
+            if g["is_shared"]:
+                new_shared_links += 1
+            else:
+                new_links += 1
+        else:
+            # Upgrade a previously-shared link when the same appid now
+            # appears in this account's owned games. Never downgrade an
+            # owned link to shared.
+            if existing_link.is_shared and not g["is_shared"]:
+                existing_link.is_shared = False
+                upgraded_links += 1
 
         if progress is not None:
             progress.processed = i + 1
@@ -969,9 +1001,13 @@ def _sync_account_games(account: SteamAccount, progress=None) -> dict:
     return {
         "account_name": account.account_name,
         "success": True,
-        "total_games": len(games),
+        "total_games": len(combined),
+        "owned_games": len(games),
+        "shared_games": len(shared_games),
         "new_games": new_games,
         "new_links": new_links,
+        "new_shared_links": new_shared_links,
+        "upgraded_links": upgraded_links,
         "cancelled": cancelled,
     }
 
@@ -1135,9 +1171,11 @@ def _bg_sync_single_account(job, app, account_id):
                     f"{job.processed}/{result.get('total_games', 0)} games processed"
                 )
             else:
+                shared = result.get("shared_games", 0)
+                shared_part = f", {shared} shared" if shared else ""
                 job.message = (
                     f"Synced {result.get('account_name')}: "
-                    f"{result.get('total_games', 0)} games "
+                    f"{result.get('owned_games', 0)} owned{shared_part} "
                     f"({result.get('new_games', 0)} new)"
                 )
         else:
@@ -1345,6 +1383,7 @@ def list_games():
             {
                 "id": link.steam_account.id,
                 "account_name": link.steam_account.account_name,
+                "is_shared": bool(link.is_shared),
             }
             for link in account_links
         ]
