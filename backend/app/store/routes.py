@@ -151,6 +151,17 @@ def _get_active_subscription(user_id: int):
     return sub
 
 
+@store_bp.route("/site/discord-url", methods=["GET"])
+def site_discord_url():
+    """Public endpoint: returns the configured Discord invite URL.
+
+    Powers the /discord route on the site, which redirects visitors to the
+    current invite. Returns an empty string when the admin hasn't set one
+    yet — the route handler falls back to homepage in that case.
+    """
+    return jsonify({"url": SiteSetting.get("discord_invite_url") or ""}), 200
+
+
 @store_bp.route("/payment-config", methods=["GET"])
 def payment_config():
     """Public endpoint: returns payment mode and Midtrans client key for frontend."""

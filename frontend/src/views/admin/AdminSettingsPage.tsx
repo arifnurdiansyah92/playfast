@@ -250,6 +250,29 @@ const AdminSettingsPage = () => {
         </CardContent>
       </Card>
 
+      {/* Community */}
+      <Card>
+        <CardHeader
+          title='Community'
+          avatar={<i className='tabler-brand-discord' style={{ fontSize: 24 }} />}
+        />
+        <Divider />
+        <CardContent>
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12 }}>
+              <CustomTextField
+                fullWidth
+                label='Discord Invite URL'
+                value={form.discord_invite_url || ''}
+                onChange={e => handleChange('discord_invite_url', e.target.value)}
+                placeholder='https://discord.gg/xxxxxxx'
+                helperText='Visitors going to playfast.id/discord get redirected here. Leave empty to fall back to homepage.'
+              />
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
       <Snackbar open={!!snackMsg} autoHideDuration={3000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>
   )

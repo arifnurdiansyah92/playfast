@@ -787,7 +787,7 @@ const LandingPage = () => {
         {/* ════════════════════ FOOTER ════════════════════ */}
         <Box sx={{ py: 4, textAlign: 'center', borderTop: `1px solid ${darkCardBorder}` }}>
           <Box component='img' src='/images/brand/logo-horizontal.png' alt='Playfast' sx={{ height: 36, mx: 'auto', mb: 2, opacity: 0.7 }} />
-          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 2, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             {[
               { label: 'Syarat & Ketentuan', href: '/syarat-ketentuan' },
               { label: 'Kebijakan Privasi', href: '/kebijakan-privasi' },
@@ -800,6 +800,17 @@ const LandingPage = () => {
                 {link.label}
               </Typography>
             ))}
+            <Typography
+              component='a' href='/discord' variant='body2'
+              sx={{
+                color: textSecondary, textDecoration: 'none',
+                display: 'inline-flex', alignItems: 'center', gap: 0.75,
+                '&:hover': { color: gold },
+              }}
+            >
+              <i className='tabler-brand-discord' style={{ fontSize: 18 }} />
+              Join Discord
+            </Typography>
           </Box>
           <Typography variant='body2' sx={{ color: 'rgba(255,255,255,0.25)' }}>
             {`\u00A9 2026 Playfast. Tidak berafiliasi dengan Valve atau Steam.`}

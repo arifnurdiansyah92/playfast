@@ -390,6 +390,7 @@ class SiteSetting(db.Model):
         "referral_referee_discount_pct": "10",
         "referral_referrer_credit": "10000",
         "referral_min_order": "50000",
+        "discord_invite_url": "",  # /discord on the site redirects here
     }
 
     @classmethod
