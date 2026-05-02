@@ -8,9 +8,9 @@ import { storeApi, formatIDR } from '@/lib/api'
 
 const SESSION_KEY = 'playfast.landingPromoBanner.dismissed'
 const WA_NUMBER = '6282240708329'
-const PROMO_END = new Date('2026-05-02T00:00:00+07:00').getTime()
+const PROMO_END = new Date('2026-05-16T00:00:00+07:00').getTime()
 const PROMO_START_LABEL = '24 APR'
-const PROMO_END_LABEL = '1 MEI 2026'
+const PROMO_END_LABEL = '15 MEI 2026'
 const REGULAR_PRICE = 599000
 
 const PF = {
