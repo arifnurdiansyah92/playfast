@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 
 import { storeApi, formatIDR } from '@/lib/api'
 
-const SESSION_KEY = 'playfast.landingPromoBanner.dismissed'
+const SESSION_KEY = 'playfast.landingPromoBanner.dismissed.v2'
 const WA_NUMBER = '6282240708329'
 const PROMO_END = new Date('2026-05-16T00:00:00+07:00').getTime()
 const PROMO_START_LABEL = '24 APR'
