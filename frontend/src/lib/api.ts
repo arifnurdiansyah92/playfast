@@ -622,6 +622,7 @@ export interface SteamAccount {
   steam_id: string | null
   game_count: number
   is_active: boolean
+  show_in_catalog_when_disabled: boolean
   created_at: string
 }
 
@@ -690,7 +691,7 @@ return res.accounts
   deleteAccount(id: number) {
     return request<{ message: string }>(`/api/admin/accounts/${id}`, { method: 'DELETE' })
   },
-  updateAccount(id: number, data: Partial<{ password: string; is_active: boolean }>) {
+  updateAccount(id: number, data: Partial<{ password: string; is_active: boolean; show_in_catalog_when_disabled: boolean }>) {
     return request<{ message: string; account: SteamAccount; reassigned_orders?: number[]; orphaned_orders?: number[] }>(`/api/admin/accounts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)

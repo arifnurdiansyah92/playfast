@@ -399,6 +399,11 @@ def update_account(account_id: int):
     if "password" in data:
         account.password = data["password"]
 
+    if "show_in_catalog_when_disabled" in data:
+        account.show_in_catalog_when_disabled = bool(
+            data["show_in_catalog_when_disabled"]
+        )
+
     reassigned: list[int] = []
     orphaned: list[int] = []
     if "is_active" in data:

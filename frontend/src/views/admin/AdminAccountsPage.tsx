@@ -93,6 +93,16 @@ const AdminAccountsPage = () => {
     onError: (err: any) => setSnackMsg(`Update failed: ${err.message}`)
   })
 
+  const toggleShowInCatalogMutation = useMutation({
+    mutationFn: ({ id, value }: { id: number; value: boolean }) =>
+      adminApi.updateAccount(id, { show_in_catalog_when_disabled: value }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      setSnackMsg('Akun diperbarui')
+    },
+    onError: (err: any) => setSnackMsg(`Update failed: ${err.message}`)
+  })
+
   const updatePwMutation = useMutation({
     mutationFn: ({ id, password }: { id: number; password: string }) => adminApi.updateAccount(id, { password }),
     onSuccess: () => {
@@ -342,6 +352,11 @@ return }
                   <TableCell>Steam ID</TableCell>
                   <TableCell align='center'>Games</TableCell>
                   <TableCell align='center'>Active</TableCell>
+                  <TableCell align='center'>
+                    <Tooltip title='Tampilkan game di katalog walau akun nonaktif (untuk marketing). Order/play akan tetap tertahan kalau akun beneran nonaktif.'>
+                      <span>Show di Katalog</span>
+                    </Tooltip>
+                  </TableCell>
                   <TableCell>Added</TableCell>
                   <TableCell align='right'>Actions</TableCell>
                 </TableRow>
@@ -370,6 +385,32 @@ return }
                         onChange={() => toggleActiveMutation.mutate({ id: account.id, is_active: !account.is_active })}
                         size='small'
                       />
+                    </TableCell>
+                    <TableCell align='center'>
+                      <Tooltip
+                        title={
+                          account.is_active
+                            ? 'Akun aktif — flag ini cuma berlaku saat akun nonaktif'
+                            : account.show_in_catalog_when_disabled
+                              ? 'Game tetap tampil di katalog walau akun nonaktif'
+                              : 'Game disembunyikan dari katalog'
+                        }
+                      >
+                        <span>
+                          <Switch
+                            checked={account.show_in_catalog_when_disabled}
+                            onChange={() =>
+                              toggleShowInCatalogMutation.mutate({
+                                id: account.id,
+                                value: !account.show_in_catalog_when_disabled,
+                              })
+                            }
+                            size='small'
+                            color='warning'
+                            disabled={toggleShowInCatalogMutation.isPending}
+                          />
+                        </span>
+                      </Tooltip>
                     </TableCell>
                     <TableCell>
                       {new Date(account.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}

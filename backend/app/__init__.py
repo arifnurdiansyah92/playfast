@@ -174,6 +174,8 @@ def _run_schema_upgrades():
         "ALTER TABLE game_accounts ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT FALSE",
         # Email blast: per-user unsubscribe flag
         "ALTER TABLE users ADD COLUMN email_opted_out BOOLEAN NOT NULL DEFAULT FALSE",
+        # Marketing: keep games visible in catalog even when account is inactive
+        "ALTER TABLE steam_accounts ADD COLUMN show_in_catalog_when_disabled BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     for stmt in alter_statements:
         try:

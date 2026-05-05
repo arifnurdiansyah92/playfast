@@ -63,6 +63,13 @@ class SteamAccount(db.Model):
     mafile_data = db.Column(db.JSON, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    # Marketing flag: when an account is inactive but this is True, its games
+    # still appear in the public catalog. Round-robin / fulfillment still
+    # filter by is_active=True only — so users who actually try to play hit
+    # the existing "no account assigned" path.
+    show_in_catalog_when_disabled = db.Column(
+        db.Boolean, default=False, nullable=False
+    )
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -85,6 +92,7 @@ class SteamAccount(db.Model):
             "account_name": self.account_name,
             "steam_id": self.steam_id,
             "is_active": self.is_active,
+            "show_in_catalog_when_disabled": self.show_in_catalog_when_disabled,
             "created_at": self.created_at.isoformat(),
             "game_count": self.game_accounts.count(),
         }

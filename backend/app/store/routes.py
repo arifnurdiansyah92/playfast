@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import midtransclient
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,32 @@ DEFAULT_PLAY_INSTRUCTIONS = """## Cara Main (Mode Offline)
 - Selalu main dalam mode OFFLINE untuk menghindari konflik dengan pengguna lain
 - Jangan ubah password akun
 - Jangan tambah teman atau ubah pengaturan akun"""
+
+
+def _catalog_visible_game_ids():
+    """Subquery of game_ids that should appear in the public catalog.
+
+    Includes games owned by active accounts AND games owned by inactive
+    accounts the admin has marked as `show_in_catalog_when_disabled`.
+
+    Use this for catalog/browse/genres/featured/showcase/claimable queries.
+    Do NOT use it for order fulfillment, the buy availability check, or
+    round-robin assignment — those must filter by is_active=True only to
+    avoid taking money for unfulfillable orders or assigning a disabled
+    account to a real order.
+    """
+    return (
+        db.session.query(GameAccount.game_id)
+        .join(SteamAccount)
+        .filter(
+            or_(
+                SteamAccount.is_active == True,  # noqa: E712
+                SteamAccount.show_in_catalog_when_disabled == True,  # noqa: E712
+            )
+        )
+        .group_by(GameAccount.game_id)
+        .subquery()
+    )
 
 
 def _get_active_subscription(user_id: int):
@@ -471,14 +497,8 @@ def list_games():
     per_page = request.args.get("per_page", 20, type=int)
     per_page = min(per_page, 100)
 
-    # Only show enabled games that have at least one active account
-    available_game_ids = (
-        db.session.query(GameAccount.game_id)
-        .join(SteamAccount)
-        .filter(SteamAccount.is_active == True)  # noqa: E712
-        .group_by(GameAccount.game_id)
-        .subquery()
-    )
+    # Only show enabled games that have at least one catalog-visible account
+    available_game_ids = _catalog_visible_game_ids()
     query = Game.query.filter(
         Game.is_enabled == True,  # noqa: E712
         Game.id.in_(db.session.query(available_game_ids.c.game_id)),
@@ -532,13 +552,7 @@ def list_games():
 @store_bp.route("/genres", methods=["GET"])
 def list_genres():
     """Return a sorted list of unique genres across all enabled games."""
-    available_game_ids = (
-        db.session.query(GameAccount.game_id)
-        .join(SteamAccount)
-        .filter(SteamAccount.is_active == True)  # noqa: E712
-        .group_by(GameAccount.game_id)
-        .subquery()
-    )
+    available_game_ids = _catalog_visible_game_ids()
     rows = (
         db.session.query(Game.genres)
         .filter(
@@ -562,13 +576,7 @@ def list_genres():
 @store_bp.route("/games/featured", methods=["GET"])
 def featured_games():
     """Return featured games (flagged by admin)."""
-    available_game_ids = (
-        db.session.query(GameAccount.game_id)
-        .join(SteamAccount)
-        .filter(SteamAccount.is_active == True)  # noqa: E712
-        .group_by(GameAccount.game_id)
-        .subquery()
-    )
+    available_game_ids = _catalog_visible_game_ids()
     games = (
         Game.query.filter(
             Game.is_enabled == True,  # noqa: E712
@@ -585,13 +593,7 @@ def featured_games():
 @store_bp.route("/games/catalog", methods=["GET"])
 def catalog_showcase():
     """Public catalog page: all enabled games with stats for sharing."""
-    available_game_ids = (
-        db.session.query(GameAccount.game_id)
-        .join(SteamAccount)
-        .filter(SteamAccount.is_active == True)  # noqa: E712
-        .group_by(GameAccount.game_id)
-        .subquery()
-    )
+    available_game_ids = _catalog_visible_game_ids()
     games = (
         Game.query.filter(
             Game.is_enabled == True,  # noqa: E712
@@ -1268,14 +1270,20 @@ def my_games():
                 games_result.append(bg)
 
     # Premium subscribers: show every other enabled game in the catalog as
-    # claimable. Only include games that currently have at least one active
-    # Steam account — otherwise clicking would 503.
+    # claimable. Includes catalog-visible accounts (active + show-when-
+    # disabled). Subscribers clicking a show-when-disabled-only game hit
+    # the existing "no account assigned" path at assignment time.
     if active_sub:
         available_game_ids = {
             gid for (gid,) in (
                 db.session.query(GameAccount.game_id)
                 .join(SteamAccount)
-                .filter(SteamAccount.is_active == True)  # noqa: E712
+                .filter(
+                    or_(
+                        SteamAccount.is_active == True,  # noqa: E712
+                        SteamAccount.show_in_catalog_when_disabled == True,  # noqa: E712
+                    )
+                )
                 .group_by(GameAccount.game_id)
                 .all()
             )
