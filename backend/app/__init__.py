@@ -73,12 +73,18 @@ def create_app(config_name: str | None = None) -> Flask:
         game_requests_bp,
         admin_game_requests_bp,
     )
+    from app.email_blast.routes import (
+        admin_email_blast_bp,
+        unsubscribe_bp,
+    )
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(store_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(game_requests_bp)
     app.register_blueprint(admin_game_requests_bp)
+    app.register_blueprint(admin_email_blast_bp)
+    app.register_blueprint(unsubscribe_bp)
 
     # ---------- Serve uploaded files ----------
     from flask import send_from_directory
@@ -166,6 +172,8 @@ def _run_schema_upgrades():
         # Steam Families library sharing — flag links that come via shared
         # library (admin-only signal, customer-facing routes ignore it).
         "ALTER TABLE game_accounts ADD COLUMN is_shared BOOLEAN NOT NULL DEFAULT FALSE",
+        # Email blast: per-user unsubscribe flag
+        "ALTER TABLE users ADD COLUMN email_opted_out BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     for stmt in alter_statements:
         try:
@@ -189,6 +197,15 @@ def _run_schema_upgrades():
     from app.models import GameRequest, GameRequestVote
     GameRequest.__table__.create(db.engine, checkfirst=True)
     GameRequestVote.__table__.create(db.engine, checkfirst=True)
+
+    from app.models import (
+        EmailCampaign,
+        EmailCampaignRecipient,
+        EmailUnsubscribeToken,
+    )
+    EmailCampaign.__table__.create(db.engine, checkfirst=True)
+    EmailCampaignRecipient.__table__.create(db.engine, checkfirst=True)
+    EmailUnsubscribeToken.__table__.create(db.engine, checkfirst=True)
 
     # Backfill referral_code for existing users that don't have one
     from app.models import User

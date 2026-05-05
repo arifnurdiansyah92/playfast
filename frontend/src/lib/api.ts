@@ -296,6 +296,42 @@ export interface GameRequest {
   resolved_by_email?: string | null
 }
 
+export interface EmailCampaignFilters {
+  verified_only: boolean
+  subscribers_only: boolean
+  never_purchased: boolean
+  exclude_inactive: boolean
+}
+
+export type EmailCampaignStatus = 'draft' | 'sending' | 'completed' | 'cancelled' | 'failed'
+
+export interface EmailCampaign {
+  id: number
+  subject: string
+  filters: EmailCampaignFilters
+  status: EmailCampaignStatus
+  total_recipients: number
+  sent_count: number
+  failed_count: number
+  created_by_email: string | null
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  finished_at: string | null
+  body_markdown?: string
+  recipients?: EmailCampaignRecipient[]
+}
+
+export interface EmailCampaignRecipient {
+  id: number
+  campaign_id: number
+  user_id: number
+  email: string
+  status: 'pending' | 'sent' | 'failed'
+  error: string | null
+  sent_at: string | null
+}
+
 export interface PlayInstructions {
   instructions: {
     game_id: number
@@ -905,6 +941,71 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
         method: 'PATCH',
         body: JSON.stringify(data),
       }
+    )
+  },
+  // ─── Email Blast ────────────────────────────────────────────────────────
+  audienceCount(filters: EmailCampaignFilters) {
+    return request<{ count: number; filters: EmailCampaignFilters }>(
+      '/api/admin/email-blast/audience-count',
+      { method: 'POST', body: JSON.stringify({ filters }) }
+    )
+  },
+  listEmailCampaigns() {
+    return request<{ items: EmailCampaign[] }>('/api/admin/email-blast/campaigns')
+  },
+  createEmailCampaign(data: { subject: string; body_markdown: string; filters: EmailCampaignFilters }) {
+    return request<{ campaign: EmailCampaign }>(
+      '/api/admin/email-blast/campaigns',
+      { method: 'POST', body: JSON.stringify(data) }
+    )
+  },
+  getEmailCampaign(id: number, withRecipients = false) {
+    const qs = withRecipients ? '?recipients=1' : ''
+
+    return request<{ campaign: EmailCampaign }>(`/api/admin/email-blast/campaigns/${id}${qs}`)
+  },
+  updateEmailCampaign(
+    id: number,
+    data: { subject?: string; body_markdown?: string; filters?: EmailCampaignFilters }
+  ) {
+    return request<{ campaign: EmailCampaign }>(
+      `/api/admin/email-blast/campaigns/${id}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    )
+  },
+  deleteEmailCampaign(id: number) {
+    return request<{ message: string }>(
+      `/api/admin/email-blast/campaigns/${id}`,
+      { method: 'DELETE' }
+    )
+  },
+  sendEmailTest(id: number) {
+    return request<{ message: string }>(
+      `/api/admin/email-blast/campaigns/${id}/send-test`,
+      { method: 'POST' }
+    )
+  },
+  sendEmailBlast(id: number) {
+    return request<{ message: string; campaign: EmailCampaign; job: JobStatus }>(
+      `/api/admin/email-blast/campaigns/${id}/send`,
+      { method: 'POST' }
+    )
+  },
+  cancelEmailBlast() {
+    return request<{ message: string }>(
+      '/api/admin/email-blast/cancel',
+      { method: 'POST' }
+    )
+  },
+}
+
+// ─── Public (no auth) ────────────────────────────────────────────────────────
+
+export const publicApi = {
+  unsubscribe(token: string) {
+    return request<{ message: string; email: string }>(
+      `/api/unsubscribe/${encodeURIComponent(token)}`,
+      { method: 'POST' }
     )
   },
 }

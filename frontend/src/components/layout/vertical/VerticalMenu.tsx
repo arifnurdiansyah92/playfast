@@ -138,6 +138,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
               <MenuItem href='/admin/game-requests' icon={<i className='tabler-bulb' />}>
                 Game Requests
               </MenuItem>
+              <MenuItem href='/admin/email-blast' icon={<i className='tabler-mail-fast' />}>
+                Email Blast
+              </MenuItem>
               <MenuItem href='/admin/subscriptions' icon={<i className='tabler-crown' />}>
                 Langganan
               </MenuItem>

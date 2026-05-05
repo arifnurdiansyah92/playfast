@@ -20,6 +20,7 @@ class User(db.Model):
     referral_code = db.Column(db.String(12), unique=True, nullable=True, index=True)
     referred_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     referral_credit = db.Column(db.Integer, nullable=False, default=0)
+    email_opted_out = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -846,3 +847,141 @@ class GameRequestVote(db.Model):
             "game_request_id", "user_id", name="uq_game_request_user_vote"
         ),
     )
+
+
+class EmailCampaign(db.Model):
+    """Admin-drafted email blast. Stores subject, markdown body, rendered HTML,
+    audience filters used, status, and aggregate counts."""
+    __tablename__ = "email_campaigns"
+
+    STATUS_CHOICES = ("draft", "sending", "completed", "cancelled", "failed")
+
+    id = db.Column(db.Integer, primary_key=True)
+    subject = db.Column(db.String(300), nullable=False)
+    body_markdown = db.Column(db.Text, nullable=False, default="")
+    body_html = db.Column(db.Text, nullable=True)  # rendered + branded, cached at send-time
+    filters_json = db.Column(db.JSON, nullable=False, default=dict)
+    status = db.Column(db.String(20), nullable=False, default="draft", index=True)
+    total_recipients = db.Column(db.Integer, nullable=False, default=0)
+    sent_count = db.Column(db.Integer, nullable=False, default=0)
+    failed_count = db.Column(db.Integer, nullable=False, default=0)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    created_by = db.relationship("User", foreign_keys=[created_by_user_id])
+    recipients = db.relationship(
+        "EmailCampaignRecipient",
+        backref="campaign",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+
+    def to_dict(self, include_body: bool = False):
+        data = {
+            "id": self.id,
+            "subject": self.subject,
+            "filters": self.filters_json or {},
+            "status": self.status,
+            "total_recipients": self.total_recipients,
+            "sent_count": self.sent_count,
+            "failed_count": self.failed_count,
+            "created_by_email": self.created_by.email if self.created_by else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+        }
+        if include_body:
+            data["body_markdown"] = self.body_markdown
+        return data
+
+
+class EmailCampaignRecipient(db.Model):
+    """One row per recipient of an EmailCampaign. Stores per-user delivery state."""
+    __tablename__ = "email_campaign_recipients"
+
+    STATUS_CHOICES = ("pending", "sent", "failed")
+
+    id = db.Column(db.Integer, primary_key=True)
+    campaign_id = db.Column(
+        db.Integer,
+        db.ForeignKey("email_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    email = db.Column(db.String(255), nullable=False)  # snapshot at send-time
+    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+    error = db.Column(db.Text, nullable=True)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "campaign_id", "user_id", name="uq_email_campaign_recipient"
+        ),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "campaign_id": self.campaign_id,
+            "user_id": self.user_id,
+            "email": self.email,
+            "status": self.status,
+            "error": self.error,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
+        }
+
+
+class EmailUnsubscribeToken(db.Model):
+    """One stable token per user, used in blast email footer links.
+    Tokens never expire — a user who clicks an old email a year later still
+    expects unsubscribe to work.
+    """
+    __tablename__ = "email_unsubscribe_tokens"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    token = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+    @classmethod
+    def get_or_create_for_user(cls, user_id: int) -> "EmailUnsubscribeToken":
+        existing = cls.query.filter_by(user_id=user_id).first()
+        if existing:
+            return existing
+        tok = cls(user_id=user_id, token=secrets.token_urlsafe(48))
+        db.session.add(tok)
+        db.session.flush()
+        return tok
