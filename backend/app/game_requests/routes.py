@@ -1,0 +1,396 @@
+"""Game request endpoints: user-facing submission/voting and admin moderation."""
+
+import logging
+import re
+import threading
+import time
+from collections import defaultdict
+from datetime import datetime, timezone, timedelta
+from functools import wraps
+from urllib.parse import urlparse
+
+import requests as http_requests
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy.exc import IntegrityError
+
+from app.extensions import db
+from app.models import Game, GameRequest, GameRequestVote, User
+
+logger = logging.getLogger(__name__)
+
+game_requests_bp = Blueprint(
+    "game_requests", __name__, url_prefix="/api/game-requests"
+)
+admin_game_requests_bp = Blueprint(
+    "admin_game_requests", __name__, url_prefix="/api/admin/game-requests"
+)
+
+
+# ---------------------------------------------------------------------------
+# Auth helper
+# ---------------------------------------------------------------------------
+
+
+def admin_required(fn):
+    @wraps(fn)
+    @jwt_required()
+    def wrapper(*args, **kwargs):
+        user_id = int(get_jwt_identity())
+        user = db.session.get(User, user_id)
+        if not user or not user.is_admin:
+            return jsonify({"error": "Admin access required"}), 403
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+# ---------------------------------------------------------------------------
+# Rate limit: max 10 new game submissions per user per day (existing votes
+# don't count). In-memory, per-process.
+# ---------------------------------------------------------------------------
+_submit_rate_lock = threading.Lock()
+_submit_rate_log: dict[int, list[float]] = defaultdict(list)
+_SUBMIT_RATE_LIMIT = 10
+_SUBMIT_RATE_WINDOW = 24 * 60 * 60  # 1 day in seconds
+
+
+def _check_submit_rate_limit(user_id: int) -> bool:
+    now = time.time()
+    with _submit_rate_lock:
+        timestamps = _submit_rate_log[user_id]
+        _submit_rate_log[user_id] = [
+            t for t in timestamps if now - t < _SUBMIT_RATE_WINDOW
+        ]
+        if len(_submit_rate_log[user_id]) >= _SUBMIT_RATE_LIMIT:
+            return False
+        return True
+
+
+def _record_submission(user_id: int):
+    with _submit_rate_lock:
+        _submit_rate_log[user_id].append(time.time())
+
+
+# ---------------------------------------------------------------------------
+# Steam URL parsing + metadata fetch
+# ---------------------------------------------------------------------------
+
+_APPID_RE = re.compile(r"/app/(\d+)(?:/|$)")
+
+
+def _extract_appid(url: str) -> int | None:
+    """Extract Steam appid from a store URL.
+
+    Accepted hosts: store.steampowered.com, steamcommunity.com.
+    Path must contain /app/<id>.
+    """
+    if not url:
+        return None
+    url = url.strip()
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None
+    host = (parsed.hostname or "").lower()
+    if host not in {"store.steampowered.com", "steamcommunity.com"}:
+        return None
+    m = _APPID_RE.search(parsed.path or "")
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def _fetch_steam_minimal(appid: int) -> dict | None:
+    """Fetch minimal game info (name, header_image, original_price) from Steam.
+    Returns None if the appid is unknown or the API fails.
+    """
+    try:
+        resp = http_requests.get(
+            f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=us",
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            return None
+        app_data = data.get(str(appid)) or {}
+        if not app_data.get("success"):
+            return None
+        details = app_data.get("data") or {}
+        name = (details.get("name") or "").strip()
+        if not name:
+            return None
+        header_image = details.get("header_image") or None
+
+        original_price = None
+        price_overview = details.get("price_overview") or {}
+        initial_cents = price_overview.get("initial")
+        if initial_cents:
+            usd_price = initial_cents / 100
+            original_price = round(usd_price * 17000)
+
+        return {
+            "name": name,
+            "header_image": header_image,
+            "original_price": original_price,
+        }
+    except Exception as e:
+        logger.warning("Steam fetch failed for appid %s: %s", appid, e)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# User-facing endpoints
+# ---------------------------------------------------------------------------
+
+
+@game_requests_bp.route("", methods=["POST"])
+@jwt_required()
+def submit_request():
+    """Submit a game request via Steam store URL.
+
+    Body: { steam_url: str }
+    - If a request for this appid exists, just adds the user's vote.
+    - Otherwise fetches Steam metadata and creates the request + vote.
+    - Rejects if the game is already in the Playfast catalog.
+    """
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    steam_url = (data.get("steam_url") or "").strip()
+
+    if not steam_url:
+        return jsonify({"error": "Link Steam tidak boleh kosong"}), 400
+
+    appid = _extract_appid(steam_url)
+    if not appid:
+        return jsonify({
+            "error": "Link Steam tidak valid. Contoh: https://store.steampowered.com/app/1091500/Cyberpunk_2077/"
+        }), 400
+
+    existing_game = Game.query.filter_by(appid=appid).first()
+    if existing_game:
+        return jsonify({
+            "error": "Game ini sudah ada di katalog kami",
+            "game_id": existing_game.id,
+            "game_name": existing_game.custom_name or existing_game.name,
+        }), 409
+
+    existing_req = GameRequest.query.filter_by(appid=appid).first()
+
+    if existing_req:
+        # Block voting on resolved requests
+        if existing_req.status == "added":
+            return jsonify({
+                "error": "Game ini sudah ditambahkan ke katalog",
+                "game_request": existing_req.to_dict(current_user_id=user_id),
+            }), 409
+        if existing_req.status == "rejected":
+            return jsonify({
+                "error": "Request game ini sudah ditolak"
+                + (f": {existing_req.admin_note}" if existing_req.admin_note else ""),
+                "game_request": existing_req.to_dict(current_user_id=user_id),
+            }), 409
+
+        # Already voted?
+        existing_vote = GameRequestVote.query.filter_by(
+            game_request_id=existing_req.id, user_id=user_id
+        ).first()
+        if existing_vote:
+            return jsonify({
+                "message": "Kamu sudah request game ini",
+                "game_request": existing_req.to_dict(current_user_id=user_id),
+            }), 200
+
+        try:
+            vote = GameRequestVote(game_request_id=existing_req.id, user_id=user_id)
+            db.session.add(vote)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+
+        return jsonify({
+            "message": "Request kamu tercatat",
+            "game_request": existing_req.to_dict(current_user_id=user_id),
+        }), 200
+
+    # New request — check rate limit before doing the Steam fetch
+    if not _check_submit_rate_limit(user_id):
+        return jsonify({
+            "error": "Kamu sudah mencapai batas request hari ini (10 game baru per hari). Coba lagi besok."
+        }), 429
+
+    meta = _fetch_steam_minimal(appid)
+    if not meta:
+        return jsonify({
+            "error": "Game tidak ditemukan di Steam Store. Pastikan link nya benar."
+        }), 404
+
+    canonical_url = f"https://store.steampowered.com/app/{appid}/"
+
+    new_req = GameRequest(
+        appid=appid,
+        name=meta["name"],
+        header_image=meta.get("header_image"),
+        original_price=meta.get("original_price"),
+        store_url=canonical_url,
+        status="pending",
+    )
+    db.session.add(new_req)
+    db.session.flush()  # get id without committing yet
+
+    vote = GameRequestVote(game_request_id=new_req.id, user_id=user_id)
+    db.session.add(vote)
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Race condition: another submission for the same appid landed first.
+        db.session.rollback()
+        new_req = GameRequest.query.filter_by(appid=appid).first()
+        if new_req:
+            existing_vote = GameRequestVote.query.filter_by(
+                game_request_id=new_req.id, user_id=user_id
+            ).first()
+            if not existing_vote:
+                vote = GameRequestVote(
+                    game_request_id=new_req.id, user_id=user_id
+                )
+                db.session.add(vote)
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+        return jsonify({
+            "message": "Request kamu tercatat",
+            "game_request": new_req.to_dict(current_user_id=user_id) if new_req else None,
+        }), 200
+
+    _record_submission(user_id)
+
+    return jsonify({
+        "message": "Request game kamu sudah masuk",
+        "game_request": new_req.to_dict(current_user_id=user_id),
+    }), 201
+
+
+@game_requests_bp.route("/mine", methods=["GET"])
+@jwt_required()
+def list_my_requests():
+    """List game requests the current user has voted on."""
+    user_id = int(get_jwt_identity())
+    votes = (
+        GameRequestVote.query.filter_by(user_id=user_id)
+        .order_by(GameRequestVote.created_at.desc())
+        .all()
+    )
+    items = []
+    for v in votes:
+        if v.game_request:
+            items.append(v.game_request.to_dict(current_user_id=user_id))
+    return jsonify({"items": items}), 200
+
+
+@game_requests_bp.route("/<int:request_id>/vote", methods=["DELETE"])
+@jwt_required()
+def remove_my_vote(request_id: int):
+    """Remove the current user's vote from a pending request."""
+    user_id = int(get_jwt_identity())
+    req = db.session.get(GameRequest, request_id)
+    if not req:
+        return jsonify({"error": "Request not found"}), 404
+    if req.status != "pending":
+        return jsonify({
+            "error": "Request ini sudah diproses, tidak bisa dibatalkan"
+        }), 400
+
+    vote = GameRequestVote.query.filter_by(
+        game_request_id=request_id, user_id=user_id
+    ).first()
+    if not vote:
+        return jsonify({"error": "Kamu belum request game ini"}), 404
+
+    db.session.delete(vote)
+    db.session.commit()
+    return jsonify({
+        "message": "Vote dibatalkan",
+        "game_request": req.to_dict(current_user_id=user_id),
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# Admin endpoints
+# ---------------------------------------------------------------------------
+
+
+@admin_game_requests_bp.route("", methods=["GET"])
+@admin_required
+def admin_list_requests():
+    """List all game requests for admin moderation.
+
+    Query params:
+      - status: pending | added | rejected | all (default: all)
+    Sorted by request_count desc, then created_at desc.
+    """
+    status = (request.args.get("status") or "all").lower()
+    q = GameRequest.query
+    if status in ("pending", "added", "rejected"):
+        q = q.filter_by(status=status)
+
+    items = q.all()
+    items.sort(key=lambda r: (r.request_count(), r.created_at), reverse=True)
+
+    # Stats: counts per status
+    pending_count = GameRequest.query.filter_by(status="pending").count()
+    added_count = GameRequest.query.filter_by(status="added").count()
+    rejected_count = GameRequest.query.filter_by(status="rejected").count()
+
+    return jsonify({
+        "items": [r.to_dict(include_voters=True) for r in items],
+        "stats": {
+            "pending": pending_count,
+            "added": added_count,
+            "rejected": rejected_count,
+        },
+    }), 200
+
+
+@admin_game_requests_bp.route("/<int:request_id>", methods=["PATCH"])
+@admin_required
+def admin_update_request(request_id: int):
+    """Update a request's status and optional admin_note.
+
+    Body: { status: pending|added|rejected, admin_note?: str }
+    """
+    admin_user_id = int(get_jwt_identity())
+    req = db.session.get(GameRequest, request_id)
+    if not req:
+        return jsonify({"error": "Request not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    new_status = (data.get("status") or "").lower()
+    if new_status not in GameRequest.STATUS_CHOICES:
+        return jsonify({
+            "error": f"Invalid status. Must be one of: {', '.join(GameRequest.STATUS_CHOICES)}"
+        }), 400
+
+    req.status = new_status
+    if "admin_note" in data:
+        note = (data.get("admin_note") or "").strip()
+        req.admin_note = note or None
+
+    if new_status == "pending":
+        req.resolved_at = None
+        req.resolved_by_user_id = None
+    else:
+        req.resolved_at = datetime.now(timezone.utc)
+        req.resolved_by_user_id = admin_user_id
+
+    db.session.commit()
+    return jsonify({
+        "message": "Status diperbarui",
+        "game_request": req.to_dict(include_voters=True),
+    }), 200

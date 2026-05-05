@@ -752,3 +752,97 @@ class AccountFlag(db.Model):
             data["resolved_by_email"] = self.resolved_by.email if self.resolved_by else None
             data["resolution_note"] = self.resolution_note
         return data
+
+
+class GameRequest(db.Model):
+    """User-submitted request for a game to be added to the catalog.
+    Aggregated by Steam appid: each unique game = one row, votes track requesters.
+    """
+    __tablename__ = "game_requests"
+
+    STATUS_CHOICES = ("pending", "added", "rejected")
+
+    id = db.Column(db.Integer, primary_key=True)
+    appid = db.Column(db.Integer, unique=True, nullable=False, index=True)
+    name = db.Column(db.String(500), nullable=False)
+    header_image = db.Column(db.String(500), nullable=True)
+    original_price = db.Column(db.Integer, nullable=True)
+    store_url = db.Column(db.String(500), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+    admin_note = db.Column(db.Text, nullable=True)
+    resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    resolved_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    votes = db.relationship(
+        "GameRequestVote", backref="game_request", lazy="dynamic", cascade="all, delete-orphan"
+    )
+    resolved_by = db.relationship("User", foreign_keys=[resolved_by_user_id])
+
+    def request_count(self) -> int:
+        return self.votes.count()
+
+    def to_dict(self, include_voters: bool = False, current_user_id: int | None = None):
+        data = {
+            "id": self.id,
+            "appid": self.appid,
+            "name": self.name,
+            "header_image": self.header_image,
+            "original_price": self.original_price,
+            "store_url": self.store_url,
+            "status": self.status,
+            "admin_note": self.admin_note,
+            "request_count": self.request_count(),
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "created_at": self.created_at.isoformat(),
+        }
+        if current_user_id is not None:
+            data["voted"] = (
+                self.votes.filter_by(user_id=current_user_id).first() is not None
+            )
+        if include_voters:
+            voters = []
+            for v in self.votes.order_by(GameRequestVote.created_at.desc()).all():
+                voters.append({
+                    "user_id": v.user_id,
+                    "email": v.user.email if v.user else None,
+                    "voted_at": v.created_at.isoformat(),
+                })
+            data["voters"] = voters
+            data["resolved_by_email"] = (
+                self.resolved_by.email if self.resolved_by else None
+            )
+        return data
+
+
+class GameRequestVote(db.Model):
+    """One row per user vote for a GameRequest. Unique per (request, user)."""
+    __tablename__ = "game_request_votes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    game_request_id = db.Column(
+        db.Integer,
+        db.ForeignKey("game_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "game_request_id", "user_id", name="uq_game_request_user_vote"
+        ),
+    )

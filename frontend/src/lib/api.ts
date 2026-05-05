@@ -278,6 +278,24 @@ export interface AccountFlag {
   resolution_note?: string | null
 }
 
+export interface GameRequest {
+  id: number
+  appid: number
+  name: string
+  header_image: string | null
+  original_price: number | null
+  store_url: string
+  status: 'pending' | 'added' | 'rejected'
+  admin_note: string | null
+  request_count: number
+  resolved_at: string | null
+  created_at: string
+  voted?: boolean
+  // admin-only enriched fields
+  voters?: { user_id: number; email: string | null; voted_at: string }[]
+  resolved_by_email?: string | null
+}
+
 export interface PlayInstructions {
   instructions: {
     game_id: number
@@ -532,6 +550,31 @@ return res.order
   },
   getMyPromos() {
     return request<{ promos: MyPromo[] }>('/api/store/my-promos').then(r => r.promos)
+  },
+}
+
+// ─── Game Requests ───────────────────────────────────────────────────────────
+
+export const gameRequestsApi = {
+  submit(steam_url: string) {
+    return request<{ message: string; game_request: GameRequest }>(
+      '/api/game-requests',
+      {
+        method: 'POST',
+        body: JSON.stringify({ steam_url }),
+      }
+    )
+  },
+  async listMine() {
+    const res = await request<{ items: GameRequest[] }>('/api/game-requests/mine')
+
+    return res.items
+  },
+  removeMyVote(requestId: number) {
+    return request<{ message: string; game_request: GameRequest }>(
+      `/api/game-requests/${requestId}/vote`,
+      { method: 'DELETE' }
+    )
   },
 }
 
@@ -845,6 +888,24 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
   },
   getReferrals() {
     return request<{ referrals: any[]; total_credit_awarded: number; total_count: number }>('/api/admin/referrals')
+  },
+  getGameRequests(status: 'pending' | 'added' | 'rejected' | 'all' = 'all') {
+    return request<{
+      items: GameRequest[]
+      stats: { pending: number; added: number; rejected: number }
+    }>(`/api/admin/game-requests?status=${status}`)
+  },
+  updateGameRequest(
+    id: number,
+    data: { status: 'pending' | 'added' | 'rejected'; admin_note?: string }
+  ) {
+    return request<{ message: string; game_request: GameRequest }>(
+      `/api/admin/game-requests/${id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }
+    )
   },
 }
 

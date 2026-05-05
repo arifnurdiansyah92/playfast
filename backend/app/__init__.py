@@ -69,10 +69,16 @@ def create_app(config_name: str | None = None) -> Flask:
     from app.auth.routes import auth_bp
     from app.store.routes import store_bp
     from app.admin.routes import admin_bp
+    from app.game_requests.routes import (
+        game_requests_bp,
+        admin_game_requests_bp,
+    )
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(store_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(game_requests_bp)
+    app.register_blueprint(admin_game_requests_bp)
 
     # ---------- Serve uploaded files ----------
     from flask import send_from_directory
@@ -179,6 +185,10 @@ def _run_schema_upgrades():
 
     from app.models import AccountFlag
     AccountFlag.__table__.create(db.engine, checkfirst=True)
+
+    from app.models import GameRequest, GameRequestVote
+    GameRequest.__table__.create(db.engine, checkfirst=True)
+    GameRequestVote.__table__.create(db.engine, checkfirst=True)
 
     # Backfill referral_code for existing users that don't have one
     from app.models import User

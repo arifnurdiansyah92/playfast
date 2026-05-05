@@ -89,6 +89,9 @@ const HorizontalMenu = () => {
         <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
           Game Saya
         </MenuItem>
+        <MenuItem href='/request-game' icon={<i className='tabler-bulb' />}>
+          Request Game
+        </MenuItem>
         <MenuItem href='/referrals' icon={<i className='tabler-share' />}>
           Referral Saya
         </MenuItem>
@@ -111,6 +114,9 @@ const HorizontalMenu = () => {
             </MenuItem>
             <MenuItem href='/admin/account-flags' icon={<i className='tabler-flag' />}>
               Account Flags
+            </MenuItem>
+            <MenuItem href='/admin/game-requests' icon={<i className='tabler-bulb' />}>
+              Game Requests
             </MenuItem>
             <MenuItem href='/admin/subscriptions' icon={<i className='tabler-crown' />}>
               Langganan
