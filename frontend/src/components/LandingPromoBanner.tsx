@@ -7,7 +7,10 @@ import { useRouter } from 'next/navigation'
 import { storeApi, formatIDR } from '@/lib/api'
 
 const SESSION_KEY = 'playfast.landingPromoBanner.dismissed.v2'
-const WA_NUMBER = '6282240708329'
+// Fallback only — runtime value comes from SiteSetting.manual_whatsapp_number
+// via storeApi.getPaymentConfig(). Kept here so the banner still works if the
+// settings call fails.
+const WA_NUMBER_FALLBACK = '6282240708329'
 const PROMO_END = new Date('2026-05-16T00:00:00+07:00').getTime()
 const PROMO_START_LABEL = '24 APR'
 const PROMO_END_LABEL = '15 MEI 2026'
@@ -725,10 +728,12 @@ export default function LandingPromoBanner() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [promoPrice, setPromoPrice] = useState<number | null>(null)
+  const [waNumber, setWaNumber] = useState<string>(WA_NUMBER_FALLBACK)
 
   useBannerAssets()
 
-  // Load plans and only open if lifetime is active and not dismissed this session
+  // Load plans and only open if lifetime is active and not dismissed this session.
+  // Also load the payment config to pick up the admin-configured WA number.
   useEffect(() => {
     let cancelled = false
 
@@ -755,7 +760,19 @@ export default function LandingPromoBanner() {
         /* silent — just don't show */
       })
 
-    
+    storeApi
+      .getPaymentConfig()
+      .then(cfg => {
+        if (cancelled) return
+        const digits = (cfg?.whatsapp_number || '').replace(/\D/g, '')
+
+        if (digits) setWaNumber(digits)
+      })
+      .catch(() => {
+        /* keep fallback */
+      })
+
+
 return () => {
       cancelled = true
     }
@@ -807,7 +824,7 @@ return () => {
       `Saya tertarik dengan promo *Subscribe Lifetime* (${priceText}) — akses semua 300+ game Steam.\n\n` +
       `Mohon info lebih lanjut untuk melanjutkan pembelian. Terima kasih!`
 
-    const url = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(message)}`
+    const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`
 
     if (typeof window !== 'undefined') {
       window.open(url, '_blank', 'noopener,noreferrer')
