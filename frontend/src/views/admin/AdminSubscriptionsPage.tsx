@@ -103,6 +103,7 @@ const AdminSubscriptionsPage = () => {
             <Table size='small'>
               <TableHead>
                 <TableRow>
+                  <TableCell>ID</TableCell>
                   <TableCell>User</TableCell>
                   <TableCell>Plan</TableCell>
                   <TableCell>Status</TableCell>
@@ -116,6 +117,7 @@ const AdminSubscriptionsPage = () => {
               <TableBody>
                 {subs.map(sub => (
                   <TableRow key={sub.id} hover>
+                    <TableCell><Typography variant='body2' sx={{ fontWeight: 600 }}>#{sub.id}</Typography></TableCell>
                     <TableCell>{sub.user_email}</TableCell>
                     <TableCell><Chip size='small' label={sub.plan_label} variant='tonal' /></TableCell>
                     <TableCell>
