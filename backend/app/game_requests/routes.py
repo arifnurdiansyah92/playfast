@@ -173,7 +173,11 @@ def submit_request():
         }), 400
 
     existing_game = Game.query.filter_by(appid=appid).first()
-    if existing_game:
+    catalog_in_stock = bool(
+        existing_game and existing_game.available_account_count() > 0
+    )
+
+    if catalog_in_stock:
         return jsonify({
             "error": "Game ini sudah ada di katalog kami",
             "game_id": existing_game.id,
@@ -183,12 +187,6 @@ def submit_request():
     existing_req = GameRequest.query.filter_by(appid=appid).first()
 
     if existing_req:
-        # Block voting on resolved requests
-        if existing_req.status == "added":
-            return jsonify({
-                "error": "Game ini sudah ditambahkan ke katalog",
-                "game_request": existing_req.to_dict(current_user_id=user_id),
-            }), 409
         if existing_req.status == "rejected":
             return jsonify({
                 "error": "Request game ini sudah ditolak"
@@ -196,11 +194,24 @@ def submit_request():
                 "game_request": existing_req.to_dict(current_user_id=user_id),
             }), 409
 
+        # Reopen previously-added requests when catalog is out of stock so admin
+        # sees fresh demand and voters get notified again on the next restock.
+        if existing_req.status == "added":
+            existing_req.status = "pending"
+            existing_req.resolved_at = None
+            existing_req.resolved_by_user_id = None
+            existing_req.notified_at = None
+            existing_req.notified_count = 0
+
         # Already voted?
         existing_vote = GameRequestVote.query.filter_by(
             game_request_id=existing_req.id, user_id=user_id
         ).first()
         if existing_vote:
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
             return jsonify({
                 "message": "Kamu sudah request game ini",
                 "game_request": existing_req.to_dict(current_user_id=user_id),
