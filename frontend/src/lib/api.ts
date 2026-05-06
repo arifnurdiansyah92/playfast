@@ -294,6 +294,8 @@ export interface GameRequest {
   // admin-only enriched fields
   voters?: { user_id: number; email: string | null; voted_at: string }[]
   resolved_by_email?: string | null
+  notified_at?: string | null
+  notified_count?: number
 }
 
 export interface EmailCampaignFilters {
@@ -560,8 +562,10 @@ return res.order
       method: 'POST'
     })
   },
-  getInstructions(orderId: number | string) {
-    return request<PlayInstructions>(`/api/store/orders/${orderId}/instructions`)
+  getInstructions(orderId: number | string, appid?: number | string) {
+    const qs = appid ? `?appid=${encodeURIComponent(appid)}` : ''
+
+    return request<PlayInstructions>(`/api/store/orders/${orderId}/instructions${qs}`)
   },
   flagOrder(orderId: number | string, params: { reason: AccountFlagReason; description?: string }) {
     return request<{ message: string; flag: AccountFlag }>(`/api/store/orders/${orderId}/flag`, {

@@ -52,7 +52,10 @@ const MyGamesPage = () => {
 
   const handlePlayClick = async (game: (typeof filtered)[number]) => {
     if (game.order_id) {
-      router.push(`/play/${game.order_id}`)
+      // Bonus games share the source purchase's order_id, so we pass the
+      // actual game's appid as a query param so PlayPage shows the right
+      // header / name / instructions.
+      router.push(`/play/${game.order_id}?appid=${game.appid}`)
 
       return
     }

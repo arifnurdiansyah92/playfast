@@ -781,6 +781,8 @@ class GameRequest(db.Model):
     admin_note = db.Column(db.Text, nullable=True)
     resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
     resolved_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    notified_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    notified_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -825,6 +827,10 @@ class GameRequest(db.Model):
             data["resolved_by_email"] = (
                 self.resolved_by.email if self.resolved_by else None
             )
+            data["notified_at"] = (
+                self.notified_at.isoformat() if self.notified_at else None
+            )
+            data["notified_count"] = self.notified_count
         return data
 
 

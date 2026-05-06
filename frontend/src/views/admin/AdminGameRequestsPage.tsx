@@ -289,6 +289,13 @@ const AdminGameRequestsPage = () => {
                                   </Typography>
                                 </Alert>
                               )}
+                              {req.notified_at && (
+                                <Alert severity='success' icon={<i className='tabler-mail-check' />} sx={{ mt: 2 }}>
+                                  <Typography variant='caption'>
+                                    Notifikasi dikirim ke <strong>{req.notified_count ?? 0} voter</strong> pada {formatDate(req.notified_at)}
+                                  </Typography>
+                                </Alert>
+                              )}
                             </Box>
                           </Collapse>
                         </TableCell>

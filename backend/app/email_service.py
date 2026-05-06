@@ -197,3 +197,58 @@ def send_verification_email(to: str, verify_url: str):
       </div>"""
 
     send_email(to, "Verifikasi Email - Playfast", _base_template(content))
+
+
+# ---------------------------------------------------------------------------
+# Email: Game Request Fulfilled
+# ---------------------------------------------------------------------------
+
+def send_game_request_fulfilled_email(
+    to: str, game_name: str, game_url: str, header_image: str | None = None
+):
+    """Notify a voter that the game they requested is now in the catalog."""
+    image_html = (
+        f'<img src="{header_image}" alt="{game_name}" '
+        f'style="width: 100%; height: auto; display: block;" />'
+        if header_image
+        else ""
+    )
+    content = f"""\
+      {image_html}
+
+      <!-- Body -->
+      <div style="padding: 32px;">
+        <h2 style="color: #ffffff; margin: 0 0 8px; font-size: 22px; font-weight: 700;">Kabar Baik! Game Request Kamu Udah Ada</h2>
+        <p style="color: #8f98a0; font-size: 14px; line-height: 1.7; margin: 0 0 8px;">
+          <strong style="color: #c9a84c;">{game_name}</strong> sekarang udah ada di katalog Playfast — game yang kamu request bareng yang lain udah berhasil kita tambahin.
+        </p>
+        <p style="color: #8f98a0; font-size: 14px; line-height: 1.7; margin: 0 0 8px;">
+          Klik tombol di bawah buat lihat detailnya, atau langsung beli/main kalau kamu udah subscribe.
+        </p>
+
+        <!-- CTA Button -->
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="{game_url}"
+             style="display: inline-block; background: #c9a84c; color: #000; text-decoration: none;
+                    padding: 14px 40px; border-radius: 8px; font-weight: 700; font-size: 15px;
+                    letter-spacing: 0.3px;">
+            Lihat Game
+          </a>
+        </div>
+
+        <!-- Fallback link -->
+        <p style="color: #555; font-size: 12px; line-height: 1.5; margin: 0 0 20px; word-break: break-all;">
+          Tombol tidak berfungsi? Salin link ini ke browser:<br>
+          <a href="{game_url}" style="color: #c9a84c; text-decoration: none;">{game_url}</a>
+        </p>
+
+        <!-- Separator -->
+        <div style="border-top: 1px solid #2a2a4a; margin: 20px 0;"></div>
+
+        <p style="color: #666; font-size: 13px; line-height: 1.5; margin: 0;">
+          Makasih udah bantu nentuin game apa yang kita tambahin selanjutnya. Terus request yang lain di
+          <a href="{SITE_URL}/request-game" style="color: #c9a84c; text-decoration: none;">halaman Request Game</a> ya!
+        </p>
+      </div>"""
+
+    send_email(to, f"Game request kamu sudah ada — {game_name}", _base_template(content))

@@ -10,10 +10,11 @@ from functools import wraps
 from urllib.parse import urlparse
 
 import requests as http_requests
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.exc import IntegrityError
 
+from app.email_service import send_game_request_fulfilled_email
 from app.extensions import db
 from app.models import Game, GameRequest, GameRequestVote, User
 
@@ -377,6 +378,17 @@ def admin_update_request(request_id: int):
             "error": f"Invalid status. Must be one of: {', '.join(GameRequest.STATUS_CHOICES)}"
         }), 400
 
+    # Block flip to "added" if the Game with this appid isn't in the catalog
+    # yet — otherwise notification emails would link to a 404.
+    matched_game = None
+    if new_status == "added":
+        matched_game = Game.query.filter_by(appid=req.appid).first()
+        if not matched_game:
+            return jsonify({
+                "error": "Game belum ada di katalog. Tambahin dulu game-nya, baru tandai request sebagai added.",
+                "code": "game_not_in_catalog",
+            }), 409
+
     req.status = new_status
     if "admin_note" in data:
         note = (data.get("admin_note") or "").strip()
@@ -389,8 +401,47 @@ def admin_update_request(request_id: int):
         req.resolved_at = datetime.now(timezone.utc)
         req.resolved_by_user_id = admin_user_id
 
+    # Notify voters once per request, only on the first flip to "added".
+    notify_message = ""
+    if (
+        new_status == "added"
+        and matched_game is not None
+        and req.notified_at is None
+    ):
+        frontend_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/")
+        game_url = f"{frontend_url}/game/{matched_game.appid}" if frontend_url else f"/game/{matched_game.appid}"
+        display_name = (
+            matched_game.custom_name
+            or matched_game.name
+            or req.name
+        )
+        header = matched_game.custom_header_image or matched_game.header_image or req.header_image
+
+        sent_count = 0
+        for vote in req.votes.all():
+            user = vote.user
+            if not user or not user.email:
+                continue
+            try:
+                send_game_request_fulfilled_email(
+                    to=user.email,
+                    game_name=display_name,
+                    game_url=game_url,
+                    header_image=header,
+                )
+                sent_count += 1
+            except Exception:
+                logger.exception(
+                    "Failed to enqueue fulfilled email for voter %s of request %s",
+                    user.id, req.id,
+                )
+
+        req.notified_at = datetime.now(timezone.utc)
+        req.notified_count = sent_count
+        notify_message = f" · Notifikasi dikirim ke {sent_count} voter."
+
     db.session.commit()
     return jsonify({
-        "message": "Status diperbarui",
+        "message": "Status diperbarui" + notify_message,
         "game_request": req.to_dict(include_voters=True),
     }), 200

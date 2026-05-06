@@ -1437,21 +1437,42 @@ def flag_account_from_order(order_id: int):
 @store_bp.route("/orders/<int:order_id>/instructions", methods=["GET"])
 @jwt_required()
 def get_instructions(order_id: int):
-    """Get play instructions for the game in this order."""
+    """Get play instructions for the game in this order.
+
+    Optional ?appid=<x>: bonus games on the same account share the source
+    purchase's order_id; pass the bonus game's appid to fetch instructions
+    for that game instead of the order's primary game. The override is only
+    honored when the requested game is actually owned by the same account
+    that backs this order.
+    """
     user_id = int(get_jwt_identity())
     order = Order.query.filter_by(id=order_id, user_id=user_id).first()
     if not order:
         return jsonify({"error": "Order not found"}), 404
 
-    # Check for custom instructions
-    instruction = PlayInstruction.query.filter_by(game_id=order.game_id).first()
+    target_game_id = order.game_id
+    appid_override = request.args.get("appid", type=int)
+    if appid_override and order.assignment is not None:
+        candidate = (
+            Game.query
+            .join(GameAccount, GameAccount.game_id == Game.id)
+            .filter(
+                Game.appid == appid_override,
+                GameAccount.steam_account_id == order.assignment.steam_account_id,
+            )
+            .first()
+        )
+        if candidate:
+            target_game_id = candidate.id
+
+    instruction = PlayInstruction.query.filter_by(game_id=target_game_id).first()
     if instruction:
         return jsonify({"instructions": instruction.to_dict()}), 200
 
     # Return default
     return jsonify({
         "instructions": {
-            "game_id": order.game_id,
+            "game_id": target_game_id,
             "content": DEFAULT_PLAY_INSTRUCTIONS,
             "is_custom": False,
         }

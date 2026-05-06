@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import { useQuery } from '@tanstack/react-query'
 
@@ -102,6 +102,8 @@ const CountdownRing = ({ seconds, total }: { seconds: number; total: number }) =
 
 const PlayPage = ({ orderId }: Props) => {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const overrideAppid = searchParams?.get('appid') || null
   const [code, setCode] = useState<string | null>(null)
   const [codeExpiresIn, setCodeExpiresIn] = useState(0)
   const [codeLoading, setCodeLoading] = useState(false)
@@ -121,9 +123,24 @@ const PlayPage = ({ orderId }: Props) => {
     queryFn: () => storeApi.getOrder(orderId)
   })
 
+  // Bonus games share the source purchase's order_id but represent a
+  // different game. When ?appid=<x> is present in the URL and differs from
+  // order.game.appid, fetch that game's metadata and display it instead —
+  // credentials still come from the order (same Steam account).
+  const orderAppid = order?.game?.appid
+  const shouldOverride = !!overrideAppid && !!orderAppid && String(overrideAppid) !== String(orderAppid)
+
+  const { data: overrideGame } = useQuery({
+    queryKey: ['play-override-game', overrideAppid],
+    queryFn: () => storeApi.getGame(overrideAppid as string),
+    enabled: shouldOverride,
+  })
+
+  const displayGame = shouldOverride && overrideGame ? overrideGame : order?.game
+
   const { data: instructionsData } = useQuery({
-    queryKey: ['instructions', orderId],
-    queryFn: () => storeApi.getInstructions(orderId),
+    queryKey: ['instructions', orderId, overrideAppid],
+    queryFn: () => storeApi.getInstructions(orderId, overrideAppid ?? undefined),
     enabled: !!order
   })
 
@@ -212,8 +229,8 @@ const PlayPage = ({ orderId }: Props) => {
 
   const instructions = instructionsData?.instructions?.content
 
-  const headerImage = order.game?.header_image
-    || (order.game?.appid ? gameHeaderImage(order.game.appid) : null)
+  const headerImage = displayGame?.header_image
+    || (displayGame?.appid ? gameHeaderImage(displayGame.appid) : null)
 
   return (
     <div className='flex flex-col gap-5'>
@@ -232,7 +249,7 @@ const PlayPage = ({ orderId }: Props) => {
           <CardMedia
             component='img'
             image={headerImage}
-            alt={order.game?.name || 'Game'}
+            alt={displayGame?.name || 'Game'}
             onError={handleImageError}
             sx={{ height: { xs: 140, sm: 180 }, objectFit: 'cover' }}
           />
@@ -254,7 +271,7 @@ const PlayPage = ({ orderId }: Props) => {
           </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant='h5' sx={{ fontWeight: 700 }} noWrap>
-              {order.game?.name}
+              {displayGame?.name}
             </Typography>
             {order.credentials?.account_name && (
               <Typography variant='body2' color='text.secondary'>
