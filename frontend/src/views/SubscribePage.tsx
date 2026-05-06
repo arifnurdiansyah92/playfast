@@ -84,7 +84,7 @@ const SubscribePage = () => {
           Playfast Premium
         </Typography>
         <Typography variant='h6' color='text.secondary' sx={{ maxWidth: 600, mx: 'auto' }}>
-          Subscribe once, play everything. Access all games with a single subscription.
+          Subscribe sekali, main semua. Akses 300+ game di katalog — dan request game baru langsung dari kita.
         </Typography>
       </Box>
 
@@ -130,12 +130,12 @@ const SubscribePage = () => {
               : 0
 
             const benefits = (() => {
-              if (plan.plan === 'monthly') return ['Akses 300+ game di katalog', 'Cancel kapan aja', 'Kode Steam Guard otomatis 24/7', 'Game baru otomatis bisa dimainkan']
-              if (plan.plan === '3monthly') return ['Semua benefit Monthly', savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat dari Monthly', 'Komitmen pendek tapi lebih murah']
-              if (plan.plan === 'yearly') return [savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat paling banyak', 'Akses penuh sepanjang tahun', 'Game baru otomatis tersedia', 'Priority WhatsApp support']
-              if (plan.plan === 'lifetime') return ['Bayar sekali, akses selamanya', 'Tidak ada renewal — pay-once', 'Semua game baru ke depannya gratis', 'Lifetime priority support']
+              if (plan.plan === 'monthly') return ['Akses 300+ game di katalog', 'Cancel kapan aja', 'Kode Steam Guard otomatis 24/7', 'Game baru otomatis bisa dimainkan', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
+              if (plan.plan === '3monthly') return ['Semua benefit Monthly', savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat dari Monthly', 'Komitmen pendek tapi lebih murah', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
+              if (plan.plan === 'yearly') return [savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat paling banyak', 'Akses penuh sepanjang tahun', 'Game baru otomatis tersedia', 'Priority WhatsApp support', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
+              if (plan.plan === 'lifetime') return ['Bayar sekali, akses selamanya', 'Tidak ada renewal — pay-once', 'Semua game baru ke depannya gratis', 'Lifetime priority support', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
 
-              return ['Akses semua game di katalog', 'Kode Steam Guard otomatis', 'Game baru otomatis tersedia']
+              return ['Akses semua game di katalog', 'Kode Steam Guard otomatis', 'Game baru otomatis tersedia', 'Bisa request game ke admin']
             })()
 
             return (
@@ -217,10 +217,10 @@ return }
       {/* Features */}
       <Grid container spacing={2} sx={{ mt: 2, maxWidth: 900, mx: 'auto' }}>
         {[
-          { icon: 'tabler-device-gamepad-2', title: 'All Games', desc: 'Access every game in the catalog' },
-          { icon: 'tabler-shield-lock', title: 'Steam Guard', desc: 'Automatic 2FA codes included' },
-          { icon: 'tabler-bolt', title: 'Instant Access', desc: 'Get credentials immediately after subscribing' },
-          { icon: 'tabler-refresh', title: 'Auto-Renew Ready', desc: 'Renew anytime before expiry' },
+          { icon: 'tabler-device-gamepad-2', title: 'All Games', desc: 'Akses semua game di katalog' },
+          { icon: 'tabler-shield-lock', title: 'Steam Guard', desc: 'Kode 2FA otomatis dari kita' },
+          { icon: 'tabler-bolt', title: 'Instant Access', desc: 'Kredensial langsung setelah subscribe' },
+          { icon: 'tabler-bulb', title: 'Request Game', desc: 'Request game yang belum ada di katalog. Yang paling banyak di-vote bakal kita tambahin.' },
         ].map(f => (
           <Grid size={{ xs: 12, sm: 6 }} key={f.title}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}>
