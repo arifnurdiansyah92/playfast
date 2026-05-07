@@ -61,6 +61,7 @@ const AdminPromoCodesPage = () => {
   const qc = useQueryClient()
   const [createOpen, setCreateOpen] = useState(false)
   const [usagesOpen, setUsagesOpen] = useState<number | null>(null)
+  const [editingOwnerId, setEditingOwnerId] = useState<number | null>(null)
   const [snack, setSnack] = useState('')
 
   const [newCode, setNewCode] = useState<{
@@ -114,6 +115,17 @@ const AdminPromoCodesPage = () => {
     mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
       adminApi.updatePromoCode(id, { is_active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-promo-codes'] }),
+  })
+
+  const updateOwnerMut = useMutation({
+    mutationFn: ({ id, assigned_user_id }: { id: number; assigned_user_id: number | null }) =>
+      adminApi.updatePromoCode(id, { assigned_user_id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-promo-codes'] })
+      setEditingOwnerId(null)
+      setSnack('Owner updated')
+    },
+    onError: (e: any) => setSnack(`Error: ${e.message}`),
   })
 
   const deleteMut = useMutation({
@@ -171,17 +183,45 @@ const AdminPromoCodesPage = () => {
                   <TableCell>{formatValue(c)}</TableCell>
                   <TableCell>{c.scope}</TableCell>
                   <TableCell>
-                    {c.assigned_user_email ? (
+                    {editingOwnerId === c.id ? (
+                      <Autocomplete
+                        size='small'
+                        autoFocus
+                        openOnFocus
+                        options={users ?? []}
+                        getOptionLabel={u => u.email}
+                        value={users?.find(u => u.id === c.assigned_user_id) ?? null}
+                        onChange={(_, picked) => {
+                          updateOwnerMut.mutate({ id: c.id, assigned_user_id: picked?.id ?? null })
+                        }}
+                        onClose={(_, reason) => {
+                          if (reason === 'escape' || reason === 'blur') setEditingOwnerId(null)
+                        }}
+                        renderInput={(params) => <TextField {...params} placeholder='Cari user…' autoFocus />}
+                        sx={{ minWidth: 240 }}
+                        isOptionEqualToValue={(o, v) => o.id === v.id}
+                        disabled={updateOwnerMut.isPending}
+                      />
+                    ) : c.assigned_user_email ? (
                       <Chip
                         size='small'
                         color='info'
                         variant='tonal'
                         icon={<i className='tabler-target' style={{ fontSize: 12 }} />}
                         label={c.assigned_user_email}
-                        sx={{ maxWidth: 200, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+                        onClick={() => setEditingOwnerId(c.id)}
+                        onDelete={() => updateOwnerMut.mutate({ id: c.id, assigned_user_id: null })}
+                        sx={{ maxWidth: 200, cursor: 'pointer', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
                       />
                     ) : (
-                      <Typography variant='caption' color='text.secondary'>—</Typography>
+                      <Button
+                        size='small'
+                        variant='text'
+                        onClick={() => setEditingOwnerId(c.id)}
+                        sx={{ textTransform: 'none', p: 0, minWidth: 0, fontWeight: 400 }}
+                      >
+                        + Set owner
+                      </Button>
                     )}
                   </TableCell>
                   <TableCell align='center'>
