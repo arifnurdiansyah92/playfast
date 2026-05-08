@@ -13,7 +13,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 
 import { publicApi } from '@/lib/api'
 
-const UnsubscribePage = ({ token }: { token: string }) => {
+const UnsubscribePage = ({ token, mode = 'user' }: { token: string; mode?: 'user' | 'guest' }) => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [message, setMessage] = useState('')
   const [email, setEmail] = useState('')
@@ -25,8 +25,9 @@ const UnsubscribePage = ({ token }: { token: string }) => {
 
       return
     }
-    publicApi
-      .unsubscribe(token)
+    const call = mode === 'guest' ? publicApi.unsubscribeGuest(token) : publicApi.unsubscribe(token)
+
+    call
       .then(res => {
         setStatus('success')
         setMessage(res.message)
@@ -36,7 +37,7 @@ const UnsubscribePage = ({ token }: { token: string }) => {
         setStatus('error')
         setMessage(err.message || 'Unsubscribe gagal.')
       })
-  }, [token])
+  }, [token, mode])
 
   return (
     <div className='flex bs-full justify-center items-center min-bs-[100dvh] p-6'>

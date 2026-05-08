@@ -11,14 +11,17 @@ from app.email_blast.service import (
     count_audience,
     query_audience,
     render_campaign_html,
+    resolve_specific_emails,
     run_blast,
     send_test_email,
+    verify_guest_unsubscribe_token,
 )
 from app.extensions import db
 from app.jobs import get_current_job, request_cancel, start_job
 from app.models import (
     EmailCampaign,
     EmailCampaignRecipient,
+    EmailGuestOptOut,
     EmailUnsubscribeToken,
     User,
 )
@@ -60,6 +63,25 @@ def _normalize_filters(raw: dict | None) -> dict:
     }
 
 
+def _normalize_audience_mode(raw: str | None) -> str:
+    mode = (raw or "filters").strip().lower()
+    return mode if mode in ("filters", "specific") else "filters"
+
+
+def _normalize_target_emails(raw) -> list[str]:
+    """Coerce input into a clean list[str]. Accepts list, comma/newline-separated
+    string, or None. Caps at 5000 entries to avoid abuse."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        items = [e.strip() for e in raw.replace(",", "\n").splitlines()]
+    elif isinstance(raw, list):
+        items = [str(e).strip() for e in raw]
+    else:
+        return []
+    return [e for e in items if e][:5000]
+
+
 def _can_modify(campaign: EmailCampaign) -> bool:
     """Drafts are editable; sending/completed campaigns are not."""
     return campaign.status == "draft"
@@ -74,8 +96,28 @@ def _can_modify(campaign: EmailCampaign) -> bool:
 @admin_required
 def audience_count():
     data = request.get_json(silent=True) or {}
+    mode = _normalize_audience_mode(data.get("audience_mode"))
+
+    if mode == "specific":
+        target_emails = _normalize_target_emails(data.get("target_emails"))
+        result = resolve_specific_emails(target_emails)
+        return jsonify({
+            "audience_mode": "specific",
+            "count": len(result["matched_users"]) + len(result["guest_emails"]),
+            "matched_count": len(result["matched_users"]),
+            "guest_count": len(result["guest_emails"]),
+            "opted_out_count": len(result["opted_out"]),
+            "invalid_count": len(result["invalid"]),
+            "opted_out_emails": result["opted_out"][:50],  # cap for UI
+            "invalid_entries": result["invalid"][:50],
+        }), 200
+
     filters = _normalize_filters(data.get("filters"))
-    return jsonify({"count": count_audience(filters), "filters": filters}), 200
+    return jsonify({
+        "audience_mode": "filters",
+        "count": count_audience(filters),
+        "filters": filters,
+    }), 200
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +142,8 @@ def create_campaign():
     subject = (data.get("subject") or "").strip()
     body_markdown = data.get("body_markdown") or ""
     filters = _normalize_filters(data.get("filters"))
+    audience_mode = _normalize_audience_mode(data.get("audience_mode"))
+    target_emails = _normalize_target_emails(data.get("target_emails"))
 
     if not subject:
         return jsonify({"error": "Subject tidak boleh kosong"}), 400
@@ -108,6 +152,8 @@ def create_campaign():
         subject=subject,
         body_markdown=body_markdown,
         filters_json=filters,
+        audience_mode=audience_mode,
+        target_emails=target_emails or None,
         status="draft",
         created_by_user_id=user_id,
     )
@@ -157,6 +203,11 @@ def update_campaign(campaign_id: int):
         campaign.body_markdown = data.get("body_markdown") or ""
     if "filters" in data:
         campaign.filters_json = _normalize_filters(data.get("filters"))
+    if "audience_mode" in data:
+        campaign.audience_mode = _normalize_audience_mode(data.get("audience_mode"))
+    if "target_emails" in data:
+        emails = _normalize_target_emails(data.get("target_emails"))
+        campaign.target_emails = emails or None
 
     db.session.commit()
     return jsonify({"campaign": campaign.to_dict(include_body=True)}), 200
@@ -258,11 +309,29 @@ def send_blast(campaign_id: int):
     # Snapshot the audience NOW (so opt-outs that happen after send-time but
     # before a slow job processes them are still respected at iteration time
     # via the per-row check).
-    filters = campaign.filters_json or {}
-    users = query_audience(filters).all()
+    audience_mode = campaign.audience_mode or "filters"
 
-    if not users:
-        return jsonify({"error": "Audience kosong — tidak ada penerima yang cocok"}), 400
+    if audience_mode == "specific":
+        target_emails = campaign.target_emails or []
+        resolved = resolve_specific_emails(target_emails)
+        matched_users = resolved["matched_users"]
+        guest_emails = resolved["guest_emails"]
+        recipients_count = len(matched_users) + len(guest_emails)
+
+        if recipients_count == 0:
+            return jsonify({
+                "error": "Audience kosong — tidak ada email valid yang akan dikirim"
+            }), 400
+    else:
+        filters = campaign.filters_json or {}
+        matched_users = query_audience(filters).all()
+        guest_emails = []
+        recipients_count = len(matched_users)
+
+        if recipients_count == 0:
+            return jsonify({
+                "error": "Audience kosong — tidak ada penerima yang cocok"
+            }), 400
 
     # Block if a job is already running
     current = get_current_job()
@@ -273,7 +342,7 @@ def send_blast(campaign_id: int):
 
     # Wipe any previous recipients (re-queue from scratch) and re-create
     EmailCampaignRecipient.query.filter_by(campaign_id=campaign_id).delete()
-    for u in users:
+    for u in matched_users:
         rec = EmailCampaignRecipient(
             campaign_id=campaign_id,
             user_id=u.id,
@@ -281,8 +350,16 @@ def send_blast(campaign_id: int):
             status="pending",
         )
         db.session.add(rec)
+    for email in guest_emails:
+        rec = EmailCampaignRecipient(
+            campaign_id=campaign_id,
+            user_id=None,
+            email=email,
+            status="pending",
+        )
+        db.session.add(rec)
 
-    campaign.total_recipients = len(users)
+    campaign.total_recipients = recipients_count
     campaign.sent_count = 0
     campaign.failed_count = 0
     campaign.status = "draft"  # worker flips to 'sending' once it starts
@@ -292,13 +369,13 @@ def send_blast(campaign_id: int):
         "email_blast",
         run_blast,
         args=(campaign_id,),
-        total=len(users),
+        total=recipients_count,
     )
     if job is None:
         return jsonify({"error": "Gagal memulai job"}), 500
 
     return jsonify({
-        "message": f"Blast dimulai untuk {len(users)} penerima",
+        "message": f"Blast dimulai untuk {recipients_count} penerima",
         "campaign": campaign.to_dict(),
         "job": job,
     }), 202
@@ -341,4 +418,29 @@ def unsubscribe(token: str):
     return jsonify({
         "message": "Kamu sudah berhasil unsubscribe dari email promo Playfast.",
         "email": user.email,
+    }), 200
+
+
+@unsubscribe_bp.route("/unsubscribe-guest/<token>", methods=["GET", "POST"])
+def unsubscribe_guest(token: str):
+    """Unsubscribe path for non-registered emails. The token is a self-
+    contained HMAC of the email — no DB row required to issue it. Verifying
+    succeeds → upsert into EmailGuestOptOut so future blasts skip this email.
+    """
+    if not token or len(token) > 500:
+        return jsonify({"error": "Token tidak valid"}), 400
+
+    secret = current_app.config.get("SECRET_KEY") or "playfast-fallback-secret"
+    email = verify_guest_unsubscribe_token(token, secret)
+    if not email:
+        return jsonify({"error": "Token tidak valid atau sudah kadaluarsa"}), 400
+
+    existing = EmailGuestOptOut.query.filter_by(email=email).first()
+    if not existing:
+        db.session.add(EmailGuestOptOut(email=email))
+        db.session.commit()
+
+    return jsonify({
+        "message": "Kamu sudah berhasil unsubscribe dari email promo Playfast.",
+        "email": email,
     }), 200

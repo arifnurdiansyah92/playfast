@@ -179,6 +179,12 @@ def _run_schema_upgrades():
         # Notify game-request voters when admin marks request as added
         "ALTER TABLE game_requests ADD COLUMN notified_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE game_requests ADD COLUMN notified_count INTEGER NOT NULL DEFAULT 0",
+        # Email blast: send to specific emails (registered users + guests)
+        "ALTER TABLE email_campaigns ADD COLUMN audience_mode VARCHAR(20) NOT NULL DEFAULT 'filters'",
+        "ALTER TABLE email_campaigns ADD COLUMN target_emails JSON",
+        "ALTER TABLE email_campaign_recipients ALTER COLUMN user_id DROP NOT NULL",
+        "ALTER TABLE email_campaign_recipients DROP CONSTRAINT IF EXISTS uq_email_campaign_recipient",
+        "ALTER TABLE email_campaign_recipients ADD CONSTRAINT uq_email_campaign_recipient_email UNIQUE (campaign_id, email)",
     ]
     for stmt in alter_statements:
         try:
@@ -206,11 +212,13 @@ def _run_schema_upgrades():
     from app.models import (
         EmailCampaign,
         EmailCampaignRecipient,
+        EmailGuestOptOut,
         EmailUnsubscribeToken,
     )
     EmailCampaign.__table__.create(db.engine, checkfirst=True)
     EmailCampaignRecipient.__table__.create(db.engine, checkfirst=True)
     EmailUnsubscribeToken.__table__.create(db.engine, checkfirst=True)
+    EmailGuestOptOut.__table__.create(db.engine, checkfirst=True)
 
     # Backfill referral_code for existing users that don't have one
     from app.models import User

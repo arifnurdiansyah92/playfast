@@ -1,5 +1,8 @@
 """Email blast service: audience filtering, markdown rendering, send worker."""
 
+import base64
+import hashlib
+import hmac
 import logging
 import smtplib
 import time
@@ -15,6 +18,7 @@ from app.extensions import db
 from app.models import (
     EmailCampaign,
     EmailCampaignRecipient,
+    EmailGuestOptOut,
     EmailUnsubscribeToken,
     Order,
     Subscription,
@@ -80,6 +84,118 @@ def query_audience(filters: dict):
 
 def count_audience(filters: dict) -> int:
     return query_audience(filters).count()
+
+
+# ---------------------------------------------------------------------------
+# Specific-emails resolution
+# ---------------------------------------------------------------------------
+
+
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _is_valid_email(s: str) -> bool:
+    return bool(s) and "@" in s and "." in s.split("@", 1)[-1]
+
+
+def resolve_specific_emails(emails: list[str]) -> dict:
+    """Classify a list of arbitrary emails into mailing categories.
+
+    Returns:
+      - matched_users:   list[User]  — active, opted-in registered users
+      - guest_emails:    list[str]   — valid emails with no User row
+      - opted_out:       list[str]   — emails skipped (user or guest opt-out)
+      - invalid:         list[str]   — original entries that aren't valid emails
+
+    Lowercases + dedupes. Order roughly preserved within each category.
+    """
+    invalid: list[str] = []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in emails or []:
+        norm = _normalize_email(raw)
+        if not _is_valid_email(norm):
+            if (raw or "").strip():
+                invalid.append(raw)
+            continue
+        if norm in seen:
+            continue
+        seen.add(norm)
+        normalized.append(norm)
+
+    if not normalized:
+        return {
+            "matched_users": [],
+            "guest_emails": [],
+            "opted_out": [],
+            "invalid": invalid,
+        }
+
+    guest_opted = {
+        e
+        for (e,) in db.session.query(EmailGuestOptOut.email)
+        .filter(EmailGuestOptOut.email.in_(normalized))
+        .all()
+    }
+
+    user_rows = User.query.filter(User.email.in_(normalized)).all()
+    user_by_email = {u.email.lower(): u for u in user_rows}
+
+    matched_users: list[User] = []
+    guest_emails: list[str] = []
+    opted_out: list[str] = []
+
+    for email in normalized:
+        u = user_by_email.get(email)
+        if u is not None:
+            if u.email_opted_out or not u.is_active:
+                opted_out.append(email)
+            else:
+                matched_users.append(u)
+        elif email in guest_opted:
+            opted_out.append(email)
+        else:
+            guest_emails.append(email)
+
+    return {
+        "matched_users": matched_users,
+        "guest_emails": guest_emails,
+        "opted_out": opted_out,
+        "invalid": invalid,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Guest unsubscribe token (self-contained, no DB row)
+# ---------------------------------------------------------------------------
+
+
+def generate_guest_unsubscribe_token(email: str, secret: str) -> str:
+    """Self-contained HMAC token for non-registered email unsubscribes.
+
+    Format: base64url("<email>|<hmac_sha256_truncated_16hex>"). No DB row
+    required — verification re-derives the HMAC and constant-time compares.
+    """
+    sig = hmac.new(secret.encode(), email.encode(), hashlib.sha256).hexdigest()[:16]
+    payload = f"{email}|{sig}".encode()
+    return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+
+
+def verify_guest_unsubscribe_token(token: str, secret: str) -> str | None:
+    """Decode & verify a guest token. Returns the email if valid, else None."""
+    try:
+        padded = token + "=" * (-len(token) % 4)
+        decoded = base64.urlsafe_b64decode(padded.encode()).decode()
+        email, sig = decoded.rsplit("|", 1)
+        expected = hmac.new(
+            secret.encode(), email.encode(), hashlib.sha256
+        ).hexdigest()[:16]
+        if hmac.compare_digest(sig, expected):
+            return email
+        return None
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -257,22 +373,43 @@ def run_blast(progress, campaign_id: int):
 
     processed = 0
 
+    secret_key = current_app.config.get("SECRET_KEY") or "playfast-fallback-secret"
+    base_frontend = (frontend_url or SITE_URL).rstrip("/")
+
     for rec in pending:
         if progress.cancelled:
             progress.message = f"Dibatalkan setelah {processed}/{total}"
             break
 
-        user = db.session.get(User, rec.user_id)
-        if not user or user.email_opted_out or not user.is_active:
+        unsubscribe_url = None
+        skip_reason = None
+
+        if rec.user_id is not None:
+            # Registered-user path: existing flow.
+            user = db.session.get(User, rec.user_id)
+            if not user or user.email_opted_out or not user.is_active:
+                skip_reason = "Recipient unsubscribed or inactive at send time"
+            else:
+                tok_obj = EmailUnsubscribeToken.get_or_create_for_user(user.id)
+                db.session.commit()
+                unsubscribe_url = _build_unsubscribe_url(tok_obj.token, frontend_url)
+        else:
+            # Guest path: check the email-keyed opt-out table at send time.
+            already_opted = (
+                EmailGuestOptOut.query.filter_by(email=rec.email).first() is not None
+            )
+            if already_opted:
+                skip_reason = "Guest email opted out at send time"
+            else:
+                token = generate_guest_unsubscribe_token(rec.email, secret_key)
+                unsubscribe_url = f"{base_frontend}/unsubscribe-guest/{token}"
+
+        if skip_reason:
             rec.status = "failed"
-            rec.error = "Recipient unsubscribed or inactive at send time"
+            rec.error = skip_reason
             rec.sent_at = datetime.now(timezone.utc)
         else:
-            tok_obj = EmailUnsubscribeToken.get_or_create_for_user(user.id)
-            db.session.commit()
-            unsubscribe_url = _build_unsubscribe_url(tok_obj.token, frontend_url)
             html = render_campaign_html(campaign.body_markdown, unsubscribe_url)
-
             try:
                 _send_one(smtp_config, rec.email, campaign.subject, html)
                 rec.status = "sent"

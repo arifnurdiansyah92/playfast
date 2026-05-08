@@ -305,12 +305,30 @@ export interface EmailCampaignFilters {
   exclude_inactive: boolean
 }
 
+export type EmailAudienceMode = 'filters' | 'specific'
+
+export interface EmailAudienceCountResponse {
+  audience_mode: EmailAudienceMode
+  count: number
+  // 'filters' mode echoes back the filters
+  filters?: EmailCampaignFilters
+  // 'specific' mode breakdown
+  matched_count?: number
+  guest_count?: number
+  opted_out_count?: number
+  invalid_count?: number
+  opted_out_emails?: string[]
+  invalid_entries?: string[]
+}
+
 export type EmailCampaignStatus = 'draft' | 'sending' | 'completed' | 'cancelled' | 'failed'
 
 export interface EmailCampaign {
   id: number
   subject: string
   filters: EmailCampaignFilters
+  audience_mode: EmailAudienceMode
+  target_emails: string[]
   status: EmailCampaignStatus
   total_recipients: number
   sent_count: number
@@ -327,7 +345,7 @@ export interface EmailCampaign {
 export interface EmailCampaignRecipient {
   id: number
   campaign_id: number
-  user_id: number
+  user_id: number | null
   email: string
   status: 'pending' | 'sent' | 'failed'
   error: string | null
@@ -949,16 +967,26 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
     )
   },
   // ─── Email Blast ────────────────────────────────────────────────────────
-  audienceCount(filters: EmailCampaignFilters) {
-    return request<{ count: number; filters: EmailCampaignFilters }>(
+  audienceCount(payload: {
+    audience_mode: EmailAudienceMode
+    filters?: EmailCampaignFilters
+    target_emails?: string[]
+  }) {
+    return request<EmailAudienceCountResponse>(
       '/api/admin/email-blast/audience-count',
-      { method: 'POST', body: JSON.stringify({ filters }) }
+      { method: 'POST', body: JSON.stringify(payload) }
     )
   },
   listEmailCampaigns() {
     return request<{ items: EmailCampaign[] }>('/api/admin/email-blast/campaigns')
   },
-  createEmailCampaign(data: { subject: string; body_markdown: string; filters: EmailCampaignFilters }) {
+  createEmailCampaign(data: {
+    subject: string
+    body_markdown: string
+    filters: EmailCampaignFilters
+    audience_mode?: EmailAudienceMode
+    target_emails?: string[]
+  }) {
     return request<{ campaign: EmailCampaign }>(
       '/api/admin/email-blast/campaigns',
       { method: 'POST', body: JSON.stringify(data) }
@@ -971,7 +999,13 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
   },
   updateEmailCampaign(
     id: number,
-    data: { subject?: string; body_markdown?: string; filters?: EmailCampaignFilters }
+    data: {
+      subject?: string
+      body_markdown?: string
+      filters?: EmailCampaignFilters
+      audience_mode?: EmailAudienceMode
+      target_emails?: string[]
+    }
   ) {
     return request<{ campaign: EmailCampaign }>(
       `/api/admin/email-blast/campaigns/${id}`,
@@ -1010,6 +1044,12 @@ export const publicApi = {
   unsubscribe(token: string) {
     return request<{ message: string; email: string }>(
       `/api/unsubscribe/${encodeURIComponent(token)}`,
+      { method: 'POST' }
+    )
+  },
+  unsubscribeGuest(token: string) {
+    return request<{ message: string; email: string }>(
+      `/api/unsubscribe-guest/${encodeURIComponent(token)}`,
       { method: 'POST' }
     )
   },

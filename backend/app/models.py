@@ -875,6 +875,10 @@ class EmailCampaign(db.Model):
     body_markdown = db.Column(db.Text, nullable=False, default="")
     body_html = db.Column(db.Text, nullable=True)  # rendered + branded, cached at send-time
     filters_json = db.Column(db.JSON, nullable=False, default=dict)
+    # 'filters' (use filters_json over User table, default) or 'specific'
+    # (use target_emails list, can include non-registered emails).
+    audience_mode = db.Column(db.String(20), nullable=False, default="filters")
+    target_emails = db.Column(db.JSON, nullable=True)  # list[str], used when audience_mode='specific'
     status = db.Column(db.String(20), nullable=False, default="draft", index=True)
     total_recipients = db.Column(db.Integer, nullable=False, default=0)
     sent_count = db.Column(db.Integer, nullable=False, default=0)
@@ -907,6 +911,8 @@ class EmailCampaign(db.Model):
             "id": self.id,
             "subject": self.subject,
             "filters": self.filters_json or {},
+            "audience_mode": self.audience_mode or "filters",
+            "target_emails": self.target_emails or [],
             "status": self.status,
             "total_recipients": self.total_recipients,
             "sent_count": self.sent_count,
@@ -935,7 +941,9 @@ class EmailCampaignRecipient(db.Model):
         nullable=False,
         index=True,
     )
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    # Nullable: when sending to non-registered emails (audience_mode='specific'),
+    # there is no User row to link.
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     email = db.Column(db.String(255), nullable=False)  # snapshot at send-time
     status = db.Column(db.String(20), nullable=False, default="pending", index=True)
     error = db.Column(db.Text, nullable=True)
@@ -949,8 +957,10 @@ class EmailCampaignRecipient(db.Model):
     user = db.relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
+        # Unique by (campaign_id, email) so a non-registered email can't be
+        # queued twice in the same campaign even when user_id is null.
         db.UniqueConstraint(
-            "campaign_id", "user_id", name="uq_email_campaign_recipient"
+            "campaign_id", "email", name="uq_email_campaign_recipient_email"
         ),
     )
 
@@ -999,3 +1009,19 @@ class EmailUnsubscribeToken(db.Model):
         db.session.add(tok)
         db.session.flush()
         return tok
+
+
+class EmailGuestOptOut(db.Model):
+    """Records emails (non-registered recipients) that have unsubscribed
+    from blast emails sent via 'specific emails' mode. Registered users use
+    User.email_opted_out instead.
+    """
+    __tablename__ = "email_guest_opt_outs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    unsubscribed_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )

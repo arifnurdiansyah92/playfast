@@ -31,7 +31,11 @@ import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+
 import type {
+  EmailAudienceMode,
   EmailCampaign,
   EmailCampaignFilters,
   EmailCampaignStatus,
@@ -46,6 +50,13 @@ const DEFAULT_FILTERS: EmailCampaignFilters = {
   never_purchased: false,
   exclude_inactive: true,
 }
+
+const parseEmailsInput = (raw: string): string[] =>
+  raw
+    .replace(/,/g, '\n')
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean)
 
 const STATUS_LABEL: Record<EmailCampaignStatus, string> = {
   draft: 'Draft',
@@ -90,7 +101,15 @@ const AdminEmailBlastPage = () => {
     subject: string
     body: string
     filters: EmailCampaignFilters
-  }>({ subject: '', body: '', filters: { ...DEFAULT_FILTERS } })
+    audienceMode: EmailAudienceMode
+    targetEmailsRaw: string
+  }>({
+    subject: '',
+    body: '',
+    filters: { ...DEFAULT_FILTERS },
+    audienceMode: 'filters',
+    targetEmailsRaw: '',
+  })
   const [tab, setTab] = useState<'edit' | 'preview' | 'recipients'>('edit')
   const [snackMsg, setSnackMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
@@ -117,9 +136,26 @@ const AdminEmailBlastPage = () => {
 
   const detail = detailData?.campaign ?? null
 
+  const targetEmailsParsed = useMemo(
+    () => parseEmailsInput(editor.targetEmailsRaw),
+    [editor.targetEmailsRaw]
+  )
+
   const { data: audienceData, refetch: refetchAudience } = useQuery({
-    queryKey: ['admin-email-audience', editor.filters],
-    queryFn: () => adminApi.audienceCount(editor.filters),
+    queryKey: [
+      'admin-email-audience',
+      editor.audienceMode,
+      editor.filters,
+      // Stable key for the parsed list, not the raw textarea string,
+      // so debounce-style updates don't refire on every keystroke.
+      targetEmailsParsed.join('|'),
+    ],
+    queryFn: () =>
+      adminApi.audienceCount({
+        audience_mode: editor.audienceMode,
+        filters: editor.filters,
+        target_emails: editor.audienceMode === 'specific' ? targetEmailsParsed : undefined,
+      }),
     enabled: user?.role === 'admin',
   })
 
@@ -133,6 +169,8 @@ const AdminEmailBlastPage = () => {
         subject: detail.subject,
         body: detail.body_markdown ?? '',
         filters: { ...DEFAULT_FILTERS, ...detail.filters },
+        audienceMode: detail.audience_mode || 'filters',
+        targetEmailsRaw: (detail.target_emails || []).join('\n'),
       })
     }
   }, [detail])
@@ -197,6 +235,8 @@ const AdminEmailBlastPage = () => {
         subject: editor.subject || 'Untitled draft',
         body_markdown: editor.body,
         filters: editor.filters,
+        audience_mode: editor.audienceMode,
+        target_emails: targetEmailsParsed,
       }),
     onSuccess: res => {
       queryClient.invalidateQueries({ queryKey: ['admin-email-campaigns'] })
@@ -214,6 +254,8 @@ const AdminEmailBlastPage = () => {
         subject: editor.subject,
         body_markdown: editor.body,
         filters: editor.filters,
+        audience_mode: editor.audienceMode,
+        target_emails: targetEmailsParsed,
       })
     },
     onSuccess: () => {
@@ -296,7 +338,13 @@ const AdminEmailBlastPage = () => {
 
   const handleNewDraft = () => {
     setSelectedId(null)
-    setEditor({ subject: '', body: '', filters: { ...DEFAULT_FILTERS } })
+    setEditor({
+      subject: '',
+      body: '',
+      filters: { ...DEFAULT_FILTERS },
+      audienceMode: 'filters',
+      targetEmailsRaw: '',
+    })
     setTab('edit')
     setErrorMsg('')
   }
@@ -471,36 +519,117 @@ const AdminEmailBlastPage = () => {
                     sx={{ ml: 1, fontWeight: 700 }}
                   />
                 </Typography>
-                <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1 }}>
-                  User yang sudah unsubscribe selalu di-skip.
+                <Typography variant='caption' color='text.secondary' sx={{ display: 'block', mb: 1.5 }}>
+                  User / email yang sudah unsubscribe selalu di-skip.
                 </Typography>
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
-                  {filterLabels.map(f => (
-                    <FormControlLabel
-                      key={f.key}
-                      control={
-                        <Switch
-                          checked={editor.filters[f.key]}
-                          onChange={e => {
-                            const next = { ...editor.filters, [f.key]: e.target.checked }
 
-                            setEditor(s => ({ ...s, filters: next }))
-                            // Audience query is keyed on filters and refetches automatically;
-                            // an explicit refetch isn't needed but helps when toggling rapidly.
-                            setTimeout(() => refetchAudience(), 0)
-                          }}
-                          disabled={!canEdit}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant='body2'>{f.label}</Typography>
-                          <Typography variant='caption' color='text.secondary'>{f.help}</Typography>
-                        </Box>
-                      }
+                <ToggleButtonGroup
+                  value={editor.audienceMode}
+                  exclusive
+                  onChange={(_, val: EmailAudienceMode | null) => {
+                    if (!val || !canEdit) return
+                    setEditor(s => ({ ...s, audienceMode: val }))
+                    setTimeout(() => refetchAudience(), 0)
+                  }}
+                  size='small'
+                  sx={{ mb: 2 }}
+                >
+                  <ToggleButton value='filters' disabled={!canEdit}>
+                    <i className='tabler-filter' style={{ marginRight: 6 }} />
+                    Filter Otomatis
+                  </ToggleButton>
+                  <ToggleButton value='specific' disabled={!canEdit}>
+                    <i className='tabler-list' style={{ marginRight: 6 }} />
+                    Email Spesifik
+                  </ToggleButton>
+                </ToggleButtonGroup>
+
+                {editor.audienceMode === 'filters' ? (
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+                    {filterLabels.map(f => (
+                      <FormControlLabel
+                        key={f.key}
+                        control={
+                          <Switch
+                            checked={editor.filters[f.key]}
+                            onChange={e => {
+                              const next = { ...editor.filters, [f.key]: e.target.checked }
+
+                              setEditor(s => ({ ...s, filters: next }))
+                              setTimeout(() => refetchAudience(), 0)
+                            }}
+                            disabled={!canEdit}
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant='body2'>{f.label}</Typography>
+                            <Typography variant='caption' color='text.secondary'>{f.help}</Typography>
+                          </Box>
+                        }
+                      />
+                    ))}
+                  </Box>
+                ) : (
+                  <Box>
+                    <TextField
+                      label='Daftar Email'
+                      value={editor.targetEmailsRaw}
+                      onChange={e => setEditor(s => ({ ...s, targetEmailsRaw: e.target.value }))}
+                      multiline
+                      minRows={5}
+                      maxRows={14}
+                      fullWidth
+                      disabled={!canEdit}
+                      placeholder={'foo@example.com\nbar@example.com, baz@example.com'}
+                      helperText={`Pisahkan dengan baris baru atau koma. ${targetEmailsParsed.length} email dimasukkan, ${audienceCount} akan dikirim.`}
                     />
-                  ))}
-                </Box>
+
+                    {(audienceData?.audience_mode === 'specific') && (
+                      <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {(audienceData.matched_count ?? 0) > 0 && (
+                          <Chip
+                            size='small'
+                            color='success'
+                            variant='tonal'
+                            label={`${audienceData.matched_count} user terdaftar`}
+                          />
+                        )}
+                        {(audienceData.guest_count ?? 0) > 0 && (
+                          <Chip
+                            size='small'
+                            color='info'
+                            variant='tonal'
+                            label={`${audienceData.guest_count} email tamu`}
+                          />
+                        )}
+                        {(audienceData.opted_out_count ?? 0) > 0 && (
+                          <Chip
+                            size='small'
+                            color='warning'
+                            variant='tonal'
+                            label={`${audienceData.opted_out_count} sudah unsubscribe`}
+                          />
+                        )}
+                        {(audienceData.invalid_count ?? 0) > 0 && (
+                          <Chip
+                            size='small'
+                            color='error'
+                            variant='tonal'
+                            label={`${audienceData.invalid_count} format tidak valid`}
+                          />
+                        )}
+                      </Box>
+                    )}
+
+                    {(audienceData?.invalid_entries?.length ?? 0) > 0 && (
+                      <Typography variant='caption' color='error.main' sx={{ display: 'block', mt: 1 }}>
+                        Tidak valid: {(audienceData?.invalid_entries ?? []).slice(0, 8).join(', ')}
+                        {(audienceData?.invalid_entries?.length ?? 0) > 8 ? '…' : ''}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
               </Box>
 
               <TextField
