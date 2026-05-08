@@ -1,5 +1,7 @@
 """Admin endpoints: account CRUD, game sync, orders, audit, dashboard."""
 
+import csv
+import io
 import json
 import logging
 import os
@@ -13,7 +15,7 @@ from functools import wraps
 from sqlalchemy import func, cast, Date
 
 import requests as http_requests
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, make_response, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
@@ -2212,3 +2214,240 @@ def list_referrals():
         "total_credit_awarded": total_credit,
         "total_count": len(result),
     }), 200
+
+
+# ---------------------------------------------------------------------------
+# Reports — unified transaction listing + summary + CSV export
+# ---------------------------------------------------------------------------
+
+
+# Indonesia is UTC+7 year-round (no DST). Using a fixed offset avoids pulling
+# in zoneinfo / pytz and keeps date math predictable.
+_JAKARTA_TZ = timezone(timedelta(hours=7))
+
+
+def _resolve_report_range(preset: str | None, from_str: str | None, to_str: str | None):
+    """Return (start_utc, end_utc, label) for the requested range.
+
+    Date inputs are interpreted as Asia/Jakarta calendar dates, then converted
+    to UTC half-open ranges [start, end) suitable for `paid_at` filtering.
+    Falls back to "today" if inputs are missing or invalid.
+    """
+    now_jakarta = datetime.now(_JAKARTA_TZ)
+    today_jakarta = now_jakarta.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    preset = (preset or "").lower()
+
+    if preset == "7d":
+        end_jakarta = today_jakarta + timedelta(days=1)
+        start_jakarta = end_jakarta - timedelta(days=7)
+        label = "7 hari terakhir"
+    elif preset == "30d":
+        end_jakarta = today_jakarta + timedelta(days=1)
+        start_jakarta = end_jakarta - timedelta(days=30)
+        label = "30 hari terakhir"
+    elif preset == "custom" and from_str and to_str:
+        try:
+            start_jakarta = datetime.strptime(from_str, "%Y-%m-%d").replace(tzinfo=_JAKARTA_TZ)
+            end_jakarta = datetime.strptime(to_str, "%Y-%m-%d").replace(tzinfo=_JAKARTA_TZ) + timedelta(days=1)
+            label = f"{from_str} – {to_str}"
+        except ValueError:
+            start_jakarta = today_jakarta
+            end_jakarta = today_jakarta + timedelta(days=1)
+            label = "Hari ini"
+    else:
+        # default + 'today'
+        start_jakarta = today_jakarta
+        end_jakarta = today_jakarta + timedelta(days=1)
+        label = "Hari ini"
+
+    return start_jakarta.astimezone(timezone.utc), end_jakarta.astimezone(timezone.utc), label
+
+
+def _format_order_txn(order: Order, promo_by_id: dict[int, str]) -> dict:
+    game_name = (
+        (order.game.custom_name or order.game.name)
+        if order.game else "(game dihapus)"
+    )
+    return {
+        "id": f"ord-{order.id}",
+        "raw_id": order.id,
+        "type": "order",
+        "type_label": "Pembelian Game",
+        "detail": game_name,
+        "user_email": order.user.email if order.user else None,
+        "amount_subtotal": order.amount_subtotal or order.amount or 0,
+        "promo_code": promo_by_id.get(order.promo_code_id) if order.promo_code_id else None,
+        "promo_discount": order.promo_discount or 0,
+        "credit_applied": order.credit_applied or 0,
+        "amount": order.amount or 0,
+        "status": order.status,
+        "payment_type": order.payment_type,
+        "paid_at": order.paid_at.isoformat() if order.paid_at else None,
+        "created_at": order.created_at.isoformat() if order.created_at else None,
+    }
+
+
+def _format_subscription_txn(sub: Subscription, promo_by_id: dict[int, str]) -> dict:
+    plan_label = sub.PLAN_LABELS.get(sub.plan, sub.plan)
+    return {
+        "id": f"sub-{sub.id}",
+        "raw_id": sub.id,
+        "type": "subscription",
+        "type_label": f"Langganan {plan_label}",
+        "detail": plan_label,
+        "user_email": sub.user.email if sub.user else None,
+        "amount_subtotal": sub.amount_subtotal or sub.amount or 0,
+        "promo_code": promo_by_id.get(sub.promo_code_id) if sub.promo_code_id else None,
+        "promo_discount": sub.promo_discount or 0,
+        "credit_applied": sub.credit_applied or 0,
+        "amount": sub.amount or 0,
+        "status": sub.status,
+        "payment_type": sub.payment_type,
+        "paid_at": sub.paid_at.isoformat() if sub.paid_at else None,
+        "created_at": sub.created_at.isoformat() if sub.created_at else None,
+    }
+
+
+def _build_report(start_utc: datetime, end_utc: datetime) -> tuple[list[dict], dict]:
+    """Query orders + subscriptions in [start_utc, end_utc) and shape into
+    the unified transaction list + summary the report endpoint returns."""
+
+    orders = (
+        Order.query
+        .filter(
+            Order.paid_at.isnot(None),
+            Order.paid_at >= start_utc,
+            Order.paid_at < end_utc,
+        )
+        .all()
+    )
+    subs = (
+        Subscription.query
+        .filter(
+            Subscription.paid_at.isnot(None),
+            Subscription.paid_at >= start_utc,
+            Subscription.paid_at < end_utc,
+        )
+        .all()
+    )
+
+    promo_ids = {o.promo_code_id for o in orders if o.promo_code_id}
+    promo_ids.update(s.promo_code_id for s in subs if s.promo_code_id)
+    promo_by_id: dict[int, str] = {}
+    if promo_ids:
+        for p in PromoCode.query.filter(PromoCode.id.in_(promo_ids)).all():
+            promo_by_id[p.id] = p.code
+
+    transactions = (
+        [_format_order_txn(o, promo_by_id) for o in orders]
+        + [_format_subscription_txn(s, promo_by_id) for s in subs]
+    )
+    transactions.sort(key=lambda t: t["paid_at"] or "", reverse=True)
+
+    order_revenue = sum(o.amount or 0 for o in orders)
+    sub_revenue = sum(s.amount or 0 for s in subs)
+    total_revenue = order_revenue + sub_revenue
+    total_promo_discount = sum(t["promo_discount"] for t in transactions)
+    total_credit_used = sum(t["credit_applied"] for t in transactions)
+    transactions_with_promo = sum(1 for t in transactions if t["promo_code"])
+
+    summary = {
+        "total_transactions": len(transactions),
+        "order_count": len(orders),
+        "subscription_count": len(subs),
+        "total_revenue": total_revenue,
+        "order_revenue": order_revenue,
+        "subscription_revenue": sub_revenue,
+        "total_promo_discount": total_promo_discount,
+        "total_credit_used": total_credit_used,
+        "transactions_with_promo": transactions_with_promo,
+    }
+    return transactions, summary
+
+
+@admin_bp.route("/reports/transactions", methods=["GET"])
+@admin_required
+def transaction_report():
+    """Unified report of paid orders + subscriptions in a date range.
+
+    Query params:
+      - preset: 'today' (default) | '7d' | '30d' | 'custom'
+      - from, to: ISO YYYY-MM-DD when preset='custom' (Jakarta calendar dates)
+      - format: 'json' (default) | 'csv'
+    """
+    preset = request.args.get("preset")
+    from_str = request.args.get("from")
+    to_str = request.args.get("to")
+    fmt = (request.args.get("format") or "json").lower()
+
+    start_utc, end_utc, label = _resolve_report_range(preset, from_str, to_str)
+    transactions, summary = _build_report(start_utc, end_utc)
+
+    if fmt == "csv":
+        return _report_csv_response(transactions, summary, label)
+
+    return jsonify({
+        "transactions": transactions,
+        "summary": summary,
+        "date_range": {
+            "label": label,
+            "start": start_utc.isoformat(),
+            "end": end_utc.isoformat(),
+            "preset": (preset or "today").lower(),
+            "from": from_str,
+            "to": to_str,
+        },
+    }), 200
+
+
+def _report_csv_response(transactions: list[dict], summary: dict, label: str):
+    """Build a CSV download for the report. Prepends a UTF-8 BOM so Excel
+    auto-detects encoding on Windows.
+    """
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+
+    writer.writerow([f"Laporan Transaksi Playfast — {label}"])
+    writer.writerow([])
+    writer.writerow(["Total Transaksi", summary["total_transactions"]])
+    writer.writerow(["Jumlah Pembelian Game", summary["order_count"]])
+    writer.writerow(["Jumlah Subscription", summary["subscription_count"]])
+    writer.writerow(["Total Pemasukan (IDR)", summary["total_revenue"]])
+    writer.writerow(["Pendapatan Pembelian Game (IDR)", summary["order_revenue"]])
+    writer.writerow(["Pendapatan Subscription (IDR)", summary["subscription_revenue"]])
+    writer.writerow(["Total Diskon Promo (IDR)", summary["total_promo_discount"]])
+    writer.writerow(["Total Kredit Referral Dipakai (IDR)", summary["total_credit_used"]])
+    writer.writerow(["Transaksi Pakai Promo", summary["transactions_with_promo"]])
+    writer.writerow([])
+
+    writer.writerow([
+        "ID", "Tanggal Bayar", "Email", "Tipe", "Detail",
+        "Subtotal (IDR)", "Promo Code", "Diskon Promo (IDR)",
+        "Kredit Dipakai (IDR)", "Total Bayar (IDR)",
+        "Status", "Metode Pembayaran",
+    ])
+    for t in transactions:
+        writer.writerow([
+            t["id"],
+            t["paid_at"] or "",
+            t["user_email"] or "",
+            t["type_label"],
+            t["detail"],
+            t["amount_subtotal"],
+            t["promo_code"] or "",
+            t["promo_discount"],
+            t["credit_applied"],
+            t["amount"],
+            t["status"],
+            t["payment_type"] or "",
+        ])
+
+    body = "﻿" + buf.getvalue()  # UTF-8 BOM so Excel auto-detects encoding
+    safe_label = label.replace(" ", "-").replace("–", "to").lower()
+    response = make_response(body)
+    response.headers["Content-Type"] = "text/csv; charset=utf-8"
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="playfast-report-{safe_label}.csv"'
+    )
+    return response

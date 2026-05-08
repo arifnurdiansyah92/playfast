@@ -298,6 +298,51 @@ export interface GameRequest {
   notified_count?: number
 }
 
+export interface ReportTransaction {
+  id: string
+  raw_id: number
+  type: 'order' | 'subscription'
+  type_label: string
+  detail: string
+  user_email: string | null
+  amount_subtotal: number
+  promo_code: string | null
+  promo_discount: number
+  credit_applied: number
+  amount: number
+  status: string
+  payment_type: string | null
+  paid_at: string | null
+  created_at: string | null
+}
+
+export interface ReportSummary {
+  total_transactions: number
+  order_count: number
+  subscription_count: number
+  total_revenue: number
+  order_revenue: number
+  subscription_revenue: number
+  total_promo_discount: number
+  total_credit_used: number
+  transactions_with_promo: number
+}
+
+export type ReportPreset = 'today' | '7d' | '30d' | 'custom'
+
+export interface ReportResponse {
+  transactions: ReportTransaction[]
+  summary: ReportSummary
+  date_range: {
+    label: string
+    start: string
+    end: string
+    preset: ReportPreset
+    from?: string | null
+    to?: string | null
+  }
+}
+
 export interface EmailCampaignFilters {
   verified_only: boolean
   subscribers_only: boolean
@@ -949,6 +994,22 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
   },
   getPromoCodeUsages(id: number) {
     return request<{ usages: PromoCodeUsage[]; total_discount: number }>(`/api/admin/promo-codes/${id}/usages`)
+  },
+  getReport(params: { preset: ReportPreset; from?: string; to?: string }) {
+    const qs = new URLSearchParams({ preset: params.preset })
+
+    if (params.from) qs.set('from', params.from)
+    if (params.to) qs.set('to', params.to)
+
+    return request<ReportResponse>(`/api/admin/reports/transactions?${qs.toString()}`)
+  },
+  reportCsvUrl(params: { preset: ReportPreset; from?: string; to?: string }): string {
+    const qs = new URLSearchParams({ preset: params.preset, format: 'csv' })
+
+    if (params.from) qs.set('from', params.from)
+    if (params.to) qs.set('to', params.to)
+
+    return `${API_BASE}/api/admin/reports/transactions?${qs.toString()}`
   },
   getReferrals() {
     return request<{ referrals: any[]; total_credit_awarded: number; total_count: number }>('/api/admin/referrals')
