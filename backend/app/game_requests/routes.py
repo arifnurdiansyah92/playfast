@@ -390,7 +390,9 @@ def admin_update_request(request_id: int):
         }), 400
 
     # Block flip to "added" if the Game with this appid isn't in the catalog
-    # yet — otherwise notification emails would link to a 404.
+    # yet — otherwise notification emails would link to a 404. Also block when
+    # no active SteamAccount owns the game, since voters would get a "tersedia"
+    # email pointing at a listing they can't actually buy.
     matched_game = None
     if new_status == "added":
         matched_game = Game.query.filter_by(appid=req.appid).first()
@@ -398,6 +400,11 @@ def admin_update_request(request_id: int):
             return jsonify({
                 "error": "Game belum ada di katalog. Tambahin dulu game-nya, baru tandai request sebagai added.",
                 "code": "game_not_in_catalog",
+            }), 409
+        if matched_game.available_account_count() == 0:
+            return jsonify({
+                "error": "Game ada di katalog tapi belum ada akun aktif yang punya. Aktifkan akun yang memiliki game ini dulu, baru tandai request sebagai added.",
+                "code": "no_active_account",
             }), 409
 
     req.status = new_status
@@ -413,6 +420,8 @@ def admin_update_request(request_id: int):
         req.resolved_by_user_id = admin_user_id
 
     # Notify voters once per request, only on the first flip to "added".
+    # Both prerequisites (game in catalog + at least one active account) are
+    # already enforced above, so we know the link in the email will work.
     notify_message = ""
     if (
         new_status == "added"
