@@ -628,6 +628,11 @@ export const gameRequestsApi = {
 
     return res.items
   },
+  async listAll() {
+    const res = await request<{ items: GameRequest[] }>('/api/game-requests')
+
+    return res.items
+  },
   removeMyVote(requestId: number) {
     return request<{ message: string; game_request: GameRequest }>(
       `/api/game-requests/${requestId}/vote`,

@@ -306,6 +306,24 @@ def list_my_requests():
     return jsonify({"items": items}), 200
 
 
+@game_requests_bp.route("", methods=["GET"])
+@jwt_required()
+def list_all_requests():
+    """List all pending game requests for the community feed.
+
+    Sorted by vote count desc, then created_at desc. Each item carries a
+    `voted` flag so the UI can render vote/unvote affordances. Resolved
+    requests (added/rejected) are excluded — users can't act on them and
+    they belong in /mine for the requester's own history.
+    """
+    user_id = int(get_jwt_identity())
+    items = GameRequest.query.filter_by(status="pending").all()
+    items.sort(key=lambda r: (r.request_count(), r.created_at), reverse=True)
+    return jsonify({
+        "items": [r.to_dict(current_user_id=user_id) for r in items],
+    }), 200
+
+
 @game_requests_bp.route("/<int:request_id>/vote", methods=["DELETE"])
 @jwt_required()
 def remove_my_vote(request_id: int):
