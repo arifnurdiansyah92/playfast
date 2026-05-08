@@ -1790,9 +1790,10 @@ def confirm_subscription_payment(sub_id: int):
     sub.payment_type = "manual"
     sub.paid_at = datetime.now(timezone.utc)
     sub.activate()
-    from app.store.routes import _maybe_award_referrer
+    from app.store.routes import _maybe_award_referrer, _send_subscription_welcome
     _maybe_award_referrer(sub, is_subscription=True)
     db.session.commit()
+    _send_subscription_welcome(sub)
 
     return jsonify({
         "message": "Subscription payment confirmed and activated",
@@ -1833,6 +1834,8 @@ def grant_lifetime_access():
     sub.activate()
     db.session.add(sub)
     db.session.commit()
+    from app.store.routes import _send_subscription_welcome
+    _send_subscription_welcome(sub)
 
     return jsonify({
         "message": f"Lifetime access granted to {target.email}",

@@ -252,3 +252,187 @@ def send_game_request_fulfilled_email(
       </div>"""
 
     send_email(to, f"Game request kamu sudah ada — {game_name}", _base_template(content))
+
+
+# ---------------------------------------------------------------------------
+# Email: Post-purchase welcome (order fulfilled / subscription activated)
+# ---------------------------------------------------------------------------
+
+
+def _play_safety_fragment() -> str:
+    """Shared HTML fragment: 5-step Mode Offline workflow + 'jangan' rules.
+
+    Used by both order and subscription welcome emails — the rules apply to
+    every Steam account access regardless of how it was purchased.
+    """
+    return """\
+        <!-- Critical workflow callout -->
+        <div style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.35); border-radius: 8px; padding: 18px 20px; margin: 0 0 24px;">
+          <p style="color: #c9a84c; font-size: 12px; font-weight: 700; letter-spacing: 0.6px; margin: 0 0 6px; text-transform: uppercase;">
+            &#9888; Aturan Paling Penting
+          </p>
+          <p style="color: #e8eaf0; font-size: 15px; font-weight: 700; line-height: 1.5; margin: 0 0 6px;">
+            Selalu main dalam Mode Offline.
+          </p>
+          <p style="color: #b0b8c4; font-size: 13px; line-height: 1.6; margin: 0;">
+            Akun Steam-mu di-share dengan beberapa user. Kalau kamu main online, user lain yang lagi main bakal ke-kick keluar &mdash; dan akun bisa di-flag Steam.
+          </p>
+        </div>
+
+        <!-- Step-by-step workflow -->
+        <p style="color: #888; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+          Cara main yang benar (5 langkah):
+        </p>
+
+        <table style="width: 100%; border-spacing: 0; margin: 0 0 24px;">
+          <tr>
+            <td style="background: #c9a84c; color: #000; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">1</td>
+            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
+              <strong style="color: #fff;">Login Steam</strong> pakai username &amp; password yang kami kirim. Masukkan kode Steam Guard dari halaman order Playfast.
+            </td>
+          </tr>
+          <tr><td colspan="2" style="height: 12px;"></td></tr>
+          <tr>
+            <td style="background: #c9a84c; color: #000; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">2</td>
+            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
+              <strong style="color: #fff;">Download game-nya</strong> dari Library Steam. Tunggu sampai 100% selesai.
+            </td>
+          </tr>
+          <tr><td colspan="2" style="height: 12px;"></td></tr>
+          <tr>
+            <td style="background: #c9a84c; color: #000; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">3</td>
+            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
+              <strong style="color: #fff;">Play game pertama kali</strong> dalam mode online &mdash; ini biarkan Steam sync &amp; verifikasi instalasi. Tutup game setelah masuk menu utama.
+            </td>
+          </tr>
+          <tr><td colspan="2" style="height: 12px;"></td></tr>
+          <tr>
+            <td style="background: #ff6b6b; color: #fff; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">4</td>
+            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
+              <strong style="color: #fff;">Exit Steam &mdash; kemudian buka lagi.</strong> Klik menu <strong style="color: #c9a84c;">Steam &rarr; Go Offline</strong>. Steam akan restart dalam mode offline.
+            </td>
+          </tr>
+          <tr><td colspan="2" style="height: 12px;"></td></tr>
+          <tr>
+            <td style="background: #4caf50; color: #fff; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">5</td>
+            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
+              <strong style="color: #fff;">Play game-nya sekarang</strong> &mdash; aman dari konflik user lain, dan Steam tidak akan flag akun.
+            </td>
+          </tr>
+        </table>
+
+        <!-- Don'ts -->
+        <p style="color: #888; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+          Yang JANGAN dilakukan:
+        </p>
+        <table style="width: 100%; border-spacing: 0; margin: 0 0 24px;">
+          <tr>
+            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top; width: 24px;">&times;</td>
+            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
+              <strong style="color: #d8dee6;">Main dalam mode online</strong> &mdash; akan kick user lain
+            </td>
+          </tr>
+          <tr>
+            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top;">&times;</td>
+            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
+              <strong style="color: #d8dee6;">Ubah password atau email</strong> akun
+            </td>
+          </tr>
+          <tr>
+            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top;">&times;</td>
+            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
+              <strong style="color: #d8dee6;">Add friend, accept invite, atau ubah profile</strong>
+            </td>
+          </tr>
+          <tr>
+            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top;">&times;</td>
+            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
+              <strong style="color: #d8dee6;">Login akun ke banyak device sekaligus</strong>
+            </td>
+          </tr>
+          <tr>
+            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top;">&times;</td>
+            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
+              <strong style="color: #d8dee6;">Share kredensial</strong> ke orang lain di luar Playfast
+            </td>
+          </tr>
+        </table>
+
+        <!-- Help -->
+        <div style="border-top: 1px solid #2a2a4a; padding-top: 18px; margin-top: 8px;">
+          <p style="color: #888; font-size: 12px; line-height: 1.6; margin: 0;">
+            Ada masalah login, error Steam Guard, atau akun bermasalah? Klik tombol <strong style="color: #d8dee6;">"Laporkan Masalah Akun"</strong> di halaman main game-mu, atau balas email ini. Admin respon dalam 24 jam.
+          </p>
+        </div>"""
+
+
+def send_order_welcome_email(to: str, game_name: str, play_url: str):
+    """Sent when an order is fulfilled (Steam account assigned).
+
+    Always sends regardless of email_opted_out — this is transactional, not
+    promotional. The user paid for access and needs the safety instructions.
+    """
+    safety = _play_safety_fragment()
+    content = f"""\
+      <!-- Icon bar -->
+      <div style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 24px; text-align: center;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,0.15); display: inline-flex; align-items: center; justify-content: center; margin: 0 auto;">
+          <span style="font-size: 28px;">&#10003;</span>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div style="padding: 32px;">
+        <h2 style="color: #ffffff; margin: 0 0 8px; font-size: 22px; font-weight: 700;">Pesanan kamu sudah aktif!</h2>
+        <p style="color: #8f98a0; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
+          Kredensial Steam untuk <strong style="color: #c9a84c;">{game_name}</strong> sudah siap dipakai. Sebelum mulai main, baca dulu cara pakainya di bawah &mdash; ini penting biar pengalamanmu (dan user lain) tetap mulus.
+        </p>
+
+        <!-- CTA Button: open play page -->
+        <div style="text-align: center; margin: 0 0 28px;">
+          <a href="{play_url}"
+             style="display: inline-block; background: #c9a84c; color: #000; text-decoration: none;
+                    padding: 14px 40px; border-radius: 8px; font-weight: 700; font-size: 15px;
+                    letter-spacing: 0.3px;">
+            Buka Halaman Main
+          </a>
+        </div>
+
+        {safety}
+      </div>"""
+
+    send_email(to, f"Pesanan aktif: {game_name} — cara main yang benar", _base_template(content))
+
+
+def send_subscription_welcome_email(to: str, plan_label: str, store_url: str):
+    """Sent when a subscription is activated. Always sends (transactional)."""
+    safety = _play_safety_fragment()
+    content = f"""\
+      <!-- Icon bar -->
+      <div style="background: linear-gradient(135deg, #c9a84c 0%, #a88a2e 100%); padding: 24px; text-align: center;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,0.15); display: inline-flex; align-items: center; justify-content: center; margin: 0 auto;">
+          <span style="font-size: 28px;">&#127775;</span>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div style="padding: 32px;">
+        <h2 style="color: #ffffff; margin: 0 0 8px; font-size: 22px; font-weight: 700;">Subscription kamu sudah aktif!</h2>
+        <p style="color: #8f98a0; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
+          Selamat &mdash; kamu sekarang punya akses <strong style="color: #c9a84c;">{plan_label}</strong> ke seluruh katalog game Playfast. Sebelum main game pertama, baca cara pakai di bawah biar pengalamanmu mulus.
+        </p>
+
+        <!-- CTA Button: open store -->
+        <div style="text-align: center; margin: 0 0 28px;">
+          <a href="{store_url}"
+             style="display: inline-block; background: #c9a84c; color: #000; text-decoration: none;
+                    padding: 14px 40px; border-radius: 8px; font-weight: 700; font-size: 15px;
+                    letter-spacing: 0.3px;">
+            Jelajahi Katalog
+          </a>
+        </div>
+
+        {safety}
+      </div>"""
+
+    send_email(to, "Subscription aktif — cara main aman di Playfast", _base_template(content))

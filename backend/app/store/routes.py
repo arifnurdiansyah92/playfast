@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 import midtransclient
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import func, or_
 
@@ -309,6 +309,7 @@ def subscribe():
         sub.activate()
         _maybe_award_referrer(sub, is_subscription=True)
         db.session.commit()
+        _send_subscription_welcome(sub)
         return jsonify({
             "message": "Subscription activated via credit/discount",
             "subscription": sub.to_dict(include_snap_token=True),
@@ -695,6 +696,35 @@ def _maybe_award_referrer(order_or_sub, is_subscription=False):
     db.session.add(reward)
 
 
+def _send_subscription_welcome(sub):
+    """Send the post-activation welcome email with Mode Offline rules.
+
+    Called after every Subscription.activate() success. Failure is logged
+    but never raised — the subscription is already active and usable.
+    """
+    try:
+        from app.email_service import send_subscription_welcome_email
+        if not sub or not sub.user or not sub.user.email:
+            return
+        frontend_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/")
+        store_url = f"{frontend_url}/store" if frontend_url else "/store"
+        plan_label = (
+            sub.PLAN_LABELS.get(sub.plan, sub.plan)
+            if hasattr(sub, "PLAN_LABELS")
+            else (sub.plan or "Premium")
+        )
+        send_subscription_welcome_email(
+            to=sub.user.email,
+            plan_label=plan_label,
+            store_url=store_url,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to send subscription welcome email for sub %s",
+            getattr(sub, "id", "?"),
+        )
+
+
 def _fulfill_order(order):
     """Assign a Steam account to a paid order using smart round-robin.
 
@@ -778,6 +808,28 @@ def _fulfill_order(order):
         order.id, steam_account.id, order.user_id, game.id,
     )
     _maybe_award_referrer(order, is_subscription=False)
+
+    # Send onboarding email with Mode Offline workflow + safety rules.
+    # Transactional, sent regardless of email_opted_out. Failure here is
+    # non-fatal — the order is already committed and accessible.
+    try:
+        from app.email_service import send_order_welcome_email
+        if order.user and order.user.email:
+            frontend_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/")
+            play_url = f"{frontend_url}/play/{order.id}" if frontend_url else f"/play/{order.id}"
+            display_name = (
+                game.custom_name
+                or game.name
+                or "Game-mu"
+            )
+            send_order_welcome_email(
+                to=order.user.email,
+                game_name=display_name,
+                play_url=play_url,
+            )
+    except Exception:
+        logger.exception("Failed to send order welcome email for order %s", order.id)
+
     return True
 
 
@@ -1059,6 +1111,7 @@ def midtrans_webhook():
                 sub.activate()
                 db.session.commit()
                 logger.info("Subscription %s activated for user %s", sub.id, sub.user_id)
+                _send_subscription_welcome(sub)
 
             return jsonify({"status": "ok"}), 200
 
