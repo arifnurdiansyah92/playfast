@@ -815,24 +815,43 @@ def _fulfill_order(order):
     )
     _maybe_award_referrer(order, is_subscription=False)
 
-    # Send onboarding email with Mode Offline workflow + safety rules.
+    # Send onboarding email with Mode Offline workflow + safety rules — but
+    # ONLY on the user's first ever fulfilled purchase. The Mode Offline
+    # rules apply to every Steam access regardless of source, so once the
+    # user has been onboarded we don't repeat it for every subsequent game.
+    #
+    # Skip cases:
+    #   - order.type == "subscription": subscriber claims from catalog,
+    #     they already received the subscription welcome email.
+    #   - prior fulfilled purchase exists: user has been onboarded before.
+    #
     # Transactional, sent regardless of email_opted_out. Failure here is
     # non-fatal — the order is already committed and accessible.
     try:
-        from app.email_service import send_order_welcome_email
-        if order.user and order.user.email:
-            frontend_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/")
-            play_url = f"{frontend_url}/play/{order.id}" if frontend_url else f"/play/{order.id}"
-            display_name = (
-                game.custom_name
-                or game.name
-                or "Game-mu"
+        if order.type == "purchase":
+            prior_purchase_count = (
+                Order.query.filter(
+                    Order.user_id == order.user_id,
+                    Order.type == "purchase",
+                    Order.status == "fulfilled",
+                    Order.id != order.id,
+                )
+                .count()
             )
-            send_order_welcome_email(
-                to=order.user.email,
-                game_name=display_name,
-                play_url=play_url,
-            )
+            if prior_purchase_count == 0 and order.user and order.user.email:
+                from app.email_service import send_order_welcome_email
+                frontend_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/")
+                play_url = f"{frontend_url}/play/{order.id}" if frontend_url else f"/play/{order.id}"
+                display_name = (
+                    game.custom_name
+                    or game.name
+                    or "Game-mu"
+                )
+                send_order_welcome_email(
+                    to=order.user.email,
+                    game_name=display_name,
+                    play_url=play_url,
+                )
     except Exception:
         logger.exception("Failed to send order welcome email for order %s", order.id)
 

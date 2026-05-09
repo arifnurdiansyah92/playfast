@@ -259,144 +259,189 @@ def send_game_request_fulfilled_email(
 # ---------------------------------------------------------------------------
 
 
+def _step_row(num: str, color: str, html_body: str) -> str:
+    """Render one step as a self-contained card row.
+
+    Tables-based for email-client compat (Outlook/Gmail/Apple Mail). Each row
+    sits on its own dark card so the list reads as discrete items rather than
+    a tight wall of text.
+    """
+    return f"""\
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 12px; background: #131527; border: 1px solid #232743; border-radius: 10px;">
+          <tr>
+            <td width="56" valign="top" style="padding: 16px 0 16px 16px;">
+              <table role="presentation" width="36" height="36" cellpadding="0" cellspacing="0" border="0" style="background: {color}; border-radius: 50%;">
+                <tr><td align="center" style="color: #0c0e16; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 15px; font-weight: 800; line-height: 36px;">{num}</td></tr>
+              </table>
+            </td>
+            <td valign="middle" style="padding: 16px 18px 16px 14px; color: #d8dee6; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 14px; line-height: 1.65;">
+              {html_body}
+            </td>
+          </tr>
+        </table>"""
+
+
+def _dont_row(html_body: str) -> str:
+    return f"""\
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0 0 8px; background: rgba(255,107,107,0.05); border: 1px solid rgba(255,107,107,0.25); border-radius: 8px;">
+          <tr>
+            <td width="40" valign="middle" align="center" style="padding: 12px 0; color: #ff6b6b; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 18px; font-weight: 700;">&times;</td>
+            <td valign="middle" style="padding: 12px 16px 12px 4px; color: #c8d0dd; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 13.5px; line-height: 1.6;">
+              {html_body}
+            </td>
+          </tr>
+        </table>"""
+
+
+def _section_label(text: str, color: str = "#c9a84c") -> str:
+    return f"""\
+        <p style="color: {color}; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; font-weight: 700; margin: 8px 0 14px; text-transform: uppercase; letter-spacing: 0.8px;">
+          {text}
+        </p>"""
+
+
+def _section_divider() -> str:
+    return """\
+        <div style="height: 1px; background: linear-gradient(90deg, transparent 0%, #2a2a4a 50%, transparent 100%); margin: 28px 0;"></div>"""
+
+
 def _play_safety_fragment() -> str:
     """Shared HTML fragment: 5-step Mode Offline workflow + 'jangan' rules.
 
     Used by both order and subscription welcome emails — the rules apply to
     every Steam account access regardless of how it was purchased.
     """
-    return """\
+    steps = (
+        _step_row("1", "#c9a84c", "<strong style=\"color: #fff;\">Login Steam</strong> pakai username &amp; password yang kami kirim. Masukkan kode Steam Guard dari halaman order Playfast.")
+        + _step_row("2", "#c9a84c", "<strong style=\"color: #fff;\">Download game-nya</strong> dari Library Steam. Tunggu sampai 100% selesai.")
+        + _step_row("3", "#c9a84c", "<strong style=\"color: #fff;\">Play game pertama kali</strong> dalam mode online &mdash; biarkan Steam sync &amp; verifikasi instalasi. Tutup game setelah masuk menu utama.")
+        + _step_row("4", "#ff6b6b", "<strong style=\"color: #fff;\">Exit Steam &mdash; kemudian buka lagi.</strong> Klik <strong style=\"color: #c9a84c;\">Steam &rarr; Go Offline</strong>. Steam akan restart dalam mode offline.")
+        + _step_row("5", "#4caf50", "<strong style=\"color: #fff;\">Play game-nya sekarang</strong> &mdash; aman dari konflik user lain, dan Steam tidak akan flag akun.")
+    )
+
+    donts = (
+        _dont_row("<strong style=\"color: #e8eaf0;\">Main dalam mode online</strong> &mdash; akan kick user lain")
+        + _dont_row("<strong style=\"color: #e8eaf0;\">Ubah password atau email</strong> akun")
+        + _dont_row("<strong style=\"color: #e8eaf0;\">Add friend, accept invite, atau ubah profile</strong>")
+        + _dont_row("<strong style=\"color: #e8eaf0;\">Login akun ke banyak device sekaligus</strong>")
+        + _dont_row("<strong style=\"color: #e8eaf0;\">Share kredensial</strong> ke orang lain di luar Playfast")
+    )
+
+    return f"""\
         <!-- Critical workflow callout -->
-        <div style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.35); border-radius: 8px; padding: 18px 20px; margin: 0 0 24px;">
-          <p style="color: #c9a84c; font-size: 12px; font-weight: 700; letter-spacing: 0.6px; margin: 0 0 6px; text-transform: uppercase;">
-            &#9888; Aturan Paling Penting
-          </p>
-          <p style="color: #e8eaf0; font-size: 15px; font-weight: 700; line-height: 1.5; margin: 0 0 6px;">
-            Selalu main dalam Mode Offline.
-          </p>
-          <p style="color: #b0b8c4; font-size: 13px; line-height: 1.6; margin: 0;">
-            Akun Steam-mu di-share dengan beberapa user. Kalau kamu main online, user lain yang lagi main bakal ke-kick keluar &mdash; dan akun bisa di-flag Steam.
-          </p>
-        </div>
-
-        <!-- Step-by-step workflow -->
-        <p style="color: #888; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">
-          Cara main yang benar (5 langkah):
-        </p>
-
-        <table style="width: 100%; border-spacing: 0; margin: 0 0 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: rgba(201,168,76,0.10); border: 1px solid rgba(201,168,76,0.4); border-radius: 12px; margin: 0 0 28px;">
           <tr>
-            <td style="background: #c9a84c; color: #000; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">1</td>
-            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
-              <strong style="color: #fff;">Login Steam</strong> pakai username &amp; password yang kami kirim. Masukkan kode Steam Guard dari halaman order Playfast.
-            </td>
-          </tr>
-          <tr><td colspan="2" style="height: 12px;"></td></tr>
-          <tr>
-            <td style="background: #c9a84c; color: #000; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">2</td>
-            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
-              <strong style="color: #fff;">Download game-nya</strong> dari Library Steam. Tunggu sampai 100% selesai.
-            </td>
-          </tr>
-          <tr><td colspan="2" style="height: 12px;"></td></tr>
-          <tr>
-            <td style="background: #c9a84c; color: #000; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">3</td>
-            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
-              <strong style="color: #fff;">Play game pertama kali</strong> dalam mode online &mdash; ini biarkan Steam sync &amp; verifikasi instalasi. Tutup game setelah masuk menu utama.
-            </td>
-          </tr>
-          <tr><td colspan="2" style="height: 12px;"></td></tr>
-          <tr>
-            <td style="background: #ff6b6b; color: #fff; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">4</td>
-            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
-              <strong style="color: #fff;">Exit Steam &mdash; kemudian buka lagi.</strong> Klik menu <strong style="color: #c9a84c;">Steam &rarr; Go Offline</strong>. Steam akan restart dalam mode offline.
-            </td>
-          </tr>
-          <tr><td colspan="2" style="height: 12px;"></td></tr>
-          <tr>
-            <td style="background: #4caf50; color: #fff; font-weight: 700; width: 32px; height: 32px; text-align: center; border-radius: 50%; font-size: 14px; vertical-align: middle;">5</td>
-            <td style="padding: 0 0 0 14px; color: #d8dee6; font-size: 14px; line-height: 1.6; vertical-align: middle;">
-              <strong style="color: #fff;">Play game-nya sekarang</strong> &mdash; aman dari konflik user lain, dan Steam tidak akan flag akun.
+            <td style="padding: 22px 22px;">
+              <p style="color: #c9a84c; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 11px; font-weight: 800; letter-spacing: 1px; margin: 0 0 8px; text-transform: uppercase;">
+                &#9888; Aturan Paling Penting
+              </p>
+              <p style="color: #ffffff; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 17px; font-weight: 700; line-height: 1.4; margin: 0 0 8px;">
+                Selalu main dalam Mode Offline.
+              </p>
+              <p style="color: #b8c0cd; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 13.5px; line-height: 1.65; margin: 0;">
+                Akun Steam-mu di-share dengan beberapa user. Kalau kamu main online, user lain yang lagi main bakal ke-kick keluar &mdash; dan akun bisa di-flag Steam.
+              </p>
             </td>
           </tr>
         </table>
 
-        <!-- Don'ts -->
-        <p style="color: #888; font-size: 13px; font-weight: 700; margin: 0 0 14px; text-transform: uppercase; letter-spacing: 0.5px;">
-          Yang JANGAN dilakukan:
-        </p>
-        <table style="width: 100%; border-spacing: 0; margin: 0 0 24px;">
-          <tr>
-            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top; width: 24px;">&times;</td>
-            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
-              <strong style="color: #d8dee6;">Main dalam mode online</strong> &mdash; akan kick user lain
-            </td>
-          </tr>
-          <tr>
-            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top;">&times;</td>
-            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
-              <strong style="color: #d8dee6;">Ubah password atau email</strong> akun
-            </td>
-          </tr>
-          <tr>
-            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top;">&times;</td>
-            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
-              <strong style="color: #d8dee6;">Add friend, accept invite, atau ubah profile</strong>
-            </td>
-          </tr>
-          <tr>
-            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top;">&times;</td>
-            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
-              <strong style="color: #d8dee6;">Login akun ke banyak device sekaligus</strong>
-            </td>
-          </tr>
-          <tr>
-            <td style="color: #ff6b6b; font-size: 14px; padding: 4px 12px 4px 0; vertical-align: top;">&times;</td>
-            <td style="color: #b0b8c4; font-size: 13px; line-height: 1.6; padding: 4px 0;">
-              <strong style="color: #d8dee6;">Share kredensial</strong> ke orang lain di luar Playfast
-            </td>
-          </tr>
-        </table>
+        {_section_label("Cara main yang benar &mdash; 5 langkah")}
+        {steps}
+
+        {_section_divider()}
+
+        {_section_label("Yang jangan dilakukan", color="#ff8e8e")}
+        {donts}
+
+        {_section_divider()}
 
         <!-- Help -->
-        <div style="border-top: 1px solid #2a2a4a; padding-top: 18px; margin-top: 8px;">
-          <p style="color: #888; font-size: 12px; line-height: 1.6; margin: 0;">
-            Ada masalah login, error Steam Guard, atau akun bermasalah? Klik tombol <strong style="color: #d8dee6;">"Laporkan Masalah Akun"</strong> di halaman main game-mu, atau balas email ini. Admin respon dalam 24 jam.
-          </p>
-        </div>"""
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #131527; border: 1px solid #232743; border-radius: 10px;">
+          <tr>
+            <td style="padding: 18px 20px;">
+              <p style="color: #c9a84c; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; margin: 0 0 6px; text-transform: uppercase;">
+                Butuh bantuan?
+              </p>
+              <p style="color: #b8c0cd; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 13px; line-height: 1.65; margin: 0;">
+                Ada masalah login, error Steam Guard, atau akun bermasalah? Klik tombol <strong style="color: #e8eaf0;">"Laporkan Masalah Akun"</strong> di halaman main game-mu, atau balas email ini. Admin respon dalam 24 jam.
+              </p>
+            </td>
+          </tr>
+        </table>"""
+
+
+def _hero_block(gradient: str, glyph: str, eyebrow: str) -> str:
+    """Tall hero header with a prominent badge + eyebrow label.
+
+    The previous design squeezed a 56px circle into 24px padding (~104px tall
+    total) which read as a thin strip. Bumping the padding and circle size
+    gives the email a proper "moment" before the body content kicks in.
+    """
+    return f"""\
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: {gradient};">
+        <tr>
+          <td align="center" style="padding: 44px 24px 36px 24px;">
+            <table role="presentation" width="76" height="76" cellpadding="0" cellspacing="0" border="0" style="background: rgba(0,0,0,0.18); border-radius: 50%; box-shadow: 0 0 0 6px rgba(255,255,255,0.06);">
+              <tr><td align="center" valign="middle" style="font-size: 36px; line-height: 76px;">{glyph}</td></tr>
+            </table>
+            <p style="color: rgba(255,255,255,0.92); font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; margin: 16px 0 0;">
+              {eyebrow}
+            </p>
+          </td>
+        </tr>
+      </table>"""
+
+
+def _cta_button(href: str, label: str) -> str:
+    """Bigger, more confident CTA — full-width on narrow viewports."""
+    return f"""\
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 4px 0 32px;">
+        <tr>
+          <td align="center">
+            <a href="{href}"
+               style="display: inline-block; background: #c9a84c; color: #000;
+                      text-decoration: none; padding: 16px 44px; border-radius: 10px;
+                      font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+                      font-weight: 800; font-size: 15px; letter-spacing: 0.4px;
+                      box-shadow: 0 6px 20px rgba(201,168,76,0.35);">
+              {label}
+            </a>
+          </td>
+        </tr>
+      </table>"""
 
 
 def send_order_welcome_email(to: str, game_name: str, play_url: str):
-    """Sent when an order is fulfilled (Steam account assigned).
+    """Sent on the user's FIRST fulfilled purchase order.
+
+    The trigger logic in store.routes._fulfill_order ensures this fires only
+    once per user (skipped for subscription claims and for any subsequent
+    purchase orders), so the body can talk like a one-time onboarding rather
+    than a per-game receipt.
 
     Always sends regardless of email_opted_out — this is transactional, not
     promotional. The user paid for access and needs the safety instructions.
     """
     safety = _play_safety_fragment()
+    hero = _hero_block(
+        gradient="linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)",
+        glyph="&#10003;",
+        eyebrow="Pesanan Aktif",
+    )
+    cta = _cta_button(play_url, "Buka Halaman Main")
     content = f"""\
-      <!-- Icon bar -->
-      <div style="background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); padding: 24px; text-align: center;">
-        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,0.15); display: inline-flex; align-items: center; justify-content: center; margin: 0 auto;">
-          <span style="font-size: 28px;">&#10003;</span>
-        </div>
-      </div>
+      {hero}
 
       <!-- Body -->
-      <div style="padding: 32px;">
-        <h2 style="color: #ffffff; margin: 0 0 8px; font-size: 22px; font-weight: 700;">Pesanan kamu sudah aktif!</h2>
-        <p style="color: #8f98a0; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
-          Kredensial Steam untuk <strong style="color: #c9a84c;">{game_name}</strong> sudah siap dipakai. Sebelum mulai main, baca dulu cara pakainya di bawah &mdash; ini penting biar pengalamanmu (dan user lain) tetap mulus.
+      <div style="padding: 36px 32px 32px 32px;">
+        <h2 style="color: #ffffff; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0 0 12px; font-size: 26px; font-weight: 800; line-height: 1.25;">
+          Pesanan kamu sudah aktif!
+        </h2>
+        <p style="color: #b0b8c4; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 15px; line-height: 1.7; margin: 0 0 28px;">
+          Kredensial Steam untuk <strong style="color: #c9a84c;">{game_name}</strong> sudah siap dipakai. Karena ini pesanan pertamamu, baca dulu cara mainnya &mdash; aturan ini berlaku untuk semua game yang kamu beli atau klaim ke depannya.
         </p>
 
-        <!-- CTA Button: open play page -->
-        <div style="text-align: center; margin: 0 0 28px;">
-          <a href="{play_url}"
-             style="display: inline-block; background: #c9a84c; color: #000; text-decoration: none;
-                    padding: 14px 40px; border-radius: 8px; font-weight: 700; font-size: 15px;
-                    letter-spacing: 0.3px;">
-            Buka Halaman Main
-          </a>
-        </div>
+        {cta}
 
         {safety}
       </div>"""
@@ -407,30 +452,25 @@ def send_order_welcome_email(to: str, game_name: str, play_url: str):
 def send_subscription_welcome_email(to: str, plan_label: str, store_url: str):
     """Sent when a subscription is activated. Always sends (transactional)."""
     safety = _play_safety_fragment()
+    hero = _hero_block(
+        gradient="linear-gradient(135deg, #c9a84c 0%, #a88a2e 100%)",
+        glyph="&#127775;",
+        eyebrow="Premium Aktif",
+    )
+    cta = _cta_button(store_url, "Jelajahi Katalog")
     content = f"""\
-      <!-- Icon bar -->
-      <div style="background: linear-gradient(135deg, #c9a84c 0%, #a88a2e 100%); padding: 24px; text-align: center;">
-        <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,0.15); display: inline-flex; align-items: center; justify-content: center; margin: 0 auto;">
-          <span style="font-size: 28px;">&#127775;</span>
-        </div>
-      </div>
+      {hero}
 
       <!-- Body -->
-      <div style="padding: 32px;">
-        <h2 style="color: #ffffff; margin: 0 0 8px; font-size: 22px; font-weight: 700;">Subscription kamu sudah aktif!</h2>
-        <p style="color: #8f98a0; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
+      <div style="padding: 36px 32px 32px 32px;">
+        <h2 style="color: #ffffff; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0 0 12px; font-size: 26px; font-weight: 800; line-height: 1.25;">
+          Subscription kamu sudah aktif!
+        </h2>
+        <p style="color: #b0b8c4; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 15px; line-height: 1.7; margin: 0 0 28px;">
           Selamat &mdash; kamu sekarang punya akses <strong style="color: #c9a84c;">{plan_label}</strong> ke seluruh katalog game Playfast. Sebelum main game pertama, baca cara pakai di bawah biar pengalamanmu mulus.
         </p>
 
-        <!-- CTA Button: open store -->
-        <div style="text-align: center; margin: 0 0 28px;">
-          <a href="{store_url}"
-             style="display: inline-block; background: #c9a84c; color: #000; text-decoration: none;
-                    padding: 14px 40px; border-radius: 8px; font-weight: 700; font-size: 15px;
-                    letter-spacing: 0.3px;">
-            Jelajahi Katalog
-          </a>
-        </div>
+        {cta}
 
         {safety}
       </div>"""
