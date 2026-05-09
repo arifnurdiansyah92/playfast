@@ -1706,7 +1706,15 @@ def restore_access(order_id: int):
 @admin_bp.route("/audit/codes", methods=["GET"])
 @admin_required
 def audit_codes():
-    """Code request log with optional filters."""
+    """Code request log with optional filters + text search.
+
+    Query params:
+        page, per_page (max 200) — pagination
+        user_id, steam_account_id — exact match by ID (existing behaviour)
+        email — substring match on User.email (case-insensitive)
+        account — substring match on SteamAccount.account_name (CI)
+        game — substring match on Game.name OR Game.custom_name (CI)
+    """
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 50, type=int)
     per_page = min(per_page, 200)
@@ -1721,6 +1729,30 @@ def audit_codes():
     if steam_account_id:
         query = query.filter_by(steam_account_id=steam_account_id)
 
+    email_q = (request.args.get("email") or "").strip()
+    if email_q:
+        query = query.join(User, CodeRequestLog.user_id == User.id).filter(
+            User.email.ilike(f"%{email_q}%")
+        )
+
+    account_q = (request.args.get("account") or "").strip()
+    if account_q:
+        query = query.join(
+            SteamAccount, CodeRequestLog.steam_account_id == SteamAccount.id
+        ).filter(SteamAccount.account_name.ilike(f"%{account_q}%"))
+
+    game_q = (request.args.get("game") or "").strip()
+    if game_q:
+        # Game lookup goes through Assignment. Match against the Steam name
+        # OR the admin's custom_name override so admins can search by what
+        # they actually call the game internally.
+        like = f"%{game_q}%"
+        query = (
+            query.join(Assignment, CodeRequestLog.assignment_id == Assignment.id)
+            .join(Game, Assignment.game_id == Game.id)
+            .filter(db.or_(Game.name.ilike(like), Game.custom_name.ilike(like)))
+        )
+
     pagination = query.order_by(CodeRequestLog.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
@@ -1733,7 +1765,7 @@ def audit_codes():
             entry.steam_account.account_name if entry.steam_account else None
         )
         ld["game_name"] = (
-            entry.assignment.game.name
+            (entry.assignment.game.custom_name or entry.assignment.game.name)
             if entry.assignment and entry.assignment.game
             else None
         )

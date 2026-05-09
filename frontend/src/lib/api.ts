@@ -1089,11 +1089,33 @@ return res.users
       { method: 'POST' }
     )
   },
-  async getAuditCodes() {
-    const res = await request<{ logs: AuditEntry[] }>('/api/admin/audit/codes')
+  getAuditCodes(params: {
+    page?: number
+    per_page?: number
+    email?: string
+    account?: string
+    game?: string
+    user_id?: number
+    steam_account_id?: number
+  } = {}) {
+    const qs = new URLSearchParams()
 
-    
-return res.logs
+    if (params.page) qs.set('page', String(params.page))
+    if (params.per_page) qs.set('per_page', String(params.per_page))
+    if (params.email) qs.set('email', params.email)
+    if (params.account) qs.set('account', params.account)
+    if (params.game) qs.set('game', params.game)
+    if (params.user_id) qs.set('user_id', String(params.user_id))
+    if (params.steam_account_id) qs.set('steam_account_id', String(params.steam_account_id))
+    const query = qs.toString()
+
+    return request<{
+      logs: AuditEntry[]
+      total: number
+      page: number
+      per_page: number
+      pages: number
+    }>(`/api/admin/audit/codes${query ? `?${query}` : ''}`)
   },
   async getSubscriptions(params?: { status?: string; page?: number }) {
     const search = new URLSearchParams()
