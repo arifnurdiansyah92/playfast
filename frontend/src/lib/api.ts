@@ -968,6 +968,9 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
   confirmSubscription(id: number) {
     return request<{ message: string; subscription: Subscription }>(`/api/admin/subscriptions/${id}/confirm`, { method: 'POST' })
   },
+  revokeSubscription(id: number) {
+    return request<{ message: string; subscription: Subscription }>(`/api/admin/subscriptions/${id}/revoke`, { method: 'POST' })
+  },
   grantLifetime(userId: number) {
     return request<{ message: string; subscription: Subscription }>('/api/admin/subscriptions/grant-lifetime', {
       method: 'POST',

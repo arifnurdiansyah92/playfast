@@ -1803,6 +1803,33 @@ def confirm_subscription_payment(sub_id: int):
     }), 200
 
 
+@admin_bp.route("/subscriptions/<int:sub_id>/revoke", methods=["POST"])
+@admin_required
+def revoke_subscription(sub_id: int):
+    """Cancel a subscription. Use case: admin misclicked confirm or needs to
+    reverse a wrongly-activated subscription. Sets status='cancelled' and
+    forces expires_at=now so Subscription.is_active flips to False
+    immediately. Refunds (if any) are handled out-of-band by the admin.
+    """
+    sub = db.session.get(Subscription, sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+
+    if sub.status not in ("active", "pending_payment"):
+        return jsonify({
+            "error": f"Subscription status '{sub.status}' tidak bisa di-revoke",
+        }), 400
+
+    sub.status = "cancelled"
+    sub.expires_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Subscription dibatalkan",
+        "subscription": sub.to_dict(include_snap_token=True),
+    }), 200
+
+
 @admin_bp.route("/subscriptions/grant-lifetime", methods=["POST"])
 @admin_required
 def grant_lifetime_access():

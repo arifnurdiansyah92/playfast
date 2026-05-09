@@ -58,6 +58,15 @@ const AdminSubscriptionsPage = () => {
     onError: (err: any) => setSnackMsg(`Failed: ${err.message}`),
   })
 
+  const revokeMutation = useMutation({
+    mutationFn: (id: number) => adminApi.revokeSubscription(id),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })
+      setSnackMsg(res.message)
+    },
+    onError: (err: any) => setSnackMsg(`Failed: ${err.message}`),
+  })
+
   const subs = data?.subscriptions ?? []
   const total = data?.total ?? 0
   const totalPages = data?.pages ?? 1
@@ -137,6 +146,24 @@ const AdminSubscriptionsPage = () => {
                             disabled={confirmMutation.isPending}
                           >
                             <i className='tabler-check' />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {(sub.status === 'active' || sub.status === 'pending_payment') && (
+                        <Tooltip title={sub.status === 'active' ? 'Revoke (batalkan)' : 'Cancel pending payment'}>
+                          <IconButton
+                            size='small'
+                            color='error'
+                            onClick={() => {
+                              const label = sub.status === 'active'
+                                ? `Yakin revoke subscription #${sub.id} (${sub.plan_label}) milik ${sub.user_email}? Akses akan langsung hilang.`
+                                : `Yakin batalkan pending payment #${sub.id} milik ${sub.user_email}?`
+
+                              if (confirm(label)) revokeMutation.mutate(sub.id)
+                            }}
+                            disabled={revokeMutation.isPending}
+                          >
+                            <i className='tabler-ban' />
                           </IconButton>
                         </Tooltip>
                       )}
