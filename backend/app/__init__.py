@@ -77,6 +77,7 @@ def create_app(config_name: str | None = None) -> Flask:
         admin_email_blast_bp,
         unsubscribe_bp,
     )
+    from app.reviews.routes import reviews_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(store_bp)
@@ -85,6 +86,7 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(admin_game_requests_bp)
     app.register_blueprint(admin_email_blast_bp)
     app.register_blueprint(unsubscribe_bp)
+    app.register_blueprint(reviews_bp)
 
     # ---------- Serve uploaded files ----------
     from flask import send_from_directory
@@ -117,6 +119,8 @@ def create_app(config_name: str | None = None) -> Flask:
         # Create site_settings table if it doesn't exist
         from app.models import SiteSetting
         SiteSetting.__table__.create(db.engine, checkfirst=True)
+        # Seed initial reviews (idempotent — only runs once per environment)
+        _seed_initial_reviews()
 
     return app
 
@@ -219,6 +223,83 @@ def _run_schema_upgrades():
     EmailCampaignRecipient.__table__.create(db.engine, checkfirst=True)
     EmailUnsubscribeToken.__table__.create(db.engine, checkfirst=True)
     EmailGuestOptOut.__table__.create(db.engine, checkfirst=True)
+
+    from app.models import Review, ReviewImage
+    Review.__table__.create(db.engine, checkfirst=True)
+    ReviewImage.__table__.create(db.engine, checkfirst=True)
+
+
+def _seed_initial_reviews():
+    """One-shot manual seed of the original "Kata Mereka" testimonials.
+
+    Idempotent: only seeds when the reviews table is completely empty AND has
+    not been previously seeded (tracked via SiteSetting flag), so re-deploys
+    won't recreate or duplicate them after admins moderate or delete.
+    """
+    from datetime import datetime, timezone, timedelta
+    from app.models import Review, SiteSetting
+
+    flag = SiteSetting.get("reviews_seeded_v1")
+    if flag == "1":
+        return
+    if Review.query.first() is not None:
+        SiteSetting.set("reviews_seeded_v1", "1")
+        db.session.commit()
+        return
+
+    seeds = [
+        {
+            "manual_email": "riski@gmail.com",
+            "manual_plan_label": "Beli Satuan",
+            "rating": 5,
+            "headline": "Akses instan, beneran instan!",
+            "body": (
+                "Gila sih, baru bayar langsung dapat akses. Kode Steam Guard-nya "
+                "instan, nggak perlu nunggu balesan seller kayak biasa. Lima menit "
+                "udah bisa download game-nya. Mantap banget!"
+            ),
+        },
+        {
+            "manual_email": "dian@gmail.com",
+            "manual_plan_label": "Subscriber Yearly",
+            "rating": 5,
+            "headline": "Worth banget buat single-player",
+            "body": (
+                "Harganya jauh lebih murah dibanding beli langsung di Steam. Satu "
+                "game AAA cuma Rp 50-100 ribu, padahal harga aslinya bisa ratusan "
+                "ribu. Worth it banget buat yang mau main game single-player."
+            ),
+        },
+        {
+            "manual_email": "fadli@gmail.com",
+            "manual_plan_label": "Beli Satuan",
+            "rating": 5,
+            "headline": "Steam Guard-nya gampang banget",
+            "body": (
+                "Awalnya ragu soal kode Steam Guard, takut ribet. Ternyata gampang "
+                "banget, tinggal klik generate terus copy-paste. Prosesnya smooth, "
+                "nggak pernah gagal. Recommended!"
+            ),
+        },
+    ]
+
+    now = datetime.now(timezone.utc)
+    for idx, s in enumerate(seeds):
+        review = Review(
+            user_id=None,
+            manual_email=s["manual_email"],
+            manual_plan_label=s["manual_plan_label"],
+            rating=s["rating"],
+            headline=s["headline"],
+            body=s["body"],
+            status="approved",
+            is_featured=True,  # so they keep the landing-page slot
+            approved_at=now - timedelta(days=30 - idx),
+            created_at=now - timedelta(days=30 - idx),
+        )
+        db.session.add(review)
+    SiteSetting.set("reviews_seeded_v1", "1")
+    db.session.commit()
 
     # Backfill referral_code for existing users that don't have one
     from app.models import User

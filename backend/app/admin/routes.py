@@ -32,10 +32,18 @@ from app.models import (
     PromoCode,
     PromoCodeUsage,
     ReferralReward,
+    Review,
+    ReviewImage,
     SiteSetting,
     SteamAccount,
     Subscription,
     User,
+)
+from app.reviews.service import (
+    MAX_IMAGES_PER_REVIEW,
+    delete_review_image_file,
+    process_review_image,
+    serialize_review,
 )
 from app.steam.service import (
     ensure_valid_token,
@@ -2478,3 +2486,269 @@ def _report_csv_response(transactions: list[dict], summary: dict, label: str):
         f'attachment; filename="playfast-report-{safe_label}.csv"'
     )
     return response
+
+
+# ===========================================================================
+# Reviews moderation
+# ===========================================================================
+
+
+def _admin_save_review_images(review: Review, files, *, start_sort: int = 0) -> int:
+    """Persist uploaded images for a review (admin path — same logic as user)."""
+    saved = 0
+    for f in files:
+        if not f.filename:
+            continue
+        url = process_review_image(f, review.id)
+        ri = ReviewImage(review_id=review.id, url=url, sort_order=start_sort + saved)
+        db.session.add(ri)
+        saved += 1
+    return saved
+
+
+def _validate_admin_review_payload(rating, body, headline) -> str | None:
+    try:
+        r = int(rating)
+    except (TypeError, ValueError):
+        return "Rating wajib angka 1-5"
+    if r < 1 or r > 5:
+        return "Rating harus 1-5"
+    if not body or not body.strip():
+        return "Body review wajib diisi"
+    if len(body) > 5000:
+        return "Body review terlalu panjang (max 5000 karakter)"
+    if headline and len(headline) > 200:
+        return "Headline terlalu panjang (max 200 karakter)"
+    return None
+
+
+@admin_bp.route("/reviews", methods=["GET"])
+@admin_required
+def admin_list_reviews():
+    status = request.args.get("status", "all")
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = min(100, max(1, int(request.args.get("per_page", 20))))
+
+    q = Review.query
+    if status in ("pending", "approved", "rejected"):
+        q = q.filter_by(status=status)
+
+    counts = {
+        "pending": Review.query.filter_by(status="pending").count(),
+        "approved": Review.query.filter_by(status="approved").count(),
+        "rejected": Review.query.filter_by(status="rejected").count(),
+    }
+
+    q = q.order_by(Review.created_at.desc())
+    total = q.count()
+    items = q.offset((page - 1) * per_page).limit(per_page).all()
+    pages = (total + per_page - 1) // per_page if per_page else 1
+
+    return jsonify({
+        "items": [serialize_review(r, admin=True) for r in items],
+        "stats": counts,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+    })
+
+
+@admin_bp.route("/reviews/<int:review_id>/approve", methods=["POST"])
+@admin_required
+def admin_approve_review(review_id):
+    review = db.session.get(Review, review_id)
+    if not review:
+        return jsonify({"error": "Review not found"}), 404
+    review.status = "approved"
+    review.approved_at = datetime.now(timezone.utc)
+    review.moderated_by_user_id = int(get_jwt_identity())
+    db.session.commit()
+    return jsonify({"message": "Review disetujui.", "review": serialize_review(review, admin=True)})
+
+
+@admin_bp.route("/reviews/<int:review_id>/reject", methods=["POST"])
+@admin_required
+def admin_reject_review(review_id):
+    review = db.session.get(Review, review_id)
+    if not review:
+        return jsonify({"error": "Review not found"}), 404
+    note = (request.get_json(silent=True) or {}).get("admin_note") or ""
+    review.status = "rejected"
+    review.admin_note = note.strip() or None
+    review.moderated_by_user_id = int(get_jwt_identity())
+    db.session.commit()
+    return jsonify({"message": "Review ditolak.", "review": serialize_review(review, admin=True)})
+
+
+@admin_bp.route("/reviews/<int:review_id>/feature", methods=["POST"])
+@admin_required
+def admin_toggle_feature(review_id):
+    review = db.session.get(Review, review_id)
+    if not review:
+        return jsonify({"error": "Review not found"}), 404
+    payload = request.get_json(silent=True) or {}
+    review.is_featured = bool(payload.get("is_featured", not review.is_featured))
+    db.session.commit()
+    return jsonify({"review": serialize_review(review, admin=True)})
+
+
+@admin_bp.route("/reviews", methods=["POST"])
+@admin_required
+def admin_create_review():
+    """Admin creates a review. Two modes (hybrid):
+
+    - **Linked**: pass user_id (existing user). Email + plan-tier auto-derive.
+    - **Manual seed**: omit user_id, pass manual_email + manual_plan_label
+      (e.g. for backfilling old testimonials).
+
+    Both modes accept rating, body, headline, status (default "approved" so
+    seeded reviews appear immediately), is_featured, multipart images.
+    """
+    rating = request.form.get("rating")
+    body = (request.form.get("body") or "").strip()
+    headline = (request.form.get("headline") or "").strip() or None
+    err = _validate_admin_review_payload(rating, body, headline)
+    if err:
+        return jsonify({"error": err}), 400
+
+    user_id_raw = request.form.get("user_id")
+    manual_email = (request.form.get("manual_email") or "").strip() or None
+    manual_plan_label = (request.form.get("manual_plan_label") or "").strip() or None
+
+    user_id = None
+    if user_id_raw and user_id_raw.strip():
+        try:
+            user_id = int(user_id_raw)
+        except ValueError:
+            return jsonify({"error": "user_id tidak valid"}), 400
+        if not db.session.get(User, user_id):
+            return jsonify({"error": "User tidak ditemukan"}), 404
+        if Review.query.filter_by(user_id=user_id).first():
+            return jsonify({"error": "User ini sudah punya review"}), 409
+    else:
+        if not manual_email and not manual_plan_label:
+            return jsonify({
+                "error": "Pilih user atau isi manual_email + manual_plan_label."
+            }), 400
+
+    status = request.form.get("status", "approved")
+    if status not in Review.STATUS_CHOICES:
+        status = "approved"
+    is_featured = request.form.get("is_featured", "false").lower() in ("1", "true", "yes")
+
+    review = Review(
+        user_id=user_id,
+        manual_email=None if user_id else manual_email,
+        manual_plan_label=None if user_id else manual_plan_label,
+        rating=int(rating),
+        headline=headline,
+        body=body,
+        status=status,
+        is_featured=is_featured,
+        moderated_by_user_id=int(get_jwt_identity()),
+        approved_at=datetime.now(timezone.utc) if status == "approved" else None,
+    )
+    db.session.add(review)
+    db.session.flush()
+
+    files = request.files.getlist("images")
+    if len(files) > MAX_IMAGES_PER_REVIEW:
+        db.session.rollback()
+        return jsonify({"error": f"Maksimal {MAX_IMAGES_PER_REVIEW} foto."}), 400
+    _admin_save_review_images(review, files)
+
+    db.session.commit()
+    return jsonify({
+        "message": "Review dibuat.",
+        "review": serialize_review(review, admin=True),
+    }), 201
+
+
+@admin_bp.route("/reviews/<int:review_id>", methods=["PATCH"])
+@admin_required
+def admin_edit_review(review_id):
+    review = db.session.get(Review, review_id)
+    if not review:
+        return jsonify({"error": "Review not found"}), 404
+
+    if "rating" in request.form:
+        try:
+            r = int(request.form["rating"])
+            if r < 1 or r > 5:
+                return jsonify({"error": "Rating harus 1-5"}), 400
+            review.rating = r
+        except ValueError:
+            return jsonify({"error": "Rating tidak valid"}), 400
+    if "body" in request.form:
+        body = request.form["body"].strip()
+        if not body:
+            return jsonify({"error": "Body wajib diisi"}), 400
+        if len(body) > 5000:
+            return jsonify({"error": "Body terlalu panjang"}), 400
+        review.body = body
+    if "headline" in request.form:
+        h = request.form["headline"].strip()
+        review.headline = h or None
+    if "manual_email" in request.form and review.user_id is None:
+        review.manual_email = request.form["manual_email"].strip() or None
+    if "manual_plan_label" in request.form and review.user_id is None:
+        review.manual_plan_label = request.form["manual_plan_label"].strip() or None
+    if "is_featured" in request.form:
+        review.is_featured = request.form["is_featured"].lower() in ("1", "true", "yes")
+    if "status" in request.form:
+        s = request.form["status"]
+        if s in Review.STATUS_CHOICES:
+            review.status = s
+            if s == "approved" and review.approved_at is None:
+                review.approved_at = datetime.now(timezone.utc)
+
+    delete_ids_raw = request.form.get("delete_image_ids", "")
+    if delete_ids_raw:
+        for img_id in [int(x) for x in delete_ids_raw.split(",") if x.strip().isdigit()]:
+            img = db.session.get(ReviewImage, img_id)
+            if img and img.review_id == review.id:
+                delete_review_image_file(img.url)
+                db.session.delete(img)
+
+    files = request.files.getlist("images")
+    if files:
+        current_count = review.images.count()
+        new_count = len([f for f in files if f.filename])
+        if current_count + new_count > MAX_IMAGES_PER_REVIEW:
+            return jsonify({"error": f"Total foto melebihi {MAX_IMAGES_PER_REVIEW}."}), 400
+        _admin_save_review_images(review, files, start_sort=current_count)
+
+    review.moderated_by_user_id = int(get_jwt_identity())
+    review.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"review": serialize_review(review, admin=True)})
+
+
+@admin_bp.route("/reviews/<int:review_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_review(review_id):
+    review = db.session.get(Review, review_id)
+    if not review:
+        return jsonify({"error": "Review not found"}), 404
+    for img in review.images.all():
+        delete_review_image_file(img.url)
+    db.session.delete(review)
+    db.session.commit()
+    return jsonify({"message": "Review dihapus."})
+
+
+@admin_bp.route("/reviews/users-search", methods=["GET"])
+@admin_required
+def admin_review_user_search():
+    """Search users by email substring for the 'link to user' picker."""
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify({"users": []})
+    users = (
+        User.query.filter(User.email.ilike(f"%{q}%"))
+        .order_by(User.email)
+        .limit(15)
+        .all()
+    )
+    return jsonify({"users": [{"id": u.id, "email": u.email} for u in users]})

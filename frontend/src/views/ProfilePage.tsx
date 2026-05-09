@@ -22,7 +22,8 @@ import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { authApi, storeApi, ApiError, formatIDR } from '@/lib/api'
+import { authApi, storeApi, reviewsApi, ApiError, formatIDR } from '@/lib/api'
+import ReviewSubmitDialog from '@/views/components/ReviewSubmitDialog'
 
 const ProfilePage = () => {
   const router = useRouter()
@@ -58,28 +59,40 @@ const ProfilePage = () => {
     queryFn: () => storeApi.getMyReferral(),
   })
 
+  // Fetch review eligibility + own review
+  const { data: reviewData, refetch: refetchReview } = useQuery({
+    queryKey: ['my-review-eligibility'],
+    queryFn: () => reviewsApi.eligibility(),
+  })
+
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
+
   const totalOrders = orders?.length ?? 0
   const activeOrders = orders?.filter(o => !o.is_revoked).length ?? 0
 
   const handleChangePassword = async () => {
     if (!currentPassword) {
       setSnackbar({ open: true, message: 'Password saat ini wajib diisi', severity: 'error' })
-      return
+      
+return
     }
 
     if (!newPassword) {
       setSnackbar({ open: true, message: 'Password baru wajib diisi', severity: 'error' })
-      return
+      
+return
     }
 
     if (newPassword.length < 6) {
       setSnackbar({ open: true, message: 'Password baru minimal 6 karakter', severity: 'error' })
-      return
+      
+return
     }
 
     if (newPassword !== confirmPassword) {
       setSnackbar({ open: true, message: 'Password baru tidak cocok', severity: 'error' })
-      return
+      
+return
     }
 
     setLoading(true)
@@ -93,6 +106,7 @@ const ProfilePage = () => {
       await refreshUser()
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Gagal memperbarui password'
+
       setSnackbar({ open: true, message, severity: 'error' })
     } finally {
       setLoading(false)
@@ -159,6 +173,85 @@ const ProfilePage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Review Saya */}
+      {reviewData?.eligible && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Typography variant='h6' sx={{ mb: 0.5 }}>Review Saya</Typography>
+                <Typography variant='body2' color='text.secondary'>
+                  Bagikan pengalaman kamu pakai Playfast — bantu calon pelanggan baru.
+                </Typography>
+              </Box>
+              {!reviewData.has_review ? (
+                <Button
+                  variant='contained'
+                  onClick={() => setReviewDialogOpen(true)}
+                  startIcon={<i className='tabler-pencil-plus' />}
+                  sx={{ fontWeight: 700 }}
+                >
+                  Tulis Review
+                </Button>
+              ) : (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip
+                    size='small'
+                    label={
+                      reviewData.review?.status === 'pending' ? 'Menunggu approval' :
+                      reviewData.review?.status === 'rejected' ? 'Ditolak' :
+                      'Tampil publik'
+                    }
+                    color={
+                      reviewData.review?.status === 'approved' ? 'success' :
+                      reviewData.review?.status === 'rejected' ? 'error' :
+                      'warning'
+                    }
+                    sx={{ fontWeight: 600 }}
+                  />
+                  {reviewData.review?.status !== 'approved' && (
+                    <Button
+                      variant='outlined'
+                      onClick={() => setReviewDialogOpen(true)}
+                      startIcon={<i className='tabler-edit' />}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </Box>
+              )}
+            </Box>
+
+            {reviewData.has_review && reviewData.review && (
+              <Box sx={{ mt: 2.5, p: 2, borderRadius: 1.5, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid', borderColor: 'divider' }}>
+                <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <i
+                      key={s}
+                      className={s <= reviewData.review!.rating ? 'tabler-star-filled' : 'tabler-star'}
+                      style={{ fontSize: 16, color: s <= reviewData.review!.rating ? '#c9a84c' : 'rgba(154,160,166,0.3)' }}
+                    />
+                  ))}
+                </Box>
+                {reviewData.review.headline && (
+                  <Typography variant='subtitle2' sx={{ fontWeight: 700, mb: 0.5 }}>
+                    {reviewData.review.headline}
+                  </Typography>
+                )}
+                <Typography variant='body2' sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                  &ldquo;{reviewData.review.body}&rdquo;
+                </Typography>
+                {reviewData.review.status === 'rejected' && reviewData.review.admin_note && (
+                  <Alert severity='warning' sx={{ mt: 1.5 }}>
+                    Alasan ditolak: {reviewData.review.admin_note}
+                  </Alert>
+                )}
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Grid container spacing={3}>
         {/* Account Info */}
@@ -332,6 +425,16 @@ const ProfilePage = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      <ReviewSubmitDialog
+        open={reviewDialogOpen}
+        onClose={() => setReviewDialogOpen(false)}
+        existing={reviewData?.review ?? null}
+        onSaved={() => {
+          refetchReview()
+          setSnackbar({ open: true, message: 'Review tersimpan. Menunggu approval admin.', severity: 'success' })
+        }}
+      />
     </div>
   )
 }

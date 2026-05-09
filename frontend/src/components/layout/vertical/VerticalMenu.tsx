@@ -85,6 +85,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
           <MenuItem href='/subscribe' icon={<i className='tabler-crown' />}>
             Premium
           </MenuItem>
+          <MenuItem href='/reviews' icon={<i className='tabler-message-star' />}>
+            Review
+          </MenuItem>
           {user && (
             <>
               <MenuItem href='/my-games' icon={<i className='tabler-device-gamepad-2' />}>
@@ -137,6 +140,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
               </MenuItem>
               <MenuItem href='/admin/game-requests' icon={<i className='tabler-bulb' />}>
                 Game Requests
+              </MenuItem>
+              <MenuItem href='/admin/reviews' icon={<i className='tabler-message-star' />}>
+                Reviews
               </MenuItem>
               <MenuItem href='/admin/email-blast' icon={<i className='tabler-mail-fast' />}>
                 Email Blast

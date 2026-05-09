@@ -24,7 +24,8 @@ import DialogActions from '@mui/material/DialogActions'
 import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
 
-import { storeApi, gameHeaderImage, handleImageError } from '@/lib/api'
+import { storeApi, reviewsApi, gameHeaderImage, handleImageError } from '@/lib/api'
+import ReviewSubmitDialog from '@/views/components/ReviewSubmitDialog'
 
 const MyGamesPage = () => {
   const router = useRouter()
@@ -32,10 +33,16 @@ const MyGamesPage = () => {
   const [bonusInfoOpen, setBonusInfoOpen] = useState(false)
   const [claimingGameId, setClaimingGameId] = useState<number | null>(null)
   const [claimError, setClaimError] = useState('')
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
 
   const { data: games, isLoading } = useQuery({
     queryKey: ['my-games'],
     queryFn: () => storeApi.getMyGames()
+  })
+
+  const { data: reviewData, refetch: refetchReview } = useQuery({
+    queryKey: ['my-review-eligibility'],
+    queryFn: () => reviewsApi.eligibility(),
   })
 
   const purchasedCount = games?.filter(g => g.type === 'purchased').length ?? 0
@@ -94,6 +101,28 @@ const MyGamesPage = () => {
           </Typography>
           <Typography variant='body2'>
             Semua game di katalog tersedia untuk kamu. Klik &quot;Klaim & Main&quot; pada game yang belum kamu klaim — akun otomatis diatur.
+          </Typography>
+        </Alert>
+      )}
+
+      {reviewData?.eligible && !reviewData.has_review && (
+        <Alert
+          severity='success'
+          icon={<i className='tabler-message-star' style={{ fontSize: 20 }} />}
+          action={
+            <Button
+              size='small'
+              variant='contained'
+              onClick={() => setReviewDialogOpen(true)}
+              sx={{ fontWeight: 700, bgcolor: '#c9a84c', color: '#000', '&:hover': { bgcolor: '#dfc06a' } }}
+            >
+              Tulis Review
+            </Button>
+          }
+          sx={{ alignItems: 'center' }}
+        >
+          <Typography variant='body2'>
+            Sudah coba mainnya? Bantu calon pelanggan baru — bagikan pengalaman kamu di Playfast.
           </Typography>
         </Alert>
       )}
@@ -365,6 +394,13 @@ const MyGamesPage = () => {
         onClose={() => setClaimError('')}
         message={claimError}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
+
+      <ReviewSubmitDialog
+        open={reviewDialogOpen}
+        onClose={() => setReviewDialogOpen(false)}
+        existing={reviewData?.review ?? null}
+        onSaved={() => refetchReview()}
       />
     </div>
   )

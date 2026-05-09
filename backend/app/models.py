@@ -1025,3 +1025,103 @@ class EmailGuestOptOut(db.Model):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+
+class Review(db.Model):
+    """User-submitted product review. Supports two creation modes:
+
+    1. **User submission** (user_id set): standard flow. Eligible paying
+       customers submit one review; admin approves/rejects. The displayed
+       email + plan-tier badge are derived on the fly from the linked user.
+    2. **Admin manual seed** (user_id null, manual_email + manual_plan_label
+       set): used to backfill historical testimonials that aren't tied to a
+       real user account. The admin types display identity directly.
+
+    Plan-tier badge (e.g. "Subscriber Lifetime", "Beli Satuan • 3 game") is
+    NOT stored on the row when user_id is set — it's derived at read time
+    via app.reviews.service.derive_plan_label so it tracks current state.
+    """
+    __tablename__ = "reviews"
+
+    STATUS_CHOICES = ("pending", "approved", "rejected")
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True, index=True
+    )
+    manual_email = db.Column(db.String(255), nullable=True)
+    manual_plan_label = db.Column(db.String(80), nullable=True)
+    rating = db.Column(db.Integer, nullable=False)  # 1..5
+    headline = db.Column(db.String(200), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    status = db.Column(
+        db.String(20), default="pending", nullable=False, index=True
+    )
+    is_featured = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    admin_note = db.Column(db.Text, nullable=True)
+    moderated_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True
+    )
+    approved_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = db.relationship("User", foreign_keys=[user_id])
+    moderated_by = db.relationship("User", foreign_keys=[moderated_by_user_id])
+    images = db.relationship(
+        "ReviewImage",
+        backref="review",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+        order_by="ReviewImage.sort_order",
+    )
+
+    __table_args__ = (
+        # One review per registered user. Manual seeds (user_id NULL) are
+        # exempt — admins can add as many seeds as needed.
+        db.Index(
+            "uq_reviews_user_id",
+            "user_id",
+            unique=True,
+            postgresql_where=db.text("user_id IS NOT NULL"),
+            sqlite_where=db.text("user_id IS NOT NULL"),
+        ),
+    )
+
+
+class ReviewImage(db.Model):
+    """Image attached to a Review. Stored on disk under
+    backend/uploads/reviews/<review_id>/, served via /uploads/...
+    """
+    __tablename__ = "review_images"
+
+    id = db.Column(db.Integer, primary_key=True)
+    review_id = db.Column(
+        db.Integer,
+        db.ForeignKey("reviews.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    url = db.Column(db.String(500), nullable=False)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "url": self.url,
+            "sort_order": self.sort_order,
+        }

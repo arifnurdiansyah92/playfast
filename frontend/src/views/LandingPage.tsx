@@ -18,8 +18,8 @@ import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 
-import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
-import type { Game } from '@/lib/api'
+import { storeApi, reviewsApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
+import type { Game, Review } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import LandingPromoBanner from '@/components/LandingPromoBanner'
 
@@ -41,6 +41,8 @@ const LandingPage = () => {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [plans, setPlans] = useState<{ plan: string; label: string; price: number; duration_days: number }[]>([])
   const [plansLoading, setPlansLoading] = useState(true)
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(true)
 
   useEffect(() => {
     storeApi.getFeaturedGames().then(featured => {
@@ -65,6 +67,12 @@ const LandingPage = () => {
     storeApi.getSubscriptionPlans()
       .then(data => { setPlans(data.plans); setPlansLoading(false) })
       .catch(() => setPlansLoading(false))
+  }, [])
+
+  useEffect(() => {
+    reviewsApi.featured(3)
+      .then(items => { setReviews(items); setReviewsLoading(false) })
+      .catch(() => setReviewsLoading(false))
   }, [])
 
   useEffect(() => {
@@ -659,48 +667,116 @@ const LandingPage = () => {
           </Container>
         </Box>
 
-        {/* ════════════════════ TESTIMONIALS ════════════════════ */}
+        {/* ════════════════════ REVIEWS ════════════════════ */}
         <Container maxWidth='lg' sx={{ py: 10 }}>
-          <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>Kata Mereka</Typography>
+          <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>Review Pelanggan</Typography>
           <Typography variant='body1' sx={{ textAlign: 'center', color: textSecondary, mb: 6 }}>
-            Pengalaman gamer yang sudah menggunakan Playfast
+            Pengalaman langsung dari pelanggan yang sudah pakai Playfast
           </Typography>
-          <Grid container spacing={3}>
-            {[
-              { name: 'Riski', city: 'Jakarta', text: 'Gila sih, baru bayar langsung dapat akses. Kode Steam Guard-nya instan, nggak perlu nunggu balesan seller kayak biasa. Lima menit udah bisa download game-nya. Mantap banget!' },
-              { name: 'Dian', city: 'Surabaya', text: 'Harganya jauh lebih murah dibanding beli langsung di Steam. Satu game AAA cuma Rp 50-100 ribu, padahal harga aslinya bisa ratusan ribu. Worth it banget buat yang mau main game single-player.' },
-              { name: 'Fadli', city: 'Bandung', text: 'Awalnya ragu soal kode Steam Guard, takut ribet. Ternyata gampang banget, tinggal klik generate terus copy-paste. Prosesnya smooth, nggak pernah gagal. Recommended!' },
-            ].map((t, idx) => (
-              <Grid size={{ xs: 12, md: 4 }} key={t.name}>
-                <Card sx={{ ...cardSx, height: '100%', animation: `fadeInUp 0.6s ease-out ${0.15 * idx}s both` }}>
-                  <CardContent sx={{ p: 3 }}>
-                    <Box sx={{ display: 'flex', gap: 0.5, mb: 2 }}>
-                      {[1, 2, 3, 4, 5].map(star => (
-                        <i key={star} className='tabler-star-filled' style={{ fontSize: 18, color: gold }} />
-                      ))}
-                    </Box>
-                    <Typography variant='body2' sx={{ color: '#c7d5e0', lineHeight: 1.7, mb: 3, fontStyle: 'italic' }}>
-                      &ldquo;{t.text}&rdquo;
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                      <Box sx={{
-                        width: 40, height: 40, borderRadius: '50%',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: `linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%)`,
-                        border: `1px solid rgba(201,168,76,0.25)`,
-                      }}>
-                        <i className='tabler-user' style={{ fontSize: 20, color: gold }} />
+
+          {reviewsLoading ? (
+            <Grid container spacing={3}>
+              {[0, 1, 2].map(i => (
+                <Grid size={{ xs: 12, md: 4 }} key={i}>
+                  <Skeleton variant='rounded' height={220} sx={{ bgcolor: 'rgba(255,255,255,0.04)' }} />
+                </Grid>
+              ))}
+            </Grid>
+          ) : reviews.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant='body2' sx={{ color: textSecondary }}>
+                Belum ada review yang tampil. Jadilah yang pertama setelah pesan game pertamamu.
+              </Typography>
+            </Box>
+          ) : (
+            <Grid container spacing={3}>
+              {reviews.map((r, idx) => (
+                <Grid size={{ xs: 12, md: 4 }} key={r.id}>
+                  <Card sx={{ ...cardSx, height: '100%', animation: `fadeInUp 0.6s ease-out ${0.15 * idx}s both` }}>
+                    <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                      <Box sx={{ display: 'flex', gap: 0.5, mb: 2 }}>
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <i
+                            key={star}
+                            className={star <= r.rating ? 'tabler-star-filled' : 'tabler-star'}
+                            style={{ fontSize: 18, color: star <= r.rating ? gold : 'rgba(154,160,166,0.4)' }}
+                          />
+                        ))}
                       </Box>
-                      <Box>
-                        <Typography variant='subtitle2' sx={{ fontWeight: 700 }}>{t.name}</Typography>
-                        <Typography variant='caption' sx={{ color: textSecondary }}>{t.city}</Typography>
+                      {r.headline && (
+                        <Typography variant='subtitle1' sx={{ fontWeight: 700, mb: 1, color: textPrimary }}>
+                          {r.headline}
+                        </Typography>
+                      )}
+                      <Typography
+                        variant='body2'
+                        sx={{
+                          color: '#c7d5e0', lineHeight: 1.7, mb: 2, fontStyle: 'italic',
+                          display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                        }}
+                      >
+                        &ldquo;{r.body}&rdquo;
+                      </Typography>
+                      {r.images.length > 0 && (
+                        <Box sx={{ display: 'flex', gap: 0.75, mb: 2, flexWrap: 'wrap' }}>
+                          {r.images.slice(0, 3).map(img => (
+                            <Box
+                              key={img.id}
+                              component='img'
+                              src={img.url}
+                              alt=''
+                              sx={{
+                                width: 56, height: 56, borderRadius: 1.5, objectFit: 'cover',
+                                border: '1px solid rgba(154,160,166,0.2)',
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      )}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 'auto' }}>
+                        <Box sx={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: `linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%)`,
+                          border: `1px solid rgba(201,168,76,0.25)`,
+                          flexShrink: 0,
+                        }}>
+                          <i className='tabler-user' style={{ fontSize: 20, color: gold }} />
+                        </Box>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant='subtitle2' sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {r.display_email || 'Pelanggan Playfast'}
+                          </Typography>
+                          {r.plan_label && (
+                            <Typography variant='caption' sx={{ color: gold, fontWeight: 600 }}>
+                              {r.plan_label}
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+
+          <Box sx={{ textAlign: 'center', mt: 5 }}>
+            <Button
+              component={Link}
+              href='/reviews'
+              variant='outlined'
+              size='large'
+              sx={{
+                px: 4, py: 1.25, fontWeight: 600,
+                borderColor: 'rgba(154,160,166,0.4)', color: textSecondary,
+                '&:hover': { borderColor: gold, color: gold, bgcolor: 'transparent' },
+              }}
+              endIcon={<i className='tabler-arrow-right' />}
+            >
+              Lihat semua review
+            </Button>
+          </Box>
         </Container>
 
         {/* ════════════════════ FAQ ════════════════════ */}

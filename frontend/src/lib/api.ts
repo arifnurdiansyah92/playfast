@@ -291,6 +291,7 @@ export interface GameRequest {
   resolved_at: string | null
   created_at: string
   voted?: boolean
+
   // admin-only enriched fields
   voters?: { user_id: number; email: string | null; voted_at: string }[]
   resolved_by_email?: string | null
@@ -355,8 +356,10 @@ export type EmailAudienceMode = 'filters' | 'specific'
 export interface EmailAudienceCountResponse {
   audience_mode: EmailAudienceMode
   count: number
+
   // 'filters' mode echoes back the filters
   filters?: EmailCampaignFilters
+
   // 'specific' mode breakdown
   matched_count?: number
   guest_count?: number
@@ -683,6 +686,143 @@ export const gameRequestsApi = {
       `/api/game-requests/${requestId}/vote`,
       { method: 'DELETE' }
     )
+  },
+}
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+export interface ReviewImage {
+  id: number
+  url: string
+  sort_order: number
+}
+
+export interface Review {
+  id: number
+  rating: number
+  headline: string | null
+  body: string
+  status: 'pending' | 'approved' | 'rejected'
+  is_featured: boolean
+  display_email: string
+  plan_label: string
+  images: ReviewImage[]
+  created_at: string
+  updated_at: string
+  approved_at: string | null
+
+  // admin-only fields
+  user_id?: number | null
+  user_email?: string | null
+  manual_email?: string | null
+  manual_plan_label?: string | null
+  admin_note?: string | null
+  moderated_by_user_id?: number | null
+  moderated_by_email?: string | null
+}
+
+export interface ReviewListResponse {
+  items: Review[]
+  total: number
+  page: number
+  per_page: number
+  pages: number
+}
+
+export interface ReviewEligibility {
+  eligible: boolean
+  has_review: boolean
+  review: Review | null
+}
+
+export const reviewsApi = {
+  async listPublic(params: {
+    page?: number
+    per_page?: number
+    rating_gte?: number
+    has_photo?: boolean
+    sort?: 'newest' | 'rating'
+  } = {}) {
+    const qs = new URLSearchParams()
+
+    if (params.page) qs.set('page', String(params.page))
+    if (params.per_page) qs.set('per_page', String(params.per_page))
+    if (params.rating_gte) qs.set('rating_gte', String(params.rating_gte))
+    if (params.has_photo) qs.set('has_photo', '1')
+    if (params.sort) qs.set('sort', params.sort)
+
+    const query = qs.toString()
+
+    return request<ReviewListResponse>(`/api/reviews${query ? `?${query}` : ''}`)
+  },
+  async featured(limit = 3) {
+    const res = await request<{ items: Review[] }>(`/api/reviews/featured?limit=${limit}`)
+
+    return res.items
+  },
+  eligibility() {
+    return request<ReviewEligibility>('/api/reviews/eligibility')
+  },
+  myReview() {
+    return request<{ review: Review | null }>('/api/reviews/me')
+  },
+  async submit(form: { rating: number; body: string; headline?: string; images: File[] }): Promise<Review> {
+    const fd = new FormData()
+
+    fd.append('rating', String(form.rating))
+    fd.append('body', form.body)
+    if (form.headline) fd.append('headline', form.headline)
+    form.images.forEach(f => fd.append('images', f))
+
+    const res = await fetch(`${API_BASE}/api/reviews`, {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+
+      throw new ApiError(res.status, err.error || 'Submit gagal')
+    }
+
+    const data = await res.json()
+
+    return data.review
+  },
+  async editMine(form: {
+    rating?: number
+    body?: string
+    headline?: string | null
+    images?: File[]
+    delete_image_ids?: number[]
+  }): Promise<Review> {
+    const fd = new FormData()
+
+    if (form.rating !== undefined) fd.append('rating', String(form.rating))
+    if (form.body !== undefined) fd.append('body', form.body)
+    if (form.headline !== undefined) fd.append('headline', form.headline ?? '')
+    if (form.delete_image_ids?.length) fd.append('delete_image_ids', form.delete_image_ids.join(','))
+    form.images?.forEach(f => fd.append('images', f))
+
+    const res = await fetch(`${API_BASE}/api/reviews/me`, {
+      method: 'PATCH',
+      credentials: 'include',
+      body: fd,
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+
+      throw new ApiError(res.status, err.error || 'Update gagal')
+    }
+
+    const data = await res.json()
+
+    return data.review
+  },
+  deleteMine() {
+    return request<{ message: string }>('/api/reviews/me', { method: 'DELETE' })
   },
 }
 
@@ -1035,6 +1175,7 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
       }
     )
   },
+
   // ─── Email Blast ────────────────────────────────────────────────────────
   audienceCount(payload: {
     audience_mode: EmailAudienceMode
@@ -1103,6 +1244,126 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
     return request<{ message: string }>(
       '/api/admin/email-blast/cancel',
       { method: 'POST' }
+    )
+  },
+
+  // ─── Reviews moderation ─────────────────────────────────────────────────
+  getReviews(params: { status?: 'pending' | 'approved' | 'rejected' | 'all'; page?: number; per_page?: number } = {}) {
+    const qs = new URLSearchParams()
+
+    if (params.status) qs.set('status', params.status)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.per_page) qs.set('per_page', String(params.per_page))
+    const query = qs.toString()
+
+    return request<{
+      items: Review[]
+      stats: { pending: number; approved: number; rejected: number }
+      total: number
+      page: number
+      per_page: number
+      pages: number
+    }>(`/api/admin/reviews${query ? `?${query}` : ''}`)
+  },
+  approveReview(id: number) {
+    return request<{ message: string; review: Review }>(`/api/admin/reviews/${id}/approve`, { method: 'POST' })
+  },
+  rejectReview(id: number, admin_note?: string) {
+    return request<{ message: string; review: Review }>(`/api/admin/reviews/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ admin_note: admin_note ?? null }),
+    })
+  },
+  toggleReviewFeatured(id: number, is_featured?: boolean) {
+    return request<{ review: Review }>(`/api/admin/reviews/${id}/feature`, {
+      method: 'POST',
+      body: JSON.stringify(is_featured === undefined ? {} : { is_featured }),
+    })
+  },
+  async createReview(form: {
+    user_id?: number | null
+    manual_email?: string
+    manual_plan_label?: string
+    rating: number
+    headline?: string
+    body: string
+    status?: 'pending' | 'approved' | 'rejected'
+    is_featured?: boolean
+    images?: File[]
+  }): Promise<Review> {
+    const fd = new FormData()
+
+    if (form.user_id) fd.append('user_id', String(form.user_id))
+    if (form.manual_email) fd.append('manual_email', form.manual_email)
+    if (form.manual_plan_label) fd.append('manual_plan_label', form.manual_plan_label)
+    fd.append('rating', String(form.rating))
+    if (form.headline) fd.append('headline', form.headline)
+    fd.append('body', form.body)
+    if (form.status) fd.append('status', form.status)
+    if (form.is_featured) fd.append('is_featured', 'true')
+    form.images?.forEach(f => fd.append('images', f))
+
+    const res = await fetch(`${API_BASE}/api/admin/reviews`, {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+
+      throw new ApiError(res.status, err.error || 'Create gagal')
+    }
+
+    const data = await res.json()
+
+    return data.review
+  },
+  async updateReview(id: number, form: {
+    rating?: number
+    headline?: string | null
+    body?: string
+    status?: 'pending' | 'approved' | 'rejected'
+    is_featured?: boolean
+    manual_email?: string
+    manual_plan_label?: string
+    images?: File[]
+    delete_image_ids?: number[]
+  }): Promise<Review> {
+    const fd = new FormData()
+
+    if (form.rating !== undefined) fd.append('rating', String(form.rating))
+    if (form.headline !== undefined) fd.append('headline', form.headline ?? '')
+    if (form.body !== undefined) fd.append('body', form.body)
+    if (form.status !== undefined) fd.append('status', form.status)
+    if (form.is_featured !== undefined) fd.append('is_featured', form.is_featured ? 'true' : 'false')
+    if (form.manual_email !== undefined) fd.append('manual_email', form.manual_email)
+    if (form.manual_plan_label !== undefined) fd.append('manual_plan_label', form.manual_plan_label)
+    if (form.delete_image_ids?.length) fd.append('delete_image_ids', form.delete_image_ids.join(','))
+    form.images?.forEach(f => fd.append('images', f))
+
+    const res = await fetch(`${API_BASE}/api/admin/reviews/${id}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      body: fd,
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }))
+
+      throw new ApiError(res.status, err.error || 'Update gagal')
+    }
+
+    const data = await res.json()
+
+    return data.review
+  },
+  deleteReview(id: number) {
+    return request<{ message: string }>(`/api/admin/reviews/${id}`, { method: 'DELETE' })
+  },
+  searchUsersForReview(q: string) {
+    return request<{ users: { id: number; email: string }[] }>(
+      `/api/admin/reviews/users-search?q=${encodeURIComponent(q)}`
     )
   },
 }
