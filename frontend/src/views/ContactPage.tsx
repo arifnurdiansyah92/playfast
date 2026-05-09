@@ -13,8 +13,11 @@ import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
 import Button from '@mui/material/Button'
 
+import { useWhatsappNumber } from '@/hooks/useWhatsappNumber'
+
 const ContactPage = () => {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
+  const waNumber = useWhatsappNumber()
 
   const faqs = [
     {
@@ -116,7 +119,7 @@ const ContactPage = () => {
                 </Typography>
                 <Button
                   component='a'
-                  href='https://wa.me/6282240708329'
+                  href={`https://wa.me/${waNumber}`}
                   target='_blank'
                   rel='noopener noreferrer'
                   variant='contained'

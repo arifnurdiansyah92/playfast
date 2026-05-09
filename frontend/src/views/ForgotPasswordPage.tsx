@@ -13,12 +13,14 @@ import Alert from '@mui/material/Alert'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { authApi } from '@/lib/api'
+import { useWhatsappNumber } from '@/hooks/useWhatsappNumber'
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+  const waNumber = useWhatsappNumber()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,7 +61,7 @@ const ForgotPasswordPage = () => {
               </Typography>
               <Typography variant='body2' color='text.secondary' sx={{ mb: 4 }}>
                 Belum menerima email? Hubungi admin via{' '}
-                <a href='https://wa.me/6282240708329' target='_blank' rel='noopener noreferrer' style={{ color: '#c9a84c' }}>
+                <a href={`https://wa.me/${waNumber}`} target='_blank' rel='noopener noreferrer' style={{ color: '#c9a84c' }}>
                   WhatsApp
                 </a>{' '}
                 untuk bantuan.

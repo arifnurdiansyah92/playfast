@@ -10,7 +10,11 @@ import Container from '@mui/material/Container'
 import Divider from '@mui/material/Divider'
 import Typography from '@mui/material/Typography'
 
+import { useWhatsappNumber, formatWhatsappDisplay } from '@/hooks/useWhatsappNumber'
+
 const TermsPage = () => {
+  const waNumber = useWhatsappNumber()
+
   return (
     <Box sx={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0a0e17 0%, #101926 20%, #1b2838 50%, #1b2838 100%)' }}>
       <Container maxWidth='md' sx={{ py: 6 }}>
@@ -120,8 +124,8 @@ const TermsPage = () => {
               <Box component='ul' sx={{ pl: 3, '& li': { mb: 1 } }}>
                 <li>
                   WhatsApp:{' '}
-                  <a href='https://wa.me/6282240708329' target='_blank' rel='noopener noreferrer' style={{ color: '#c9a84c' }}>
-                    +62 822-4070-8329
+                  <a href={`https://wa.me/${waNumber}`} target='_blank' rel='noopener noreferrer' style={{ color: '#c9a84c' }}>
+                    {formatWhatsappDisplay(waNumber)}
                   </a>
                 </li>
                 <li>

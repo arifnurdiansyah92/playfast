@@ -190,9 +190,16 @@ def site_discord_url():
 
 @store_bp.route("/payment-config", methods=["GET"])
 def payment_config():
-    """Public endpoint: returns payment mode and Midtrans client key for frontend."""
+    """Public endpoint: returns payment mode + the WA contact number, plus
+    Midtrans/manual-mode specifics. WhatsApp number is always returned because
+    several public pages (contact, terms, privacy, forgot-password, play page,
+    landing promo banner) link to wa.me/<number> regardless of payment mode.
+    """
     mode = SiteSetting.get("payment_mode")
-    result = {"payment_mode": mode}
+    result = {
+        "payment_mode": mode,
+        "whatsapp_number": SiteSetting.get("manual_whatsapp_number"),
+    }
     if mode != "manual":
         if mode == "midtrans_production":
             result["client_key"] = SiteSetting.get("midtrans_production_client_key")
@@ -202,7 +209,6 @@ def payment_config():
             result["snap_url"] = "https://app.sandbox.midtrans.com/snap/snap.js"
     else:
         result["qris_image_url"] = SiteSetting.get("manual_qris_image_url")
-        result["whatsapp_number"] = SiteSetting.get("manual_whatsapp_number")
         result["instructions"] = SiteSetting.get("manual_payment_instructions")
     return jsonify(result), 200
 

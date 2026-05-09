@@ -30,6 +30,7 @@ import ReactMarkdown from 'react-markdown'
 
 import type { AccountFlagReason } from '@/lib/api'
 import { storeApi, gameHeaderImage, handleImageError } from '@/lib/api'
+import { useWhatsappNumber } from '@/hooks/useWhatsappNumber'
 
 const FLAG_REASONS: { value: AccountFlagReason; label: string }[] = [
   { value: 'credentials_invalid', label: 'Username/password salah' },
@@ -104,6 +105,7 @@ const PlayPage = ({ orderId }: Props) => {
   const router = useRouter()
   const searchParams = useSearchParams()
   const overrideAppid = searchParams?.get('appid') || null
+  const waNumber = useWhatsappNumber()
   const [code, setCode] = useState<string | null>(null)
   const [codeExpiresIn, setCodeExpiresIn] = useState(0)
   const [codeLoading, setCodeLoading] = useState(false)
@@ -301,7 +303,7 @@ const PlayPage = ({ orderId }: Props) => {
             <Button
               size='small'
               color='inherit'
-              href='https://wa.me/6282240708329'
+              href={`https://wa.me/${waNumber}`}
               target='_blank'
               rel='noopener noreferrer'
               startIcon={<i className='tabler-brand-whatsapp' />}
