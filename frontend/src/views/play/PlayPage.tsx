@@ -406,21 +406,51 @@ const PlayPage = ({ orderId }: Props) => {
           </Box>
 
           {order.credentials && (
-            <Box sx={{ mt: 3, pt: 2.5, borderTop: '1px dashed', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-              <Typography variant='caption' color='text.secondary' sx={{ flex: 1, minWidth: 200 }}>
-                Akun bermasalah? Login gagal, ke-banned, password berubah, dll.
-              </Typography>
-              <Button
-                variant='outlined'
-                color='warning'
-                size='small'
-                startIcon={<i className='tabler-flag' />}
-                onClick={() => setFlagOpen(true)}
-                sx={{ fontWeight: 600 }}
-              >
-                Laporkan Masalah
-              </Button>
-            </Box>
+            <>
+              <Box sx={{ mt: 3, pt: 2.5, borderTop: '1px dashed', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                <Typography variant='caption' color='text.secondary' sx={{ flex: 1, minWidth: 200 }}>
+                  Akun bermasalah? Login gagal, ke-banned, password berubah, dll.
+                </Typography>
+                <Button
+                  variant='outlined'
+                  color='warning'
+                  size='small'
+                  startIcon={<i className='tabler-flag' />}
+                  onClick={() => setFlagOpen(true)}
+                  sx={{ fontWeight: 600 }}
+                >
+                  Laporkan Masalah
+                </Button>
+              </Box>
+
+              {/* Save-file migration nudge — when a user is reassigned to a
+                  different Steam account (account flagged, family share
+                  pruned, etc.), Steam Cloud saves don't carry over because
+                  they're tied to the previous account. Admin can manually
+                  copy the cloud save file with WhatsApp coordination. */}
+              <Box sx={{ mt: 1.5, pt: 2, borderTop: '1px dashed', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                <Typography variant='caption' color='text.secondary' sx={{ flex: 1, minWidth: 200 }}>
+                  Akun berbeda dari sebelumnya? Save lama bisa kami pindahkan ke akun baru.
+                </Typography>
+                <Button
+                  component='a'
+                  href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Mohon bantuan migrasi save file game ${displayGame?.name ?? ''} ke akun ${order.credentials.account_name}`)}`}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  variant='outlined'
+                  size='small'
+                  startIcon={<i className='tabler-brand-whatsapp' />}
+                  sx={{
+                    fontWeight: 600,
+                    borderColor: '#25D366',
+                    color: '#25D366',
+                    '&:hover': { borderColor: '#1da851', color: '#1da851', bgcolor: 'rgba(37,211,102,0.06)' },
+                  }}
+                >
+                  WhatsApp untuk Migrasi Save
+                </Button>
+              </Box>
+            </>
           )}
         </CardContent>
       </Card>
