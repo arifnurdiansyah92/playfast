@@ -175,13 +175,20 @@ def fetch_owned_games(access_token: str, steam_id: str) -> list[dict]:
     return games
 
 
-def fetch_family_shared_games(access_token: str, steam_id: str) -> list[dict]:
+def fetch_family_shared_games(access_token: str, steam_id: str) -> tuple[list[dict], bool]:
     """Fetch games shared to this account via a Steam Families group.
 
-    Returns the same shape as fetch_owned_games (list of {appid, name, icon}).
-    Returns [] when the account isn't in a family, the family has no shared
-    apps, or any underlying API call fails — sync should never break because
-    the family API is unhappy.
+    Returns ``(games, ok)``:
+      - games: list of {appid, name, icon} (same shape as fetch_owned_games),
+        empty when the account isn't in a family or its family has no shared
+        apps.
+      - ok: True iff the upstream API calls succeeded. False means the
+        sync caller should NOT prune existing shared links — an empty list
+        from a failed call would otherwise be indistinguishable from a
+        legitimately-empty family library and could nuke valid links.
+
+    The function never raises; sync should never break because the family
+    API is unhappy.
     """
     try:
         resp = requests.get(
@@ -192,7 +199,9 @@ def fetch_family_shared_games(access_token: str, steam_id: str) -> list[dict]:
         resp.raise_for_status()
         family_groupid = resp.json().get("response", {}).get("family_groupid")
         if not family_groupid:
-            return []
+            # Legitimate "no family" — caller can safely prune any stale
+            # shared links because we know there are zero shared apps.
+            return [], True
 
         resp = requests.get(
             f"{STEAM_API}/IFamilyGroupsService/GetSharedLibraryApps/v1",
@@ -228,13 +237,13 @@ def fetch_family_shared_games(access_token: str, steam_id: str) -> list[dict]:
                 "name": app.get("name") or f"App {appid}",
                 "icon": app.get("img_icon_url", ""),
             })
-        return games
+        return games, True
     except Exception:  # noqa: BLE001
         logger.warning(
             "fetch_family_shared_games failed for steam_id=%s; sync continues with owned games only",
             steam_id, exc_info=True,
         )
-        return []
+        return [], False
 
 
 # ---------------------------------------------------------------------------

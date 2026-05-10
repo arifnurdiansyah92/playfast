@@ -416,6 +416,9 @@ def update_account(account_id: int):
 
     reassigned: list[int] = []
     orphaned: list[int] = []
+    family_resync_started = False
+    family_resync_account_count = 0
+    family_resync_skipped_reason: str | None = None
     if "is_active" in data:
         new_active = bool(data["is_active"])
         deactivating = account.is_active and not new_active
@@ -466,6 +469,17 @@ def update_account(account_id: int):
                 else:
                     orphaned.append(order.id)
 
+            # Auto-trigger sync on family-joined accounts.
+            # When the disabled account directly owns a game and another
+            # active account has the same game flagged is_shared=True,
+            # that other account is highly likely sharing FROM this one
+            # via Steam Families. Re-syncing them now will pick up the
+            # share-revocation on Steam's side and prune the stale link
+            # via the new prune logic in _sync_account_games.
+            family_resync_account_count, family_resync_started, family_resync_skipped_reason = (
+                _resync_family_joined_accounts(account_id)
+            )
+
     db.session.commit()
 
     msg = "Account updated"
@@ -476,13 +490,89 @@ def update_account(account_id: int):
         if orphaned:
             parts.append(f"{len(orphaned)} pending account availability")
         msg = "Account deactivated. " + "; ".join(parts) + "."
+    if family_resync_started:
+        msg += f" Re-syncing {family_resync_account_count} family-joined account(s) in background."
+    elif family_resync_account_count > 0 and family_resync_skipped_reason:
+        msg += (
+            f" {family_resync_account_count} family-joined account(s) detected — "
+            f"resync skipped: {family_resync_skipped_reason}."
+        )
 
     return jsonify({
         "message": msg,
         "account": account.to_dict(),
         "reassigned_orders": reassigned,
         "orphaned_orders": orphaned,
+        "family_resync_started": family_resync_started,
+        "family_resync_account_count": family_resync_account_count,
+        "family_resync_skipped_reason": family_resync_skipped_reason,
     }), 200
+
+
+def _resync_family_joined_accounts(disabled_account_id: int) -> tuple[int, bool, str | None]:
+    """Kick off a background sync of accounts that likely share a Steam
+    Family with the now-disabled account.
+
+    Heuristic: any active account B is treated as a family-joined candidate
+    when there exists a game G such that:
+        - the disabled account directly owns G (is_shared=False), and
+        - account B has G flagged is_shared=True.
+
+    Re-syncing those candidates lets `_sync_account_games` (with its prune
+    logic) discover that G is no longer in their family share and remove
+    the stale GameAccount + revoke any active customer assignments.
+
+    Returns ``(candidate_count, started, skipped_reason)``:
+      - candidate_count: how many distinct accounts matched the heuristic
+      - started: True iff a background job was successfully kicked off
+      - skipped_reason: human-readable reason when started=False
+        (only set when candidate_count > 0)
+    """
+    # Subquery: appids the disabled account directly owns
+    owned_appids_subq = (
+        db.session.query(GameAccount.game_id)
+        .filter(
+            GameAccount.steam_account_id == disabled_account_id,
+            GameAccount.is_shared == False,  # noqa: E712
+        )
+        .subquery()
+    )
+
+    candidate_ids = [
+        row[0]
+        for row in (
+            db.session.query(GameAccount.steam_account_id)
+            .join(SteamAccount, SteamAccount.id == GameAccount.steam_account_id)
+            .filter(
+                GameAccount.steam_account_id != disabled_account_id,
+                GameAccount.is_shared == True,  # noqa: E712
+                GameAccount.game_id.in_(db.session.query(owned_appids_subq.c.game_id)),
+                SteamAccount.is_active == True,  # noqa: E712
+            )
+            .distinct()
+            .all()
+        )
+    ]
+
+    if not candidate_ids:
+        return 0, False, None
+
+    # Don't fight an admin-launched sync-all/logout-all/etc.
+    current = get_current_job()
+    if current and current.get("status") == "running":
+        return len(candidate_ids), False, "another job is already running"
+
+    from flask import current_app
+    app = current_app._get_current_object()
+    job = start_job(
+        "family_resync",
+        _bg_sync_games,
+        args=(app, candidate_ids),
+        total=len(candidate_ids),
+    )
+    if not job:
+        return len(candidate_ids), False, "another job is already running"
+    return len(candidate_ids), True, None
 
 
 @admin_bp.route("/accounts/<int:account_id>", methods=["DELETE"])
@@ -911,14 +1001,17 @@ def _sync_account_games(account: SteamAccount, progress=None) -> dict:
         }
 
     # Pull in Steam Families library-shared games. Failures here degrade
-    # gracefully (returns []), so a flaky family API never blocks the sync.
-    shared_games = fetch_family_shared_games(token, steam_id)
+    # gracefully (shared_ok=False), so a flaky family API never blocks the
+    # sync — but it does suppress shared-link pruning so we never nuke
+    # valid links because of a transient outage.
+    shared_games, shared_ok = fetch_family_shared_games(token, steam_id)
 
     # Merge: owned wins on duplicates (we never want a direct-owned link to
     # be re-tagged as shared). `is_shared` per entry tells the loop whether
     # to mark a fresh GameAccount as shared, and whether to upgrade an
     # existing shared link when the same appid now appears as owned.
     owned_appids = {g["appid"] for g in games}
+    shared_appids = {g["appid"] for g in shared_games if g["appid"] not in owned_appids}
     combined: list[dict] = [{**g, "is_shared": False} for g in games]
     for g in shared_games:
         if g["appid"] in owned_appids:
@@ -929,6 +1022,9 @@ def _sync_account_games(account: SteamAccount, progress=None) -> dict:
     new_links = 0
     new_shared_links = 0
     upgraded_links = 0
+    removed_owned_links = 0
+    removed_shared_links = 0
+    revoked_assignments = 0
     cancelled = False
 
     if progress is not None:
@@ -1011,6 +1107,66 @@ def _sync_account_games(account: SteamAccount, progress=None) -> dict:
         if progress is not None:
             progress.processed = i + 1
 
+    # ── Prune stale GameAccount links ───────────────────────────────────
+    # Without pruning, a game that disappears from this account's library
+    # (e.g. family share revoked because the source account was disabled)
+    # leaves a ghost link in the DB. Round-robin keeps handing out the
+    # account to new customers, who then log in and discover the game is
+    # gone. We prune carefully:
+    #
+    # - SHARED links: only prune when the family API call succeeded
+    #   (shared_ok=True). On failure we'd see an empty list and would
+    #   nuke every valid shared link.
+    # - OWNED links: only prune when the owned-games API returned a
+    #   non-empty list. A banned/throttled account can momentarily
+    #   return zero owned games; never use that as a signal to delete.
+    # - When a link is pruned, also revoke any active customer
+    #   assignments to (account, game) so the customer sees they've
+    #   lost access instead of getting credentials to a library that
+    #   no longer contains the game. Admin can re-fulfill via the
+    #   existing /retry-fulfill endpoints once another account picks
+    #   up the slack.
+    if not cancelled:
+        prune_owned = len(games) > 0  # only when we got real owned data back
+        prune_shared = shared_ok
+        if prune_owned or prune_shared:
+            existing_links = (
+                db.session.query(GameAccount, Game.appid)
+                .join(Game, GameAccount.game_id == Game.id)
+                .filter(GameAccount.steam_account_id == account.id)
+                .all()
+            )
+            for link, link_appid in existing_links:
+                if link.is_shared:
+                    if not prune_shared:
+                        continue
+                    if link_appid in shared_appids or link_appid in owned_appids:
+                        continue
+                    removed_shared_links += 1
+                else:
+                    if not prune_owned:
+                        continue
+                    if link_appid in owned_appids:
+                        continue
+                    removed_owned_links += 1
+
+                # Revoke active assignments for (this account, this game)
+                # before removing the link so customer-facing queries
+                # immediately stop returning the dead pairing.
+                affected = Assignment.query.filter(
+                    Assignment.steam_account_id == account.id,
+                    Assignment.game_id == link.game_id,
+                    Assignment.is_revoked == False,  # noqa: E712
+                ).all()
+                for a in affected:
+                    a.is_revoked = True
+                    a.revoked_at = datetime.now(timezone.utc)
+                    if a.order is not None:
+                        a.order.assignment_id = None
+                    revoked_assignments += 1
+
+                db.session.delete(link)
+
     db.session.commit()
 
     return {
@@ -1019,10 +1175,14 @@ def _sync_account_games(account: SteamAccount, progress=None) -> dict:
         "total_games": len(combined),
         "owned_games": len(games),
         "shared_games": len(shared_games),
+        "shared_api_ok": shared_ok,
         "new_games": new_games,
         "new_links": new_links,
         "new_shared_links": new_shared_links,
         "upgraded_links": upgraded_links,
+        "removed_owned_links": removed_owned_links,
+        "removed_shared_links": removed_shared_links,
+        "revoked_assignments": revoked_assignments,
         "cancelled": cancelled,
     }
 
