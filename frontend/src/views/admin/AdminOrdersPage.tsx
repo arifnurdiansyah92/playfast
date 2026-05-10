@@ -91,9 +91,17 @@ const AdminOrdersPage = () => {
       )
     }
 
-    if (statusFilter) result = result.filter(o => o.status === statusFilter)
-    
-return result
+    if (statusFilter === 'unassigned') {
+      // "unassigned" is a pseudo-status: fulfilled order whose Steam account
+      // assignment was lost (initial fulfillment failed, account disabled,
+      // or family-share pruned). Bookkeeping-wise these orders are still
+      // status='fulfilled' so we filter on the derived condition instead.
+      result = result.filter(o => o.status === 'fulfilled' && !o.credentials && !o.is_revoked)
+    } else if (statusFilter) {
+      result = result.filter(o => o.status === statusFilter)
+    }
+
+    return result
   }, [orders, search, statusFilter])
 
   if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
@@ -110,11 +118,12 @@ return 'default' as const
   const fulfilledCount = orders?.filter(o => o.status === 'fulfilled').length ?? 0
   const revokedCount = orders?.filter(o => o.status === 'revoked').length ?? 0
 
-  const statuses = [
+  const statuses: { label: string; value: string; count: number; color?: 'primary' | 'warning' | 'success' | 'error' }[] = [
     { label: 'All', value: '', count: orders?.length ?? 0 },
     { label: 'Pending', value: 'pending_payment', count: pendingCount },
     { label: 'Fulfilled', value: 'fulfilled', count: fulfilledCount },
-    { label: 'Revoked', value: 'revoked', count: revokedCount },
+    { label: 'Unassigned', value: 'unassigned', count: unassignedCount, color: 'warning' },
+    { label: 'Revoked', value: 'revoked', count: revokedCount, color: 'error' },
   ]
 
   return (
@@ -145,7 +154,7 @@ return 'default' as const
             key={s.value}
             label={`${s.label} (${s.count})`}
             variant={statusFilter === s.value ? 'filled' : 'outlined'}
-            color={statusFilter === s.value ? 'primary' : 'default'}
+            color={statusFilter === s.value ? (s.color ?? 'primary') : 'default'}
             onClick={() => setStatusFilter(statusFilter === s.value ? '' : s.value)}
             sx={{ fontWeight: 600 }}
           />
