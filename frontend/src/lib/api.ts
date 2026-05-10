@@ -826,6 +826,54 @@ export const reviewsApi = {
   },
 }
 
+// ─── Creator Program ────────────────────────────────────────────────────────
+
+export type CreatorPlatform = 'tiktok' | 'instagram' | 'youtube' | 'x' | 'facebook' | 'other'
+export type CreatorAppStatus = 'pending' | 'contacted' | 'approved' | 'rejected'
+export type CreatorFollowerBucket = '<1K' | '1-10K' | '10-50K' | '50-100K' | '100K+'
+
+export interface CreatorApplication {
+  id: number
+  name: string
+  email: string
+  whatsapp: string
+  platform: CreatorPlatform
+  handle: string
+  follower_bucket: CreatorFollowerBucket | null
+  content_links: string[]
+  niche: string | null
+  pitch: string | null
+  status: CreatorAppStatus
+  created_at: string
+
+  // admin-only
+  admin_note?: string | null
+  reviewed_by_user_id?: number | null
+  reviewed_by_email?: string | null
+  reviewed_at?: string | null
+}
+
+export interface CreatorApplicationSubmit {
+  name: string
+  email: string
+  whatsapp: string
+  platform: CreatorPlatform
+  handle: string
+  follower_bucket?: CreatorFollowerBucket | null
+  content_links: string[]
+  niche?: string
+  pitch?: string
+}
+
+export const creatorApi = {
+  submitApplication(payload: CreatorApplicationSubmit) {
+    return request<{ message: string; application: CreatorApplication }>(
+      '/api/creator-applications',
+      { method: 'POST', body: JSON.stringify(payload) }
+    )
+  },
+}
+
 // ─── Admin ───────────────────────────────────────────────────────────────────
 
 export interface SteamAccount {
@@ -1500,6 +1548,44 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
   searchUsersForReview(q: string) {
     return request<{ users: { id: number; email: string }[] }>(
       `/api/admin/reviews/users-search?q=${encodeURIComponent(q)}`
+    )
+  },
+
+  // ─── Creator Applications ──────────────────────────────────────────────
+  getCreatorApplications(params: {
+    status?: CreatorAppStatus | 'all'
+    page?: number
+    per_page?: number
+  } = {}) {
+    const qs = new URLSearchParams()
+
+    if (params.status) qs.set('status', params.status)
+    if (params.page) qs.set('page', String(params.page))
+    if (params.per_page) qs.set('per_page', String(params.per_page))
+    const query = qs.toString()
+
+    return request<{
+      items: CreatorApplication[]
+      counts: Record<CreatorAppStatus | 'all', number>
+      total: number
+      page: number
+      per_page: number
+      pages: number
+    }>(`/api/admin/creator-applications${query ? `?${query}` : ''}`)
+  },
+  updateCreatorApplication(
+    id: number,
+    data: { status?: CreatorAppStatus; admin_note?: string | null }
+  ) {
+    return request<{ message: string; application: CreatorApplication }>(
+      `/api/admin/creator-applications/${id}`,
+      { method: 'PATCH', body: JSON.stringify(data) }
+    )
+  },
+  deleteCreatorApplication(id: number) {
+    return request<{ message: string }>(
+      `/api/admin/creator-applications/${id}`,
+      { method: 'DELETE' }
     )
   },
 }

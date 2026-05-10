@@ -78,6 +78,10 @@ def create_app(config_name: str | None = None) -> Flask:
         unsubscribe_bp,
     )
     from app.reviews.routes import reviews_bp
+    from app.creators.routes import (
+        creator_applications_bp,
+        admin_creator_applications_bp,
+    )
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(store_bp)
@@ -87,6 +91,8 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(admin_email_blast_bp)
     app.register_blueprint(unsubscribe_bp)
     app.register_blueprint(reviews_bp)
+    app.register_blueprint(creator_applications_bp)
+    app.register_blueprint(admin_creator_applications_bp)
 
     # ---------- Serve uploaded files ----------
     from flask import send_from_directory
@@ -227,6 +233,9 @@ def _run_schema_upgrades():
     from app.models import Review, ReviewImage
     Review.__table__.create(db.engine, checkfirst=True)
     ReviewImage.__table__.create(db.engine, checkfirst=True)
+
+    from app.models import CreatorApplication
+    CreatorApplication.__table__.create(db.engine, checkfirst=True)
 
 
 def _seed_initial_reviews():

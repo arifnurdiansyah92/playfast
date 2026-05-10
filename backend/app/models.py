@@ -1125,3 +1125,70 @@ class ReviewImage(db.Model):
             "url": self.url,
             "sort_order": self.sort_order,
         }
+
+
+class CreatorApplication(db.Model):
+    """Application submitted via the public /creator landing page.
+
+    Anyone can submit (no Playfast account required) — admin reviews the
+    queue in /admin/creator-applications and contacts the applicant via
+    WhatsApp/email if accepted. Approval doesn't auto-create a promo code
+    or trial subscription — those are issued manually via the existing
+    admin UIs so the admin retains control over personalisation (code
+    name, commission rate, trial duration).
+    """
+    __tablename__ = "creator_applications"
+
+    STATUS_CHOICES = ("pending", "contacted", "approved", "rejected")
+    PLATFORM_CHOICES = ("tiktok", "instagram", "youtube", "x", "facebook", "other")
+    FOLLOWER_BUCKETS = ("<1K", "1-10K", "10-50K", "50-100K", "100K+")
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(255), nullable=False, index=True)
+    whatsapp = db.Column(db.String(50), nullable=False)
+    platform = db.Column(db.String(30), nullable=False)
+    handle = db.Column(db.String(200), nullable=False)
+    follower_bucket = db.Column(db.String(20), nullable=True)
+    # JSON array of strings (URLs). At least one is required at submission
+    # time, but we store as JSON so it's easy to evolve to N items later.
+    content_links = db.Column(db.JSON, nullable=True)
+    niche = db.Column(db.String(200), nullable=True)
+    pitch = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="pending", index=True)
+    admin_note = db.Column(db.Text, nullable=True)
+    reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    reviewed_by = db.relationship("User", foreign_keys=[reviewed_by_user_id])
+
+    def to_dict(self, admin: bool = False) -> dict:
+        data = {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email,
+            "whatsapp": self.whatsapp,
+            "platform": self.platform,
+            "handle": self.handle,
+            "follower_bucket": self.follower_bucket,
+            "content_links": self.content_links or [],
+            "niche": self.niche,
+            "pitch": self.pitch,
+            "status": self.status,
+            "created_at": self.created_at.isoformat(),
+        }
+        if admin:
+            data["admin_note"] = self.admin_note
+            data["reviewed_by_user_id"] = self.reviewed_by_user_id
+            data["reviewed_by_email"] = (
+                self.reviewed_by.email if self.reviewed_by else None
+            )
+            data["reviewed_at"] = (
+                self.reviewed_at.isoformat() if self.reviewed_at else None
+            )
+        return data
