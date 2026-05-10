@@ -17,6 +17,7 @@ import Navbar from '@components/layout/vertical/Navbar'
 import VerticalFooter from '@components/layout/vertical/Footer'
 import HorizontalFooter from '@components/layout/horizontal/Footer'
 import ScrollToTop from '@core/components/scroll-to-top'
+import ReviewNudgeModal from '@components/ReviewNudgeModal'
 
 // Util Imports
 import { getMode, getSystemMode } from '@core/utils/serverHelpers'
@@ -51,6 +52,7 @@ const Layout = async (props: ChildrenType) => {
           <i className='tabler-arrow-up' />
         </Button>
       </ScrollToTop>
+      <ReviewNudgeModal />
     </Providers>
   )
 }
