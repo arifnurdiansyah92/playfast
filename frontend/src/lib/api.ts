@@ -1039,6 +1039,27 @@ return res.orders
   retryFulfillAllOrders() {
     return request<{ message: string; healed: number[]; failed: { order_id: number; reason: string }[]; scanned: number }>(`/api/admin/orders/retry-fulfill-all`, { method: 'POST' })
   },
+  getOrderCandidateAccounts(orderId: number) {
+    return request<{
+      order_id: number
+      game_id: number
+      current_account_id: number | null
+      candidates: {
+        id: number
+        account_name: string
+        steam_id: string | null
+        is_shared: boolean
+        active_assignment_count: number
+        is_current: boolean
+      }[]
+    }>(`/api/admin/orders/${orderId}/candidate-accounts`)
+  },
+  reassignOrder(orderId: number, steam_account_id: number) {
+    return request<{ message: string; order: Order }>(`/api/admin/orders/${orderId}/reassign`, {
+      method: 'POST',
+      body: JSON.stringify({ steam_account_id }),
+    })
+  },
   async getUsers() {
     const res = await request<{ users: (User & { order_count: number; is_admin: boolean; is_active: boolean })[] }>('/api/admin/users')
 

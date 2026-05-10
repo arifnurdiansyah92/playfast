@@ -2202,6 +2202,174 @@ def retry_fulfill_all_orders():
     }), 200
 
 
+@admin_bp.route("/orders/<int:order_id>/candidate-accounts", methods=["GET"])
+@admin_required
+def order_candidate_accounts(order_id: int):
+    """List the active Steam accounts that own this order's game.
+
+    Used by the admin "Rotate Account" flow when a customer hits a
+    Denuvo activation cap (or any other reason to swap the same order
+    onto a different account that owns the same game). The frontend
+    shows this list so the admin can see usage proxy info before
+    picking a target.
+    """
+    order = db.session.get(Order, order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    if not order.game_id:
+        return jsonify({"error": "Order has no associated game"}), 400
+
+    current_account_id = (
+        order.assignment.steam_account_id
+        if order.assignment and not order.assignment.is_revoked
+        else None
+    )
+
+    candidates = (
+        SteamAccount.query.join(GameAccount, GameAccount.steam_account_id == SteamAccount.id)
+        .filter(
+            GameAccount.game_id == order.game_id,
+            SteamAccount.is_active == True,  # noqa: E712
+        )
+        .order_by(SteamAccount.account_name.asc())
+        .all()
+    )
+
+    items = []
+    for acc in candidates:
+        # active_assignment_count is a Denuvo-style proxy: how many distinct
+        # users (excluding this order's user) currently hold an active
+        # assignment to this (account, game) pair. Higher = more likely to
+        # have burned an activation slot. Admin uses this to bias toward
+        # less-used accounts.
+        active_count = (
+            Assignment.query.filter(
+                Assignment.steam_account_id == acc.id,
+                Assignment.game_id == order.game_id,
+                Assignment.is_revoked == False,  # noqa: E712
+                Assignment.user_id != order.user_id,
+            )
+            .count()
+        )
+        link = (
+            GameAccount.query.filter_by(
+                game_id=order.game_id, steam_account_id=acc.id
+            )
+            .first()
+        )
+        items.append({
+            "id": acc.id,
+            "account_name": acc.account_name,
+            "steam_id": acc.steam_id,
+            "is_shared": bool(link.is_shared) if link else False,
+            "active_assignment_count": active_count,
+            "is_current": acc.id == current_account_id,
+        })
+
+    return jsonify({
+        "order_id": order_id,
+        "game_id": order.game_id,
+        "current_account_id": current_account_id,
+        "candidates": items,
+    }), 200
+
+
+@admin_bp.route("/orders/<int:order_id>/reassign", methods=["POST"])
+@admin_required
+def reassign_order(order_id: int):
+    """Manually swap an order onto a specific Steam account.
+
+    Body: { steam_account_id: int }
+
+    Use case: customer hits a Denuvo activation limit on the assigned
+    account; admin swaps them to another account that owns the same
+    game and still has activation slots. Differs from the existing
+    /retry-fulfill (auto round-robin) by letting the admin pick the
+    target explicitly.
+
+    Behaviour:
+        - Revokes the current assignment (if any) — durable history
+          for audit, same shape as account-deactivation flow.
+        - Creates a new Assignment to the target account.
+        - Sets order.status='fulfilled' if it wasn't already, so the
+          customer sees credentials again. Works for unassigned-fulfilled
+          orders too (those have status='fulfilled' but no assignment).
+    """
+    order = db.session.get(Order, order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    target_id = data.get("steam_account_id")
+    if not isinstance(target_id, int):
+        return jsonify({"error": "steam_account_id (int) is required"}), 400
+
+    target = db.session.get(SteamAccount, target_id)
+    if not target:
+        return jsonify({"error": "Target account not found"}), 404
+    if not target.is_active:
+        return jsonify({"error": "Target account is inactive"}), 400
+
+    # Target must own the game (direct or via family share — round-robin
+    # already supports both via GameAccount).
+    owns_game = (
+        GameAccount.query.filter_by(
+            steam_account_id=target.id, game_id=order.game_id
+        ).first()
+        is not None
+    )
+    if not owns_game:
+        return jsonify({
+            "error": f"Account '{target.account_name}' does not own this game"
+        }), 400
+
+    # Revoke current assignment (if any). We don't touch order.status —
+    # we'll set it to 'fulfilled' below regardless.
+    current = (
+        Assignment.query.filter_by(id=order.assignment_id).first()
+        if order.assignment_id
+        else None
+    )
+    if current and not current.is_revoked:
+        if current.steam_account_id == target.id:
+            return jsonify({
+                "error": "Order is already assigned to this account"
+            }), 409
+        current.is_revoked = True
+        current.revoked_at = datetime.now(timezone.utc)
+
+    # Create new assignment
+    new_assignment = Assignment(
+        order_id=order.id,
+        user_id=order.user_id,
+        steam_account_id=target.id,
+        game_id=order.game_id,
+    )
+    db.session.add(new_assignment)
+    db.session.flush()
+
+    order.assignment_id = new_assignment.id
+    if order.status != "fulfilled":
+        order.status = "fulfilled"
+    db.session.commit()
+
+    logger.info(
+        "Order %s reassigned by admin %s: account %s -> %s",
+        order.id,
+        get_jwt_identity(),
+        current.steam_account_id if current else None,
+        target.id,
+    )
+
+    return jsonify({
+        "message": (
+            f"Order reassigned to '{target.account_name}'. "
+            "Customer will see new credentials on next page load."
+        ),
+        "order": order.to_dict(include_credentials=True),
+    }), 200
+
+
 # ---------------------------------------------------------------------------
 # Account Flags (user-reported issues)
 # ---------------------------------------------------------------------------
