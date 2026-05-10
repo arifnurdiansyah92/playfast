@@ -22,15 +22,12 @@ import TextField from '@mui/material/TextField'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 import Snackbar from '@mui/material/Snackbar'
-import Dialog from '@mui/material/Dialog'
-import DialogTitle from '@mui/material/DialogTitle'
-import DialogContent from '@mui/material/DialogContent'
-import DialogActions from '@mui/material/DialogActions'
 import Tooltip from '@mui/material/Tooltip'
 
 import { adminApi, gameThumbnail, handleImageError } from '@/lib/api'
 import type { Order } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import RotateAccountDialog from '@/views/admin/RotateAccountDialog'
 
 const AdminOrdersPage = () => {
   const { user } = useAuth()
@@ -81,16 +78,6 @@ const AdminOrdersPage = () => {
     onError: (err: any) => setSnackMsg(err?.message || 'Bulk retry failed'),
   })
 
-  const reassignMutation = useMutation({
-    mutationFn: ({ orderId, accountId }: { orderId: number; accountId: number }) =>
-      adminApi.reassignOrder(orderId, accountId),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-orders'] })
-      setSnackMsg(res.message || 'Order reassigned')
-      setRotateOrder(null)
-    },
-    onError: (err: any) => setSnackMsg(err?.message || 'Reassign failed'),
-  })
 
   const unassignedCount = orders?.filter(o => o.status === 'fulfilled' && !o.credentials && !o.is_revoked).length ?? 0
 
@@ -271,105 +258,17 @@ return 'default' as const
         </Card>
       )}
 
-      <RotateDialog
-        order={rotateOrder}
+      <RotateAccountDialog
+        orderId={rotateOrder?.id ?? null}
+        gameName={rotateOrder?.game?.name}
+        currentAccountName={rotateOrder?.credentials?.account_name ?? null}
         onClose={() => setRotateOrder(null)}
-        onPick={(accountId) =>
-          rotateOrder && reassignMutation.mutate({ orderId: rotateOrder.id, accountId })
-        }
-        isPending={reassignMutation.isPending}
+        onSuccess={(msg) => setSnackMsg(msg)}
+        invalidateKeys={[['admin-orders']]}
       />
 
       <Snackbar open={!!snackMsg} autoHideDuration={3000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>
-  )
-}
-
-interface RotateDialogProps {
-  order: Order | null
-  onClose: () => void
-  onPick: (accountId: number) => void
-  isPending: boolean
-}
-
-const RotateDialog = ({ order, onClose, onPick, isPending }: RotateDialogProps) => {
-  const open = !!order
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin-order-candidates', order?.id],
-    queryFn: () => adminApi.getOrderCandidateAccounts(order!.id),
-    enabled: open && !!order,
-  })
-
-  const candidates = data?.candidates ?? []
-  const otherCandidates = candidates.filter(c => !c.is_current)
-
-  const currentAccountName =
-    candidates.find(c => c.is_current)?.account_name ||
-    order?.credentials?.account_name ||
-    '-'
-
-  return (
-    <Dialog open={open} onClose={() => !isPending && onClose()} maxWidth='sm' fullWidth>
-      <DialogTitle sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-        <i className='tabler-arrows-shuffle' />
-        Rotate Account — Order #{order?.id}
-      </DialogTitle>
-      <DialogContent>
-        <Typography variant='body2' color='text.secondary' sx={{ mb: 2 }}>
-          Game: <strong>{order?.game?.name}</strong> · Saat ini: <strong>{currentAccountName}</strong>
-        </Typography>
-
-        {isLoading ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={48} />)}
-          </Box>
-        ) : otherCandidates.length === 0 ? (
-          <Alert severity='info'>
-            Tidak ada akun aktif lain yang punya game ini. Tambahkan akun baru atau aktifkan akun yang ada untuk membuka opsi rotate.
-          </Alert>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Typography variant='caption' color='text.secondary' sx={{ mb: 0.5 }}>
-              Pilih akun tujuan. Angka users = berapa user lain yang sedang aktif pakai pasangan account+game ini (proxy buat Denuvo activation slot).
-            </Typography>
-            {otherCandidates.map(c => (
-              <Card key={c.id} variant='outlined'>
-                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant='subtitle2' sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
-                      {c.account_name}
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {c.steam_id && (
-                        <Typography variant='caption' color='text.secondary' sx={{ fontFamily: 'monospace' }}>
-                          {c.steam_id}
-                        </Typography>
-                      )}
-                      <Chip size='small' label={`${c.active_assignment_count} user${c.active_assignment_count === 1 ? '' : 's'}`} variant='tonal' color={c.active_assignment_count === 0 ? 'success' : c.active_assignment_count < 3 ? 'info' : 'warning'} sx={{ height: 20, fontSize: '0.7rem' }} />
-                      {c.is_shared && (
-                        <Chip size='small' label='shared' variant='tonal' color='default' sx={{ height: 20, fontSize: '0.7rem' }} />
-                      )}
-                    </Box>
-                  </Box>
-                  <Button
-                    variant='contained'
-                    size='small'
-                    onClick={() => onPick(c.id)}
-                    disabled={isPending}
-                  >
-                    Reassign
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={isPending}>Tutup</Button>
-      </DialogActions>
-    </Dialog>
   )
 }
 

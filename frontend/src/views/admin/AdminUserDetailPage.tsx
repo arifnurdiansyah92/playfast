@@ -24,10 +24,14 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Pagination from '@mui/material/Pagination'
 import Button from '@mui/material/Button'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
+import Snackbar from '@mui/material/Snackbar'
 
 import { adminApi, formatIDR } from '@/lib/api'
-import type { UserProfile } from '@/lib/api'
+import type { UserProfile, UserProfileAssignment } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import RotateAccountDialog from '@/views/admin/RotateAccountDialog'
 
 const PER_PAGE_OTP = 25
 
@@ -95,6 +99,8 @@ const AdminUserDetailPage = ({ userId }: Props) => {
   const { user: currentUser } = useAuth()
   const [tab, setTab] = useState(0)
   const [otpPage, setOtpPage] = useState(1)
+  const [rotateAssignment, setRotateAssignment] = useState<UserProfileAssignment | null>(null)
+  const [snackMsg, setSnackMsg] = useState('')
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin-user-profile', userId],
@@ -457,11 +463,12 @@ const AdminUserDetailPage = ({ userId }: Props) => {
                   <TableCell>Status</TableCell>
                   <TableCell>Assigned</TableCell>
                   <TableCell>Revoked</TableCell>
+                  <TableCell align='right'>Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {assignments.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} sx={{ textAlign: 'center', py: 4 }}>Belum pernah dapat akun</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>Belum pernah dapat akun</TableCell></TableRow>
                 ) : assignments.map(a => (
                   <TableRow key={a.id} hover>
                     <TableCell>#{a.id}</TableCell>
@@ -477,6 +484,15 @@ const AdminUserDetailPage = ({ userId }: Props) => {
                     </TableCell>
                     <TableCell>{formatDate(a.created_at)}</TableCell>
                     <TableCell>{formatDate(a.revoked_at)}</TableCell>
+                    <TableCell align='right'>
+                      {!a.is_revoked && (
+                        <Tooltip title='Rotasi ke akun lain (mis. Denuvo activation limit)'>
+                          <IconButton size='small' onClick={() => setRotateAssignment(a)}>
+                            <i className='tabler-arrows-shuffle' style={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -610,6 +626,23 @@ const AdminUserDetailPage = ({ userId }: Props) => {
           </CardContent>
         )}
       </Card>
+
+      <RotateAccountDialog
+        orderId={rotateAssignment?.order_id ?? null}
+        gameName={rotateAssignment?.game_name}
+        currentAccountName={rotateAssignment?.steam_account_name ?? null}
+        onClose={() => setRotateAssignment(null)}
+        onSuccess={(msg) => setSnackMsg(msg)}
+        invalidateKeys={[['admin-user-profile', userId]]}
+      />
+
+      <Snackbar
+        open={!!snackMsg}
+        autoHideDuration={3500}
+        onClose={() => setSnackMsg('')}
+        message={snackMsg}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </div>
   )
 }
