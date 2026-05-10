@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 
+import { useRouter } from 'next/navigation'
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
@@ -34,6 +36,7 @@ import { useAuth } from '@/contexts/AuthContext'
 const AdminUsersPage = () => {
   const { user: currentUser } = useAuth()
   const queryClient = useQueryClient()
+  const router = useRouter()
   const [snackMsg, setSnackMsg] = useState('')
   const [resetPwUser, setResetPwUser] = useState<{ id: number; email: string } | null>(null)
   const [newPassword, setNewPassword] = useState('')
@@ -107,9 +110,19 @@ const AdminUsersPage = () => {
   const handleEditReferralSubmit = () => {
     if (!editReferralUser) return
     const code = editReferralCode.trim().toUpperCase()
-    if (!code) { setEditReferralError('Referral code cannot be empty'); return }
-    if (code.length > 12) { setEditReferralError('Must be 12 characters or less'); return }
-    if (!/^[A-Z0-9]+$/.test(code)) { setEditReferralError('Must be alphanumeric (letters and digits only)'); return }
+
+    if (!code) { setEditReferralError('Referral code cannot be empty'); 
+
+return }
+
+    if (code.length > 12) { setEditReferralError('Must be 12 characters or less'); 
+
+return }
+
+    if (!/^[A-Z0-9]+$/.test(code)) { setEditReferralError('Must be alphanumeric (letters and digits only)'); 
+
+return }
+
     setEditReferralError('')
     editReferralMutation.mutate({ id: editReferralUser.id, code })
   }
@@ -155,11 +168,22 @@ const AdminUsersPage = () => {
               <TableBody>
                 {users.map(u => {
                   const isSelf = u.id === currentUser?.id
-                  return (
+
+                  
+return (
                     <TableRow key={u.id} hover>
                       <TableCell>#{u.id}</TableCell>
                       <TableCell>
-                        <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                        <Typography
+                          variant='body2'
+                          sx={{
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            color: 'primary.main',
+                            '&:hover': { textDecoration: 'underline' },
+                          }}
+                          onClick={() => router.push(`/admin/users/${u.id}`)}
+                        >
                           {u.email}
                           {isSelf && <Chip label='You' size='small' sx={{ ml: 1 }} variant='tonal' color='info' />}
                         </Typography>

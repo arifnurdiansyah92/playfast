@@ -875,6 +875,96 @@ export interface AuditEntry {
   ip_address: string
 }
 
+export interface UserProfileStats {
+  total_orders: number
+  fulfilled_orders: number
+  total_spent: number
+  purchase_spent: number
+  subscription_spent: number
+  subscription_count: number
+  active_subscription: Subscription | null
+  code_request_count: number
+  last_code_request_at: string | null
+  referrals_made: number
+  referrals_rewarded: number
+  total_credit_earned: number
+  promo_usage_count: number
+  promo_total_discount: number
+}
+
+export interface UserProfileAssignment {
+  id: number
+  order_id: number
+  is_revoked: boolean
+  revoked_at: string | null
+  created_at: string
+  steam_account_id: number
+  steam_account_name: string | null
+  steam_id: string | null
+  game_id: number
+  game_name: string | null
+  game_appid: number | null
+}
+
+export interface UserProfilePromoUsage {
+  id: number
+  code: string
+  order_id: number | null
+  subscription_id: number | null
+  discount_amount: number
+  used_at: string
+}
+
+export interface UserProfileReferralMade {
+  user_id: number
+  email: string
+  joined_at: string
+  credit_awarded: number | null
+}
+
+export interface UserProfileReview {
+  id: number
+  rating: number
+  headline: string | null
+  body: string
+  status: 'pending' | 'approved' | 'rejected'
+  is_featured: boolean
+  admin_note: string | null
+  created_at: string
+  approved_at: string | null
+}
+
+export interface UserProfileGameRequest {
+  id: number
+  appid: number
+  name: string
+  status: 'pending' | 'added' | 'rejected'
+  request_count: number
+  voted_at: string
+}
+
+export interface UserProfile {
+  user: User & {
+    is_admin: boolean
+    is_active: boolean
+    referral_code: string | null
+    referral_credit: number
+    referred_by_user_id: number | null
+    email_opted_out: boolean
+  }
+  referrer: { id: number; email: string; referral_code: string | null } | null
+  stats: UserProfileStats
+  orders: Order[]
+  subscriptions: Subscription[]
+  assignments: UserProfileAssignment[]
+  promo_usages: UserProfilePromoUsage[]
+  referrals_made: UserProfileReferralMade[]
+  referral_rewards: { id: number; referee_user_id: number; credit_awarded: number; awarded_at: string }[]
+  review: UserProfileReview | null
+  account_flags: AccountFlag[]
+  game_requests: UserProfileGameRequest[]
+}
+
 export const adminApi = {
   getDashboard() {
     return request<DashboardStats>('/api/admin/dashboard')
@@ -1063,8 +1153,11 @@ return res.orders
   async getUsers() {
     const res = await request<{ users: (User & { order_count: number; is_admin: boolean; is_active: boolean })[] }>('/api/admin/users')
 
-    
-return res.users
+
+    return res.users
+  },
+  getUserProfile(id: number) {
+    return request<UserProfile>(`/api/admin/users/${id}/profile`)
   },
   updateUser(id: number, data: Partial<{ is_admin: boolean; is_active: boolean; password: string; referral_code: string }>) {
     return request<{ user: User }>(`/api/admin/users/${id}`, {

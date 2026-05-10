@@ -26,6 +26,8 @@ from app.models import (
     CodeRequestLog,
     Game,
     GameAccount,
+    GameRequest,
+    GameRequestVote,
     Order,
     PasswordResetToken,
     PlayInstruction,
@@ -207,6 +209,211 @@ def list_users():
         ud["order_count"] = u.orders.count()
         result.append(ud)
     return jsonify({"users": result}), 200
+
+
+@admin_bp.route("/users/<int:user_id>/profile", methods=["GET"])
+@admin_required
+def user_profile(user_id: int):
+    """Comprehensive single-user profile for the admin CRM view.
+
+    Returns everything currently trackable about a user in one payload so
+    the detail page can render without a chatty waterfall of N requests.
+    OTP/Steam-Guard request history is intentionally excluded here — it
+    can run into thousands of rows; admin detail page paginates that
+    separately via the existing /audit/codes?user_id=N endpoint.
+    """
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    # ── Orders (purchases + subscription claims) ─────────────────────
+    orders = (
+        Order.query.filter_by(user_id=user.id)
+        .order_by(Order.created_at.desc())
+        .all()
+    )
+    orders_data = []
+    fulfilled_count = 0
+    purchase_spent = 0
+    for o in orders:
+        d = o.to_dict()
+        if o.status == "fulfilled":
+            fulfilled_count += 1
+            if o.type == "purchase":
+                purchase_spent += o.amount or 0
+        orders_data.append(d)
+
+    # ── Subscriptions ────────────────────────────────────────────────
+    subs = (
+        Subscription.query.filter_by(user_id=user.id)
+        .order_by(Subscription.created_at.desc())
+        .all()
+    )
+    subs_data = [s.to_dict() for s in subs]
+    sub_spent = sum((s.amount or 0) for s in subs if s.paid_at)
+    active_sub = next((s for s in subs if s.is_active), None)
+
+    # ── Assignments (account ↔ game pairs, history) ──────────────────
+    assignments = (
+        Assignment.query.filter_by(user_id=user.id)
+        .order_by(Assignment.created_at.desc())
+        .all()
+    )
+    assignments_data = []
+    for a in assignments:
+        assignments_data.append({
+            "id": a.id,
+            "order_id": a.order_id,
+            "is_revoked": a.is_revoked,
+            "revoked_at": a.revoked_at.isoformat() if a.revoked_at else None,
+            "created_at": a.created_at.isoformat(),
+            "steam_account_id": a.steam_account_id,
+            "steam_account_name": a.steam_account.account_name if a.steam_account else None,
+            "steam_id": a.steam_account.steam_id if a.steam_account else None,
+            "game_id": a.game_id,
+            "game_name": (a.game.custom_name or a.game.name) if a.game else None,
+            "game_appid": a.game.appid if a.game else None,
+        })
+
+    # ── OTP / Steam Guard summary ────────────────────────────────────
+    code_count = CodeRequestLog.query.filter_by(user_id=user.id).count()
+    last_code = (
+        CodeRequestLog.query.filter_by(user_id=user.id)
+        .order_by(CodeRequestLog.created_at.desc())
+        .first()
+    )
+
+    # ── Promo code usages ────────────────────────────────────────────
+    promo_usages_q = (
+        db.session.query(PromoCodeUsage, PromoCode.code)
+        .join(PromoCode, PromoCode.id == PromoCodeUsage.promo_code_id)
+        .filter(PromoCodeUsage.user_id == user.id)
+        .order_by(PromoCodeUsage.used_at.desc())
+        .all()
+    )
+    promo_usages_data = []
+    promo_total_discount = 0
+    for usage, code in promo_usages_q:
+        promo_usages_data.append({
+            "id": usage.id,
+            "code": code,
+            "order_id": usage.order_id,
+            "subscription_id": usage.subscription_id,
+            "discount_amount": usage.discount_amount,
+            "used_at": usage.used_at.isoformat(),
+        })
+        promo_total_discount += usage.discount_amount
+
+    # ── Referral activity ────────────────────────────────────────────
+    referred_users = (
+        User.query.filter_by(referred_by_user_id=user.id)
+        .order_by(User.created_at.desc())
+        .all()
+    )
+    rewards = (
+        ReferralReward.query.filter_by(referrer_user_id=user.id)
+        .order_by(ReferralReward.awarded_at.desc())
+        .all()
+    )
+    rewards_data = [{
+        "id": r.id,
+        "referee_user_id": r.referee_user_id,
+        "credit_awarded": r.credit_awarded,
+        "awarded_at": r.awarded_at.isoformat(),
+    } for r in rewards]
+    referrer = (
+        db.session.get(User, user.referred_by_user_id)
+        if user.referred_by_user_id
+        else None
+    )
+    referred_summary = []
+    for ru in referred_users:
+        rewarded = next((r for r in rewards if r.referee_user_id == ru.id), None)
+        referred_summary.append({
+            "user_id": ru.id,
+            "email": ru.email,
+            "joined_at": ru.created_at.isoformat(),
+            "credit_awarded": rewarded.credit_awarded if rewarded else None,
+        })
+
+    # ── Review ───────────────────────────────────────────────────────
+    review_data = None
+    own_review = Review.query.filter_by(user_id=user.id).first()
+    if own_review:
+        review_data = {
+            "id": own_review.id,
+            "rating": own_review.rating,
+            "headline": own_review.headline,
+            "body": own_review.body,
+            "status": own_review.status,
+            "is_featured": own_review.is_featured,
+            "admin_note": own_review.admin_note,
+            "created_at": own_review.created_at.isoformat(),
+            "approved_at": (
+                own_review.approved_at.isoformat() if own_review.approved_at else None
+            ),
+        }
+
+    # ── Account flags filed by user ──────────────────────────────────
+    flags = (
+        AccountFlag.query.filter_by(user_id=user.id)
+        .order_by(AccountFlag.created_at.desc())
+        .all()
+    )
+    flags_data = [f.to_dict(include_admin_fields=True) for f in flags]
+
+    # ── Game requests / votes ────────────────────────────────────────
+    voted_requests = (
+        db.session.query(GameRequest, GameRequestVote.created_at)
+        .join(GameRequestVote, GameRequestVote.game_request_id == GameRequest.id)
+        .filter(GameRequestVote.user_id == user.id)
+        .order_by(GameRequestVote.created_at.desc())
+        .all()
+    )
+    game_requests_data = [{
+        "id": gr.id,
+        "appid": gr.appid,
+        "name": gr.name,
+        "status": gr.status,
+        "request_count": gr.request_count(),
+        "voted_at": voted_at.isoformat(),
+    } for gr, voted_at in voted_requests]
+
+    return jsonify({
+        "user": user.to_dict(),
+        "referrer": (
+            {"id": referrer.id, "email": referrer.email, "referral_code": referrer.referral_code}
+            if referrer
+            else None
+        ),
+        "stats": {
+            "total_orders": len(orders),
+            "fulfilled_orders": fulfilled_count,
+            "total_spent": purchase_spent + sub_spent,
+            "purchase_spent": purchase_spent,
+            "subscription_spent": sub_spent,
+            "subscription_count": len(subs),
+            "active_subscription": active_sub.to_dict() if active_sub else None,
+            "code_request_count": code_count,
+            "last_code_request_at": (
+                last_code.created_at.isoformat() if last_code else None
+            ),
+            "referrals_made": len(referred_users),
+            "referrals_rewarded": len(rewards),
+            "total_credit_earned": sum(r.credit_awarded for r in rewards),
+            "promo_usage_count": len(promo_usages_data),
+            "promo_total_discount": promo_total_discount,
+        },
+        "orders": orders_data,
+        "subscriptions": subs_data,
+        "assignments": assignments_data,
+        "promo_usages": promo_usages_data,
+        "referrals_made": referred_summary,
+        "referral_rewards": rewards_data,
+        "review": review_data,
+        "account_flags": flags_data,
+        "game_requests": game_requests_data,
+    }), 200
 
 
 @admin_bp.route("/users/<int:user_id>", methods=["PUT"])
