@@ -681,6 +681,14 @@ export const gameRequestsApi = {
 
     return res.items
   },
+  listPublic() {
+    return request<{
+      pending: GameRequest[]
+      added: GameRequest[]
+      pending_total: number
+      added_total: number
+    }>('/api/game-requests/public')
+  },
   removeMyVote(requestId: number) {
     return request<{ message: string; game_request: GameRequest }>(
       `/api/game-requests/${requestId}/vote`,

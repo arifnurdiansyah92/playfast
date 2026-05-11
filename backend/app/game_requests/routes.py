@@ -324,6 +324,32 @@ def list_all_requests():
     }), 200
 
 
+@game_requests_bp.route("/public", methods=["GET"])
+def list_public_requests():
+    """Public, unauthenticated feed for the landing page.
+
+    Returns the top-voted pending requests (so visitors see what the
+    community is asking for) plus the most recently-added requests (so
+    they see we actually deliver). No `voted` flag — that needs a user.
+    """
+    pending = GameRequest.query.filter_by(status="pending").all()
+    pending.sort(key=lambda r: (r.request_count(), r.created_at), reverse=True)
+
+    added = (
+        GameRequest.query.filter_by(status="added")
+        .order_by(GameRequest.resolved_at.desc().nullslast())
+        .limit(12)
+        .all()
+    )
+
+    return jsonify({
+        "pending": [r.to_dict() for r in pending[:6]],
+        "added": [r.to_dict() for r in added[:6]],
+        "pending_total": len(pending),
+        "added_total": GameRequest.query.filter_by(status="added").count(),
+    }), 200
+
+
 @game_requests_bp.route("/<int:request_id>/vote", methods=["DELETE"])
 @jwt_required()
 def remove_my_vote(request_id: int):

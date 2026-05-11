@@ -18,10 +18,12 @@ import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import Skeleton from '@mui/material/Skeleton'
 
-import { storeApi, reviewsApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
-import type { Game, Review } from '@/lib/api'
+import { storeApi, reviewsApi, gameRequestsApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
+import type { Game, GameRequest, Review } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import LandingPromoBanner from '@/components/LandingPromoBanner'
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
 
 /* ── Brand palette ─────────────────────────────────── */
 const gold = '#c9a84c'
@@ -43,6 +45,16 @@ const LandingPage = () => {
   const [plansLoading, setPlansLoading] = useState(true)
   const [reviews, setReviews] = useState<Review[]>([])
   const [reviewsLoading, setReviewsLoading] = useState(true)
+  const [catalogStats, setCatalogStats] = useState<{ total_games: number; total_value: number } | null>(null)
+
+  const [requestsData, setRequestsData] = useState<{
+    pending: GameRequest[]
+    added: GameRequest[]
+    pending_total: number
+    added_total: number
+  } | null>(null)
+
+  const [requestsLoading, setRequestsLoading] = useState(true)
 
   useEffect(() => {
     storeApi.getFeaturedGames().then(featured => {
@@ -76,10 +88,24 @@ const LandingPage = () => {
   }, [])
 
   useEffect(() => {
-    if (!loading && user) {
-      router.replace('/store')
-    }
-  }, [loading, user, router])
+    fetch(`${API_BASE}/api/store/games/catalog`)
+      .then(r => r.json())
+      .then((data: { games: Game[] }) => {
+        const list = data.games || []
+
+        setCatalogStats({
+          total_games: list.length,
+          total_value: list.reduce((sum, g) => sum + (g.original_price || 0), 0),
+        })
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    gameRequestsApi.listPublic()
+      .then(data => { setRequestsData(data); setRequestsLoading(false) })
+      .catch(() => setRequestsLoading(false))
+  }, [])
 
   const features = [
     { icon: 'tabler-bolt', title: 'Akses Instan', desc: 'Dapatkan kredensial Steam dan kode guard langsung setelah pembelian' },
@@ -168,18 +194,38 @@ const LandingPage = () => {
         >
           <Box component='img' src='/images/brand/wordmark.png' alt='Playfast' sx={{ height: { xs: 28, md: 34 } }} />
           <Box sx={{ display: 'flex', gap: 1.5 }}>
-            <Button component={Link} href='/login' variant='text' sx={{ color: textSecondary, fontWeight: 600, '&:hover': { color: gold } }}>
-              Masuk
-            </Button>
-            <Button
-              component={Link} href='/register' variant='contained' size='small'
-              sx={{
-                bgcolor: gold, color: dark, fontWeight: 700,
-                '&:hover': { bgcolor: goldLight },
-              }}
-            >
-              Daftar
-            </Button>
+            {loading ? null : user ? (
+              <>
+                <Button component={Link} href='/store' variant='text' sx={{ color: textSecondary, fontWeight: 600, '&:hover': { color: gold } }}>
+                  Toko
+                </Button>
+                <Button
+                  component={Link} href='/my-games' variant='contained' size='small'
+                  startIcon={<i className='tabler-device-gamepad-2' style={{ fontSize: 16 }} />}
+                  sx={{
+                    bgcolor: gold, color: dark, fontWeight: 700,
+                    '&:hover': { bgcolor: goldLight },
+                  }}
+                >
+                  Game Saya
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button component={Link} href='/login' variant='text' sx={{ color: textSecondary, fontWeight: 600, '&:hover': { color: gold } }}>
+                  Masuk
+                </Button>
+                <Button
+                  component={Link} href='/register' variant='contained' size='small'
+                  sx={{
+                    bgcolor: gold, color: dark, fontWeight: 700,
+                    '&:hover': { bgcolor: goldLight },
+                  }}
+                >
+                  Daftar
+                </Button>
+              </>
+            )}
           </Box>
         </Box>
 
@@ -470,14 +516,252 @@ const LandingPage = () => {
           </Container>
         )}
 
+        {/* ════════════════════ GAME REQUESTS ════════════════════ */}
+        {(requestsLoading || (requestsData && (requestsData.pending.length > 0 || requestsData.added.length > 0))) && (
+          <Container maxWidth='lg' sx={{ py: 10 }}>
+            <Box sx={{ textAlign: 'center', mb: 5 }}>
+              <Typography variant='overline' sx={{ color: gold, fontWeight: 700, letterSpacing: 2 }}>
+                Permintaan Komunitas
+              </Typography>
+              <Typography variant='h4' sx={{ fontWeight: 700, mt: 0.5, mb: 1.5 }}>
+                Game Apa yang Mau Kamu Mainkan Selanjutnya?
+              </Typography>
+              <Typography
+                variant='body1'
+                sx={{ color: textSecondary, maxWidth: 620, mx: 'auto', lineHeight: 1.7 }}
+              >
+                Vote game yang lagi diincar — judul paling banyak request bakal kami prioritasin masuk katalog.
+              </Typography>
+            </Box>
+
+            <Grid container spacing={4}>
+              {/* Pending — invite to vote */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <i className='tabler-flame' style={{ fontSize: 22, color: gold }} />
+                    <Typography variant='h6' sx={{ fontWeight: 700 }}>Lagi Banyak Diminta</Typography>
+                  </Box>
+                  {requestsData && requestsData.pending_total > requestsData.pending.length && (
+                    <Chip
+                      label={`+${requestsData.pending_total - requestsData.pending.length} lagi`}
+                      size='small'
+                      sx={{ bgcolor: 'rgba(201,168,76,0.1)', color: gold, border: `1px solid rgba(201,168,76,0.3)` }}
+                    />
+                  )}
+                </Box>
+
+                {requestsLoading ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {[0, 1, 2, 3].map(i => <Skeleton key={i} variant='rounded' height={72} sx={{ bgcolor: 'rgba(255,255,255,0.04)' }} />)}
+                  </Box>
+                ) : !requestsData || requestsData.pending.length === 0 ? (
+                  <Card sx={{ ...cardSx }}>
+                    <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                      <Typography variant='body2' sx={{ color: textSecondary }}>
+                        Belum ada request aktif. Jadilah yang pertama!
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {requestsData.pending.map(r => (
+                      <Card key={r.id} sx={{ ...cardSx }}>
+                        <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                          <Box
+                            component='img'
+                            src={r.header_image || gameHeaderImage(r.appid)}
+                            onError={handleImageError}
+                            alt={r.name}
+                            sx={{ width: 80, height: 38, objectFit: 'cover', borderRadius: 0.75, flexShrink: 0 }}
+                          />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography
+                              variant='subtitle2'
+                              noWrap
+                              sx={{ fontWeight: 600, color: textPrimary }}
+                            >
+                              {r.name}
+                            </Typography>
+                            <Typography variant='caption' sx={{ color: textSecondary, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <i className='tabler-users' style={{ fontSize: 12 }} />
+                              {r.request_count} request
+                            </Typography>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Box>
+                )}
+
+                <Box sx={{ mt: 2.5, textAlign: 'center' }}>
+                  <Button
+                    component={Link}
+                    href={user ? '/request-game' : '/register?redirect=/request-game'}
+                    variant='contained'
+                    size='large'
+                    startIcon={<i className='tabler-thumb-up' />}
+                    sx={{
+                      px: 4, py: 1.25, fontWeight: 700,
+                      bgcolor: gold, color: dark,
+                      '&:hover': { bgcolor: goldLight },
+                    }}
+                  >
+                    Vote / Request Game
+                  </Button>
+                </Box>
+              </Grid>
+
+              {/* Added — proof we deliver */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <i className='tabler-circle-check-filled' style={{ fontSize: 22, color: '#3ecf8e' }} />
+                    <Typography variant='h6' sx={{ fontWeight: 700 }}>Baru Saja Ditambahkan</Typography>
+                  </Box>
+                  {requestsData && requestsData.added_total > requestsData.added.length && (
+                    <Chip
+                      label={`${requestsData.added_total} total`}
+                      size='small'
+                      sx={{ bgcolor: 'rgba(62,207,142,0.1)', color: '#3ecf8e', border: '1px solid rgba(62,207,142,0.3)' }}
+                    />
+                  )}
+                </Box>
+
+                {requestsLoading ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {[0, 1, 2, 3].map(i => <Skeleton key={i} variant='rounded' height={72} sx={{ bgcolor: 'rgba(255,255,255,0.04)' }} />)}
+                  </Box>
+                ) : !requestsData || requestsData.added.length === 0 ? (
+                  <Card sx={{ ...cardSx }}>
+                    <CardContent sx={{ textAlign: 'center', py: 4 }}>
+                      <Typography variant='body2' sx={{ color: textSecondary }}>
+                        Belum ada request yang ditambahkan ke katalog.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {requestsData.added.map(r => (
+                      <Card
+                        key={r.id}
+                        sx={{
+                          ...cardSx,
+                          cursor: 'pointer',
+                          '&:hover': { ...cardSx['&:hover'], borderColor: '#3ecf8e' },
+                        }}
+                        onClick={() => router.push(`/game/${r.appid}`)}
+                      >
+                        <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                          <Box
+                            component='img'
+                            src={r.header_image || gameHeaderImage(r.appid)}
+                            onError={handleImageError}
+                            alt={r.name}
+                            sx={{ width: 80, height: 38, objectFit: 'cover', borderRadius: 0.75, flexShrink: 0 }}
+                          />
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography
+                              variant='subtitle2'
+                              noWrap
+                              sx={{ fontWeight: 600, color: textPrimary }}
+                            >
+                              {r.name}
+                            </Typography>
+                            <Typography variant='caption' sx={{ color: '#3ecf8e', display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: 600 }}>
+                              <i className='tabler-check' style={{ fontSize: 12 }} />
+                              Tersedia di katalog
+                            </Typography>
+                          </Box>
+                          <i className='tabler-arrow-right' style={{ fontSize: 16, color: textSecondary, flexShrink: 0 }} />
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Box>
+                )}
+
+                <Box sx={{ mt: 2.5, textAlign: 'center' }}>
+                  <Button
+                    component={Link}
+                    href='/store'
+                    variant='outlined'
+                    size='large'
+                    endIcon={<i className='tabler-arrow-right' style={{ fontSize: 16 }} />}
+                    sx={{
+                      px: 4, py: 1.25, fontWeight: 600,
+                      borderColor: 'rgba(154,160,166,0.4)', color: textSecondary,
+                      '&:hover': { borderColor: gold, color: gold, bgcolor: 'transparent' },
+                    }}
+                  >
+                    Telusuri Katalog
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
+          </Container>
+        )}
+
         {/* ════════════════════ PRICING / SUBSCRIBE ════════════════════ */}
         <Box sx={{ py: 10, bgcolor: 'rgba(0,0,0,0.2)' }}>
           <Container maxWidth='lg'>
-            <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1 }}>
-              Pilih Paket Premium-mu
+            {/* Catalog value stats — anchors the price to the bag of games on offer */}
+            {catalogStats && catalogStats.total_games > 0 && (
+              <Box
+                sx={{
+                  maxWidth: 720, mx: 'auto', mb: 5,
+                  display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2,
+                  animation: 'fadeInUp 0.6s ease-out',
+                }}
+              >
+                <Card sx={{ ...cardSx }}>
+                  <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                    <Typography variant='caption' sx={{ color: textSecondary, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+                      Game di Katalog
+                    </Typography>
+                    <Typography variant='h3' sx={{ fontWeight: 800, color: gold, mt: 0.5 }}>
+                      {catalogStats.total_games}
+                    </Typography>
+                    <Typography variant='caption' sx={{ color: textSecondary }}>
+                      judul siap dimainkan
+                    </Typography>
+                  </CardContent>
+                </Card>
+                <Card sx={{ ...cardSx }}>
+                  <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                    <Typography variant='caption' sx={{ color: textSecondary, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>
+                      Total Harga di Steam
+                    </Typography>
+                    <Typography
+                      variant='h3'
+                      sx={{
+                        fontWeight: 800, mt: 0.5,
+                        background: `linear-gradient(135deg, ${goldLight} 0%, ${gold} 100%)`,
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
+                      {formatIDR(catalogStats.total_value)}
+                    </Typography>
+                    <Typography variant='caption' sx={{ color: textSecondary }}>
+                      kalau kamu beli sendiri semuanya
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Box>
+            )}
+
+            <Typography variant='h4' sx={{ fontWeight: 700, textAlign: 'center', mb: 1.5 }}>
+              {catalogStats && catalogStats.total_games > 0
+                ? `Akses ${catalogStats.total_games}+ Game — Mulai Rp 50K`
+                : 'Pilih Paket Premium-mu'}
             </Typography>
-            <Typography variant='body1' sx={{ textAlign: 'center', color: textSecondary, mb: 6 }}>
-              Subscribe sekali, akses semua game di katalog. Kalau cuma butuh satu game, beli satuan tetap tersedia di akhir.
+            <Typography
+              variant='body1'
+              sx={{ textAlign: 'center', color: textSecondary, mb: 6, maxWidth: 640, mx: 'auto', lineHeight: 1.7 }}
+            >
+              {catalogStats && catalogStats.total_value > 0
+                ? <>Subscribe sekali — main {catalogStats.total_games} game senilai <Box component='span' sx={{ color: gold, fontWeight: 700 }}>{formatIDR(catalogStats.total_value)}</Box> di Steam. Game baru otomatis nambah, tanpa perlu beli ulang.</>
+                : 'Subscribe sekali, akses semua game di katalog. Game baru otomatis nambah ke akunmu.'}
             </Typography>
 
             <Grid container spacing={3} justifyContent='center'>
