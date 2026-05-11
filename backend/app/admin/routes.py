@@ -201,14 +201,72 @@ def dashboard():
 @admin_bp.route("/users", methods=["GET"])
 @admin_required
 def list_users():
-    """List all users."""
-    users = User.query.order_by(User.created_at.desc()).all()
+    """List users.
+
+    When a ``page`` query param is provided, returns a paginated response
+    with optional ``q`` (email / referral_code / id) search and ``per_page``.
+    Otherwise falls back to the legacy "return everything" shape consumed by
+    callers that need a full lookup table (e.g. promo-code assignment).
+    """
+    page_arg = request.args.get("page", type=int)
+
+    query = User.query
+
+    q = request.args.get("q", "").strip()
+    if q:
+        like = f"%{q}%"
+        conditions = [User.email.ilike(like), User.referral_code.ilike(like)]
+        if q.isdigit():
+            conditions.append(User.id == int(q))
+        query = query.filter(db.or_(*conditions))
+
+    query = query.order_by(User.created_at.desc())
+
+    if page_arg is None:
+        users = query.all()
+        user_ids = [u.id for u in users]
+        order_counts = _batch_order_counts(user_ids)
+        result = []
+        for u in users:
+            ud = u.to_dict()
+            ud["order_count"] = order_counts.get(u.id, 0)
+            result.append(ud)
+        return jsonify({"users": result}), 200
+
+    per_page = request.args.get("per_page", 25, type=int)
+    per_page = min(max(per_page, 1), 200)
+
+    pagination = query.paginate(page=page_arg, per_page=per_page, error_out=False)
+
+    user_ids = [u.id for u in pagination.items]
+    order_counts = _batch_order_counts(user_ids)
+
     result = []
-    for u in users:
+    for u in pagination.items:
         ud = u.to_dict()
-        ud["order_count"] = u.orders.count()
+        ud["order_count"] = order_counts.get(u.id, 0)
         result.append(ud)
-    return jsonify({"users": result}), 200
+
+    return jsonify({
+        "users": result,
+        "total": pagination.total,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+        "pages": pagination.pages,
+    }), 200
+
+
+def _batch_order_counts(user_ids: list[int]) -> dict[int, int]:
+    """Single grouped query, avoids N+1 over ``u.orders.count()``."""
+    if not user_ids:
+        return {}
+    rows = (
+        db.session.query(Order.user_id, func.count(Order.id))
+        .filter(Order.user_id.in_(user_ids))
+        .group_by(Order.user_id)
+        .all()
+    )
+    return {uid: cnt for uid, cnt in rows}
 
 
 @admin_bp.route("/users/<int:user_id>/profile", methods=["GET"])

@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
@@ -16,6 +16,7 @@ import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
+import TablePagination from '@mui/material/TablePagination'
 import Skeleton from '@mui/material/Skeleton'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
@@ -26,12 +27,25 @@ import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Snackbar from '@mui/material/Snackbar'
+import InputAdornment from '@mui/material/InputAdornment'
 
 import Tooltip from '@mui/material/Tooltip'
 
 import CustomTextField from '@core/components/mui/TextField'
 import { adminApi } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+
+function useDebounced<T>(value: T, delayMs = 300): T {
+  const [debounced, setDebounced] = useState(value)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs)
+
+    return () => clearTimeout(t)
+  }, [value, delayMs])
+
+  return debounced
+}
 
 const AdminUsersPage = () => {
   const { user: currentUser } = useAuth()
@@ -47,11 +61,29 @@ const AdminUsersPage = () => {
   const [editReferralError, setEditReferralError] = useState('')
   const [regenConfirm, setRegenConfirm] = useState<{ id: number; email: string } | null>(null)
 
-  const { data: users, isLoading } = useQuery({
-    queryKey: ['admin-users'],
-    queryFn: () => adminApi.getUsers(),
-    enabled: currentUser?.role === 'admin'
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search)
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(25)
+
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch, rowsPerPage])
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['admin-users', debouncedSearch, page, rowsPerPage],
+    queryFn: () => adminApi.getUsersPaginated({
+      page: page + 1,
+      per_page: rowsPerPage,
+      q: debouncedSearch.trim() || undefined,
+    }),
+    enabled: currentUser?.role === 'admin',
+    placeholderData: keepPreviousData,
   })
+
+  const users = data?.users ?? []
+  const total = data?.total ?? 0
+  const hasSearch = !!debouncedSearch.trim()
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Parameters<typeof adminApi.updateUser>[1] }) =>
@@ -142,15 +174,54 @@ return }
     <div className='flex flex-col gap-6'>
       <Box>
         <Typography variant='h4' sx={{ mb: 1 }}>Users</Typography>
-        <Typography color='text.secondary'>Manage platform users</Typography>
+        <Typography color='text.secondary'>
+          {data
+            ? `${total} user${total === 1 ? '' : 's'}${hasSearch ? ' matching search' : ''}`
+            : 'Manage platform users'}
+        </Typography>
       </Box>
+
+      <Card>
+        <CardContent sx={{ pb: '16px !important' }}>
+          <CustomTextField
+            fullWidth
+            placeholder='Search by email, referral code, or ID'
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position='start'>
+                  <i className='tabler-search' />
+                </InputAdornment>
+              ),
+              endAdornment: search ? (
+                <InputAdornment position='end'>
+                  <IconButton size='small' onClick={() => setSearch('')}>
+                    <i className='tabler-x' />
+                  </IconButton>
+                </InputAdornment>
+              ) : undefined,
+            }}
+          />
+        </CardContent>
+      </Card>
 
       {isLoading ? (
         <Card><CardContent>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</CardContent></Card>
-      ) : !users || users.length === 0 ? (
-        <Card><CardContent sx={{ textAlign: 'center', py: 8 }}><Typography variant='h6'>No users</Typography></CardContent></Card>
-      ) : (
+      ) : total === 0 ? (
         <Card>
+          <CardContent sx={{ textAlign: 'center', py: 8 }}>
+            <Typography variant='h6'>{hasSearch ? 'No users match your search' : 'No users'}</Typography>
+            {hasSearch && (
+              <>
+                <Typography color='text.secondary' sx={{ mt: 1 }}>Try a different keyword or clear the search.</Typography>
+                <Button variant='outlined' sx={{ mt: 2 }} onClick={() => setSearch('')}>Clear search</Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card sx={{ opacity: isFetching ? 0.7 : 1, transition: 'opacity 0.15s' }}>
           <TableContainer>
             <Table>
               <TableHead>
@@ -295,6 +366,15 @@ return (
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component='div'
+            count={total}
+            page={page}
+            onPageChange={(_, p) => setPage(p)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={e => setRowsPerPage(parseInt(e.target.value, 10))}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
         </Card>
       )}
 

@@ -1221,6 +1221,21 @@ return res.orders
 
     return res.users
   },
+  getUsersPaginated(params: { page: number; per_page: number; q?: string }) {
+    const sp = new URLSearchParams()
+
+    sp.set('page', String(params.page))
+    sp.set('per_page', String(params.per_page))
+    if (params.q) sp.set('q', params.q)
+
+    return request<{
+      users: (User & { order_count: number; is_admin: boolean; is_active: boolean; referral_code: string | null })[]
+      total: number
+      page: number
+      per_page: number
+      pages: number
+    }>(`/api/admin/users?${sp.toString()}`)
+  },
   getUserProfile(id: number) {
     return request<UserProfile>(`/api/admin/users/${id}/profile`)
   },
