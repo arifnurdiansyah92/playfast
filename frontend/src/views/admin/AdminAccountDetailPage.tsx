@@ -49,13 +49,17 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [logoutResult, setLogoutResult] = useState<null | { devices: string[]; failed: number; relogin: boolean }>(null)
 
-  const { data: accounts } = useQuery({
-    queryKey: ['admin-accounts'],
-    queryFn: () => adminApi.getAccounts(),
-    enabled: user?.role === 'admin'
+  // Single-account endpoint returns the Steam password too — the admin
+  // detail page is where you actually need it (assisting customers,
+  // pasting into Steam client, etc.). The list endpoint stays
+  // password-less to avoid bulk leakage.
+  const { data: account } = useQuery({
+    queryKey: ['admin-account', accountId],
+    queryFn: () => adminApi.getAccount(Number(accountId)),
+    enabled: user?.role === 'admin' && Number.isFinite(Number(accountId)),
   })
 
-  const account = accounts?.find(a => String(a.id) === accountId)
+  const [showPassword, setShowPassword] = useState(false)
 
   const { data: confirmations, isLoading: confsLoading, refetch: refetchConfs } = useQuery({
     queryKey: ['confirmations', accountId],
@@ -75,6 +79,7 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
     onSuccess: (data) => {
       setSnackMsg(data.message)
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-account', accountId] })
     },
     onError: (err: any) => setSnackMsg(err?.message || 'Login failed')
   })
@@ -88,6 +93,7 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
       // and the user's next page visit re-fetches.
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-account', accountId] })
         queryClient.invalidateQueries({ queryKey: ['admin-games'] })
       }, 3000)
     },
@@ -101,6 +107,7 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
       setLogoutResult({ devices: data.devices, failed: data.failed_count, relogin: data.relogin_success })
       setSnackMsg(data.message)
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-account', accountId] })
     },
     onError: (err: any) => {
       setLogoutConfirmOpen(false)
@@ -163,6 +170,80 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
           </Typography>
         </Box>
       </Box>
+
+      {/* Credentials — first thing visible. Admin role gate already passed
+          at the route + endpoint level, so we surface the password directly.
+          Both fields are click-to-copy; password masks/unmasks via the
+          eye icon for screen-share situations. */}
+      <Card sx={{ border: '2px solid', borderColor: 'primary.main' }}>
+        <CardHeader
+          title='Credentials'
+          subheader='Login Steam langsung dengan info di bawah. Klik untuk salin.'
+          avatar={<i className='tabler-key' style={{ fontSize: 24, color: '#c9a84c' }} />}
+        />
+        <Divider />
+        <CardContent>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Typography variant='caption' sx={{ color: 'text.secondary', display: 'block', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, mb: 0.5 }}>
+                Username
+              </Typography>
+              <Box
+                onClick={() => { navigator.clipboard.writeText(account.account_name); setSnackMsg('Username disalin') }}
+                sx={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  p: 1.5, borderRadius: 1.5, cursor: 'pointer',
+                  bgcolor: 'rgba(255,255,255,0.03)',
+                  border: '1px solid', borderColor: 'divider',
+                  transition: 'all 0.15s ease',
+                  '&:hover': { borderColor: 'primary.main', bgcolor: 'rgba(201,168,76,0.04)' },
+                }}
+              >
+                <Typography sx={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '1.05rem' }}>
+                  {account.account_name}
+                </Typography>
+                <Tooltip title='Salin'>
+                  <IconButton size='small'><i className='tabler-copy' style={{ fontSize: 18 }} /></IconButton>
+                </Tooltip>
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Typography variant='caption' sx={{ color: 'text.secondary', display: 'block', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 700, mb: 0.5 }}>
+                Password
+              </Typography>
+              <Box
+                sx={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  p: 1.5, borderRadius: 1.5,
+                  bgcolor: 'rgba(255,255,255,0.03)',
+                  border: '1px solid', borderColor: 'divider',
+                  transition: 'all 0.15s ease',
+                  '&:hover': { borderColor: 'primary.main', bgcolor: 'rgba(201,168,76,0.04)' },
+                }}
+              >
+                <Typography
+                  onClick={() => { if (account.password) { navigator.clipboard.writeText(account.password); setSnackMsg('Password disalin') } }}
+                  sx={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '1.05rem', cursor: 'pointer', flex: 1, userSelect: showPassword ? 'all' : 'none' }}
+                >
+                  {showPassword ? (account.password || '—') : '•'.repeat(12)}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 0.25 }}>
+                  <Tooltip title={showPassword ? 'Sembunyikan' : 'Tampilkan'}>
+                    <IconButton size='small' onClick={() => setShowPassword(s => !s)}>
+                      <i className={showPassword ? 'tabler-eye-off' : 'tabler-eye'} style={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title='Salin'>
+                    <IconButton size='small' onClick={() => { if (account.password) { navigator.clipboard.writeText(account.password); setSnackMsg('Password disalin') } }}>
+                      <i className='tabler-copy' style={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
 
       <Grid container spacing={3}>
         {/* Steam Guard Code */}

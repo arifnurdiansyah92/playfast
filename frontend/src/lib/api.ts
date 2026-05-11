@@ -1020,8 +1020,16 @@ export const adminApi = {
   async getAccounts() {
     const res = await request<{ accounts: SteamAccount[] }>('/api/admin/accounts')
 
-    
-return res.accounts
+
+    return res.accounts
+  },
+  async getAccount(id: number) {
+    const res = await request<{ account: SteamAccount & { password: string } }>(
+      `/api/admin/accounts/${id}`
+    )
+
+
+    return res.account
   },
   addAccount(formData: FormData) {
     return fetch(`/api/admin/accounts`, {

@@ -529,11 +529,33 @@ def regenerate_user_referral_code(user_id: int):
 @admin_bp.route("/accounts", methods=["GET"])
 @admin_required
 def list_accounts():
-    """List all Steam accounts with status."""
+    """List all Steam accounts with status.
+
+    Password is intentionally NOT returned in the list response — bulk
+    transmission of passwords creates needless XSS/log/cache exposure.
+    Use GET /accounts/<id> for the detail view where the admin needs it.
+    """
     accounts = SteamAccount.query.order_by(SteamAccount.created_at.desc()).all()
     return jsonify({
         "accounts": [a.to_dict() for a in accounts],
     }), 200
+
+
+@admin_bp.route("/accounts/<int:account_id>", methods=["GET"])
+@admin_required
+def get_account(account_id: int):
+    """Single-account detail with the Steam password attached.
+
+    Admin lands here from the accounts list and immediately needs the
+    credentials to assist customers / log in to the Steam web client /
+    paste into the desktop client. Gating on the admin role already
+    happened via @admin_required — exposing the password here is the
+    intended behaviour.
+    """
+    account = db.session.get(SteamAccount, account_id)
+    if not account:
+        return jsonify({"error": "Account not found"}), 404
+    return jsonify({"account": account.to_dict(include_password=True)}), 200
 
 
 @admin_bp.route("/accounts", methods=["POST"])
