@@ -26,6 +26,7 @@ import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 
 import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 
 const SORT_OPTIONS = [
   { value: '', label: 'Terbaru & Termahal' },
@@ -38,9 +39,12 @@ const SORT_OPTIONS = [
 const StorePage = () => {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useAuth()
   const codeParam = searchParams?.get('code')
+
   const buildGameHref = (appid: number) =>
     codeParam ? `/game/${appid}?code=${encodeURIComponent(codeParam)}` : `/game/${appid}`
+
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -79,6 +83,60 @@ const StorePage = () => {
     queryKey: ['store-genres'],
     queryFn: () => storeApi.getGenres()
   })
+
+  const { data: subStatus } = useQuery({
+    queryKey: ['subscription-status'],
+    queryFn: () => storeApi.getSubscriptionStatus(),
+    enabled: !!user,
+  })
+
+  const { data: myGames } = useQuery({
+    queryKey: ['my-games'],
+    queryFn: () => storeApi.getMyGames(),
+    enabled: !!user,
+  })
+
+  const isPremium = subStatus?.is_subscribed ?? false
+  const ownedAppids = new Set((myGames ?? []).map(g => g.appid))
+
+  const renderPriceLine = (game: { appid: number; price: number }) => {
+    const isOwned = ownedAppids.has(game.appid)
+
+    if (isPremium && isOwned) {
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 1.5 }}>
+          <i className='tabler-circle-check-filled' style={{ fontSize: 18, color: '#3ecf8e' }} />
+          <Typography variant='subtitle2' sx={{ fontWeight: 700, color: '#3ecf8e' }}>
+            Sudah Diklaim
+          </Typography>
+        </Box>
+      )
+    }
+
+    if (isPremium) {
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+          <Typography variant='h6' sx={{ fontWeight: 700, color: '#c9a84c' }}>
+            GRATIS
+          </Typography>
+          <Typography variant='caption' sx={{ color: 'text.secondary', fontWeight: 600 }}>
+            dengan Premium
+          </Typography>
+          {game.price > 0 && (
+            <Typography variant='caption' sx={{ color: 'text.disabled', textDecoration: 'line-through' }}>
+              {formatIDR(game.price)}
+            </Typography>
+          )}
+        </Box>
+      )
+    }
+
+    return (
+      <Typography variant='h6' color='primary.main' sx={{ fontWeight: 700, mt: 1.5 }}>
+        {formatIDR(game.price)}
+      </Typography>
+    )
+  }
 
   const { data, isLoading } = useQuery({
     queryKey: ['store-games', debouncedSearch, page, sort, selectedGenre],
@@ -136,7 +194,9 @@ const StorePage = () => {
           Toko Game
         </Typography>
         <Typography color='text.secondary'>
-          Cari dan dapatkan akses ke game Steam
+          {isPremium
+            ? 'Premium kamu aktif — semua game di sini bisa kamu klaim gratis. Klik game untuk mulai main.'
+            : 'Cari dan dapatkan akses ke game Steam'}
         </Typography>
       </Box>
 
@@ -305,9 +365,7 @@ const StorePage = () => {
                       <Typography variant='subtitle1' sx={{ fontWeight: 600, mb: 'auto', lineHeight: 1.3 }} noWrap>
                         {game.name}
                       </Typography>
-                      <Typography variant='h6' color='primary.main' sx={{ fontWeight: 700, mt: 1.5 }}>
-                        {formatIDR(game.price)}
-                      </Typography>
+                      {renderPriceLine(game)}
                     </CardContent>
                   </CardActionArea>
                 </Card>
@@ -452,9 +510,7 @@ const StorePage = () => {
                       >
                         {game.name}
                       </Typography>
-                      <Typography variant='h6' color='primary.main' sx={{ fontWeight: 700, mt: 1.5 }}>
-                        {formatIDR(game.price)}
-                      </Typography>
+                      {renderPriceLine(game)}
                     </CardContent>
                   </CardActionArea>
                 </Card>

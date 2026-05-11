@@ -23,6 +23,9 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import Alert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
+import TextField from '@mui/material/TextField'
+import InputAdornment from '@mui/material/InputAdornment'
+import IconButton from '@mui/material/IconButton'
 
 import { storeApi, reviewsApi, gameHeaderImage, handleImageError } from '@/lib/api'
 import ReviewSubmitDialog from '@/views/components/ReviewSubmitDialog'
@@ -34,6 +37,7 @@ const MyGamesPage = () => {
   const [claimingGameId, setClaimingGameId] = useState<number | null>(null)
   const [claimError, setClaimError] = useState('')
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
+  const [search, setSearch] = useState('')
 
   const { data: games, isLoading } = useQuery({
     queryKey: ['my-games'],
@@ -51,8 +55,14 @@ const MyGamesPage = () => {
   const isPremium = claimableCount > 0 || games?.some(g => g.type === 'subscription') === true
 
   const filtered = games?.filter(g => {
-    if (tab === 1) return g.type === 'purchased'
-    if (tab === 2) return g.type === 'bonus'
+    if (tab === 1 && g.type !== 'purchased') return false
+    if (tab === 2 && g.type !== 'bonus') return false
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+
+      if (!g.name.toLowerCase().includes(q)) return false
+    }
 
     return true
   }) ?? []
@@ -164,6 +174,30 @@ const MyGamesPage = () => {
         </Card>
       ) : (
         <>
+          {/* Search */}
+          <TextField
+            placeholder='Cari game di koleksi kamu...'
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            fullWidth
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position='start'>
+                    <i className='tabler-search' style={{ fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+                endAdornment: search ? (
+                  <InputAdornment position='end'>
+                    <IconButton size='small' onClick={() => setSearch('')} aria-label='Clear search'>
+                      <i className='tabler-x' style={{ fontSize: 18 }} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              },
+            }}
+          />
+
           {/* Tabs filter */}
           {bonusCount > 0 && (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: 1, borderColor: 'divider' }}>
@@ -192,6 +226,17 @@ const MyGamesPage = () => {
             </Box>
           )}
 
+          {filtered.length === 0 && search.trim() ? (
+            <Card sx={{ border: '1px solid', borderColor: 'divider' }}>
+              <CardContent sx={{ textAlign: 'center', py: 6 }}>
+                <i className='tabler-search-off' style={{ fontSize: 40, opacity: 0.4 }} />
+                <Typography variant='subtitle1' sx={{ mt: 1.5, fontWeight: 600 }}>
+                  Tidak ada game cocok dengan &quot;{search}&quot;
+                </Typography>
+                <Button onClick={() => setSearch('')} sx={{ mt: 1 }}>Hapus pencarian</Button>
+              </CardContent>
+            </Card>
+          ) : (
           <Grid container spacing={3}>
             {filtered.map((game, idx) => {
               const isBonus = game.type === 'bonus'
@@ -336,6 +381,7 @@ const MyGamesPage = () => {
               )
             })}
           </Grid>
+          )}
         </>
       )}
       {/* Bonus info dialog */}

@@ -45,6 +45,13 @@ const paymentTypeLabels: Record<string, string> = {
   gopay: 'GoPay',
   shopeepay: 'ShopeePay',
   qris: 'QRIS',
+  subscription: 'Premium',
+}
+
+const formatPrice = (order: Order) => {
+  if (order.payment_type === 'subscription') return 'Premium'
+  
+return order.amount ? formatIDR(order.amount) : '-'
 }
 
 const tabFilters = [
@@ -187,7 +194,12 @@ const OrderCard = ({ order }: { order: Order }) => {
         </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
           <Typography variant='caption' color='text.secondary'>Harga</Typography>
-          <Typography variant='caption' sx={{ fontWeight: 600 }}>{order.amount ? formatIDR(order.amount) : '-'}</Typography>
+          <Typography
+            variant='caption'
+            sx={{ fontWeight: 600, color: order.payment_type === 'subscription' ? '#c9a84c' : undefined }}
+          >
+            {formatPrice(order)}
+          </Typography>
         </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
           <Typography variant='caption' color='text.secondary'>Pembayaran</Typography>
@@ -227,6 +239,7 @@ const OrderHistoryPage = () => {
   })
 
   const filterValue = tabFilters[tab].value
+
   const filtered = orders
     ? filterValue
       ? orders.filter(o => o.status === filterValue)
@@ -298,6 +311,7 @@ const OrderHistoryPage = () => {
           ) : paged.length === 0 ? (
             renderEmpty()
           ) : isMobile ? (
+
             /* ── Mobile: card layout ── */
             <CardContent sx={{ p: 2 }}>
               {paged.map((order: Order) => (
@@ -305,6 +319,7 @@ const OrderHistoryPage = () => {
               ))}
             </CardContent>
           ) : (
+
             /* ── Desktop: table layout ── */
             <TableContainer>
               <Table>
@@ -351,8 +366,11 @@ const OrderHistoryPage = () => {
                           <Typography variant='body2'>{formatDate(order.created_at)}</Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                            {order.amount ? formatIDR(order.amount) : '-'}
+                          <Typography
+                            variant='body2'
+                            sx={{ fontWeight: 600, color: order.payment_type === 'subscription' ? '#c9a84c' : undefined }}
+                          >
+                            {formatPrice(order)}
                           </Typography>
                         </TableCell>
                         <TableCell>

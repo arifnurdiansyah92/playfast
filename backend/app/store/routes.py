@@ -1272,9 +1272,13 @@ def list_orders():
     per_page = request.args.get("per_page", 20, type=int)
     per_page = min(per_page, 100)
 
+    # Include subscription-typed orders too: those are per-game claims by
+    # Premium subscribers (amount=0, payment_type='subscription'). Users
+    # want them visible in /pesanan so they can track which games they've
+    # actually played. Subscription *plan* purchases live in the separate
+    # Subscription table and are surfaced via the Subscription tab.
     pagination = (
         Order.query.filter_by(user_id=user_id)
-        .filter(Order.type != "subscription")
         .order_by(Order.created_at.desc())
         .paginate(page=page, per_page=per_page, error_out=False)
     )
