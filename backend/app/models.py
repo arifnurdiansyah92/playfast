@@ -70,6 +70,12 @@ class SteamAccount(db.Model):
     show_in_catalog_when_disabled = db.Column(
         db.Boolean, default=False, nullable=False
     )
+    # When set, sync + round-robin only consider the listed Steam appids
+    # for this account. Use case: account is parental-controlled / Family
+    # View restricted to one or a few specific titles, but Steam's
+    # GetOwnedGames still returns the whole library. NULL = unrestricted
+    # (default historical behaviour).
+    allowed_appids = db.Column(db.JSON, nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -93,6 +99,7 @@ class SteamAccount(db.Model):
             "steam_id": self.steam_id,
             "is_active": self.is_active,
             "show_in_catalog_when_disabled": self.show_in_catalog_when_disabled,
+            "allowed_appids": self.allowed_appids,
             "created_at": self.created_at.isoformat(),
             "game_count": self.game_accounts.count(),
         }

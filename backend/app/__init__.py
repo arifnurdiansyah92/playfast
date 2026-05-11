@@ -186,6 +186,10 @@ def _run_schema_upgrades():
         "ALTER TABLE users ADD COLUMN email_opted_out BOOLEAN NOT NULL DEFAULT FALSE",
         # Marketing: keep games visible in catalog even when account is inactive
         "ALTER TABLE steam_accounts ADD COLUMN show_in_catalog_when_disabled BOOLEAN NOT NULL DEFAULT FALSE",
+        # Parental-controlled accounts: restrict sync + round-robin to a
+        # specific subset of appids even though GetOwnedGames returns the
+        # whole library. NULL = unrestricted (default).
+        "ALTER TABLE steam_accounts ADD COLUMN allowed_appids JSON",
         # Notify game-request voters when admin marks request as added
         "ALTER TABLE game_requests ADD COLUMN notified_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE game_requests ADD COLUMN notified_count INTEGER NOT NULL DEFAULT 0",

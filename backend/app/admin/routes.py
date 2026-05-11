@@ -544,18 +544,35 @@ def list_accounts():
 @admin_bp.route("/accounts/<int:account_id>", methods=["GET"])
 @admin_required
 def get_account(account_id: int):
-    """Single-account detail with the Steam password attached.
+    """Single-account detail with password + the games this account holds.
 
-    Admin lands here from the accounts list and immediately needs the
-    credentials to assist customers / log in to the Steam web client /
-    paste into the desktop client. Gating on the admin role already
-    happened via @admin_required — exposing the password here is the
-    intended behaviour.
+    Includes ``games`` so the detail page can render the per-game
+    "Allowed?" toggle that drives ``allowed_appids`` (parental-controls
+    whitelist). Gating on the admin role already happened via
+    @admin_required — exposing the password here is intentional.
     """
     account = db.session.get(SteamAccount, account_id)
     if not account:
         return jsonify({"error": "Account not found"}), 404
-    return jsonify({"account": account.to_dict(include_password=True)}), 200
+
+    games = (
+        db.session.query(GameAccount, Game)
+        .join(Game, Game.id == GameAccount.game_id)
+        .filter(GameAccount.steam_account_id == account.id)
+        .order_by(Game.name.asc())
+        .all()
+    )
+    games_payload = [{
+        "id": g.id,
+        "appid": g.appid,
+        "name": g.custom_name or g.name,
+        "header_image": g.custom_header_image or g.header_image,
+        "is_shared": bool(link.is_shared),
+    } for link, g in games]
+
+    data = account.to_dict(include_password=True)
+    data["games"] = games_payload
+    return jsonify({"account": data}), 200
 
 
 @admin_bp.route("/accounts", methods=["POST"])
@@ -642,6 +659,51 @@ def update_account(account_id: int):
         account.show_in_catalog_when_disabled = bool(
             data["show_in_catalog_when_disabled"]
         )
+
+    # Parental-controls whitelist. NULL or empty list = unrestricted;
+    # a non-empty list of appids restricts sync + round-robin to only
+    # those titles. Also prunes any GameAccount + active Assignment
+    # that fall outside the new whitelist so the customer-facing state
+    # matches reality immediately (without waiting for next sync).
+    if "allowed_appids" in data:
+        raw = data["allowed_appids"]
+        if raw is None or (isinstance(raw, list) and len(raw) == 0):
+            account.allowed_appids = None
+        elif isinstance(raw, list):
+            try:
+                cleaned = sorted({int(a) for a in raw})
+            except (TypeError, ValueError):
+                return jsonify({"error": "allowed_appids must be a list of integers"}), 400
+            account.allowed_appids = cleaned
+        else:
+            return jsonify({"error": "allowed_appids must be a list or null"}), 400
+
+        # Apply immediately so the state on screen reflects the new rule
+        # without forcing a full re-sync. Skipped when unrestricted.
+        if account.allowed_appids:
+            allowed_set = set(account.allowed_appids)
+            stale_links = (
+                db.session.query(GameAccount, Game.appid)
+                .join(Game, Game.id == GameAccount.game_id)
+                .filter(
+                    GameAccount.steam_account_id == account.id,
+                    Game.appid.notin_(allowed_set),
+                )
+                .all()
+            )
+            for link, _appid in stale_links:
+                affected_asg = Assignment.query.filter(
+                    Assignment.steam_account_id == account.id,
+                    Assignment.game_id == link.game_id,
+                    Assignment.is_revoked == False,  # noqa: E712
+                ).all()
+                for a in affected_asg:
+                    a.is_revoked = True
+                    a.revoked_at = datetime.now(timezone.utc)
+                    if a.order is not None:
+                        a.order.assignment_id = None
+                db.session.delete(link)
+            db.session.flush()
 
     reassigned: list[int] = []
     orphaned: list[int] = []
@@ -1234,6 +1296,16 @@ def _sync_account_games(account: SteamAccount, progress=None) -> dict:
     # sync — but it does suppress shared-link pruning so we never nuke
     # valid links because of a transient outage.
     shared_games, shared_ok = fetch_family_shared_games(token, steam_id)
+
+    # Apply parental-controls whitelist if the admin set one for this
+    # account. Steam itself still returns the full library from
+    # GetOwnedGames regardless of the parental restriction, so we have
+    # to enforce the limit here. NULL/empty allowed_appids = unrestricted.
+    allowed = account.allowed_appids
+    if isinstance(allowed, list) and len(allowed) > 0:
+        allowed_set = {int(a) for a in allowed if isinstance(a, (int, str)) and str(a).isdigit()}
+        games = [g for g in games if g["appid"] in allowed_set]
+        shared_games = [g for g in shared_games if g["appid"] in allowed_set]
 
     # Merge: owned wins on duplicates (we never want a direct-owned link to
     # be re-tagged as shared). `is_shared` per entry tells the loop whether

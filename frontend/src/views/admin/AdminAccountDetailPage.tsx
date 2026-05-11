@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 
 import { useRouter } from 'next/navigation'
 
@@ -30,8 +30,12 @@ import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
+import Switch from '@mui/material/Switch'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import TextField from '@mui/material/TextField'
+import InputAdornment from '@mui/material/InputAdornment'
 
-import { adminApi } from '@/lib/api'
+import { adminApi, gameThumbnail, handleImageError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface Props {
@@ -60,6 +64,13 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
   })
 
   const [showPassword, setShowPassword] = useState(false)
+
+  // Local editable state for the parental-controls whitelist. Hydrated
+  // from server data; only persisted to the backend when admin clicks
+  // "Simpan Restriksi". `restrictEnabled=false` ⇒ saving sends null.
+  const [restrictEnabled, setRestrictEnabled] = useState<boolean | null>(null)
+  const [allowedSet, setAllowedSet] = useState<Set<number> | null>(null)
+  const [gameSearch, setGameSearch] = useState('')
 
   const { data: confirmations, isLoading: confsLoading, refetch: refetchConfs } = useQuery({
     queryKey: ['confirmations', accountId],
@@ -124,6 +135,37 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
     },
     onError: (err: any) => setSnackMsg(`Action failed: ${err.message}`)
   })
+
+  const saveRestrictionsMutation = useMutation({
+    mutationFn: (allowed_appids: number[] | null) =>
+      adminApi.updateAccount(Number(accountId), { allowed_appids }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-account', accountId] })
+      queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
+      setSnackMsg('Restriksi disimpan. Stale assignment di-revoke otomatis.')
+    },
+    onError: (err: any) => setSnackMsg(`Gagal simpan restriksi: ${err.message}`),
+  })
+
+  // Hydrate restriction state when account data lands. Run once per
+  // account-id change so the local edits aren't clobbered by refetches.
+  useEffect(() => {
+    if (!account) return
+    if (allowedSet !== null) return  // already hydrated for this account
+    const stored = account.allowed_appids
+    const hasRestriction = Array.isArray(stored) && stored.length > 0
+
+    setRestrictEnabled(hasRestriction)
+    setAllowedSet(new Set(hasRestriction ? stored : (account.games?.map(g => g.appid) ?? [])))
+  }, [account, allowedSet])
+
+  // Reset hydration when account changes (e.g. navigating between accounts
+  // without unmounting). accountId is the stable key.
+  useEffect(() => {
+    setRestrictEnabled(null)
+    setAllowedSet(null)
+    setGameSearch('')
+  }, [accountId])
 
   const handleGetCode = useCallback(async () => {
     setCodeLoading(true)
@@ -344,6 +386,57 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
         </Grid>
       </Grid>
 
+      {/* Games on this Account + Parental-Controls Whitelist */}
+      <GamesRestrictionCard
+        games={account.games ?? []}
+        restrictEnabled={restrictEnabled}
+        allowedSet={allowedSet}
+        gameSearch={gameSearch}
+        onSearchChange={setGameSearch}
+        onToggleEnable={(enabled) => {
+          setRestrictEnabled(enabled)
+
+          // When turning ON for the first time, default to "nothing
+          // allowed" so admin explicitly opts each game in — matches the
+          // mental model of "I want only X playable."
+          if (enabled && allowedSet?.size === (account.games?.length ?? 0)) {
+            setAllowedSet(new Set())
+          }
+        }}
+        onToggleGame={(appid, allow) => {
+          setAllowedSet(prev => {
+            const next = new Set(prev ?? [])
+
+            if (allow) next.add(appid)
+            else next.delete(appid)
+
+            return next
+          })
+        }}
+        onSelectAll={() => setAllowedSet(new Set((account.games ?? []).map(g => g.appid)))}
+        onSelectNone={() => setAllowedSet(new Set())}
+        onSave={() => {
+          const payload = restrictEnabled ? Array.from(allowedSet ?? []) : null
+
+          saveRestrictionsMutation.mutate(payload)
+        }}
+        savePending={saveRestrictionsMutation.isPending}
+        isDirty={(() => {
+          if (restrictEnabled === null || allowedSet === null) return false
+          const stored = account.allowed_appids
+          const wasRestricted = Array.isArray(stored) && stored.length > 0
+
+          if (wasRestricted !== restrictEnabled) return true
+          if (!restrictEnabled) return false
+          const storedSet = new Set(stored ?? [])
+
+          if (storedSet.size !== allowedSet.size) return true
+          for (const a of storedSet) if (!allowedSet.has(a)) return true
+
+          return false
+        })()}
+      />
+
       {/* Confirmations */}
       <Card>
         <CardHeader
@@ -541,6 +634,223 @@ const AdminAccountDetailPage = ({ accountId }: Props) => {
 
       <Snackbar open={!!snackMsg} autoHideDuration={3000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>
+  )
+}
+
+interface GameRow {
+  id: number
+  appid: number
+  name: string
+  header_image: string | null
+  is_shared: boolean
+}
+
+interface GamesRestrictionCardProps {
+  games: GameRow[]
+  restrictEnabled: boolean | null
+  allowedSet: Set<number> | null
+  gameSearch: string
+  onSearchChange: (v: string) => void
+  onToggleEnable: (enabled: boolean) => void
+  onToggleGame: (appid: number, allow: boolean) => void
+  onSelectAll: () => void
+  onSelectNone: () => void
+  onSave: () => void
+  savePending: boolean
+  isDirty: boolean
+}
+
+const GamesRestrictionCard = ({
+  games,
+  restrictEnabled,
+  allowedSet,
+  gameSearch,
+  onSearchChange,
+  onToggleEnable,
+  onToggleGame,
+  onSelectAll,
+  onSelectNone,
+  onSave,
+  savePending,
+  isDirty,
+}: GamesRestrictionCardProps) => {
+  const filteredGames = useMemo(() => {
+    const q = gameSearch.trim().toLowerCase()
+
+    if (!q) return games
+
+    return games.filter(g => g.name.toLowerCase().includes(q) || String(g.appid).includes(q))
+  }, [games, gameSearch])
+
+  const allowedCount = allowedSet?.size ?? 0
+  const totalCount = games.length
+  const restrictingAll = restrictEnabled === true && allowedCount === totalCount
+  const allowingNone = restrictEnabled === true && allowedCount === 0
+
+  return (
+    <Card>
+      <CardHeader
+        title={`Games on this Account (${totalCount})`}
+        subheader='Atur parental-controls whitelist — kalau akun di-restrict Steam ke beberapa game, centang yang allowed di sini'
+        avatar={<i className='tabler-device-gamepad-2' style={{ fontSize: 24, color: '#c9a84c' }} />}
+        action={
+          <FormControlLabel
+            control={
+              <Switch
+                checked={restrictEnabled === true}
+                onChange={e => onToggleEnable(e.target.checked)}
+              />
+            }
+            label='Aktifkan Restriksi'
+            labelPlacement='start'
+          />
+        }
+      />
+      <Divider />
+
+      {/* Status banner */}
+      <Box sx={{ px: 3, py: 2, bgcolor: restrictEnabled ? 'rgba(201,168,76,0.08)' : 'rgba(76,175,80,0.06)', borderBottom: '1px solid', borderColor: 'divider' }}>
+        {restrictEnabled === false || restrictEnabled === null ? (
+          <Typography variant='body2' sx={{ color: 'text.secondary' }}>
+            <strong style={{ color: '#4caf50' }}>Tidak ada restriksi.</strong>{' '}
+            Semua {totalCount} game di-sync + bisa di-assign ke customer. Aktifkan switch di atas kalau akun ini di-batasi via Steam Family View.
+          </Typography>
+        ) : allowingNone ? (
+          <Typography variant='body2' sx={{ color: '#ff8e8e' }}>
+            <strong>Tidak ada game yang allowed.</strong>{' '}
+            Centang minimal 1 game di bawah, atau matikan switch restriksi.
+          </Typography>
+        ) : restrictingAll ? (
+          <Typography variant='body2' sx={{ color: 'text.secondary' }}>
+            Semua {totalCount} game di-allow — sama dengan tanpa restriksi. Matikan switch atau uncheck beberapa game.
+          </Typography>
+        ) : (
+          <Typography variant='body2' sx={{ color: '#c9a84c' }}>
+            <strong>{allowedCount} dari {totalCount} game allowed.</strong>{' '}
+            Sync + round-robin hanya akan pakai game yang dicentang. Game lain di-prune dari katalog akun ini.
+          </Typography>
+        )}
+      </Box>
+
+      <CardContent>
+        {totalCount === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant='body2' color='text.secondary'>
+              Akun ini belum punya game ter-sync. Jalankan Sync dari Account Actions di atas.
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            {/* Search + bulk actions */}
+            <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+              <TextField
+                size='small'
+                placeholder='Cari nama / appid…'
+                value={gameSearch}
+                onChange={e => onSearchChange(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position='start'>
+                        <i className='tabler-search' style={{ fontSize: 16 }} />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+                sx={{ flex: 1, minWidth: 220 }}
+              />
+              {restrictEnabled && (
+                <>
+                  <Button size='small' variant='outlined' onClick={onSelectAll}>Allow All</Button>
+                  <Button size='small' variant='outlined' onClick={onSelectNone}>Allow None</Button>
+                </>
+              )}
+            </Box>
+
+            {/* Games list */}
+            <TableContainer>
+              <Table size='small'>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: 60 }}></TableCell>
+                    <TableCell>Game</TableCell>
+                    <TableCell>AppID</TableCell>
+                    <TableCell>Source</TableCell>
+                    <TableCell align='center' sx={{ width: 100 }}>Allowed</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredGames.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} sx={{ textAlign: 'center', py: 3, color: 'text.secondary' }}>
+                        Tidak ada game cocok dengan &ldquo;{gameSearch}&rdquo;
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredGames.map(g => {
+                    const allowed = restrictEnabled ? !!allowedSet?.has(g.appid) : true
+
+                    return (
+                      <TableRow key={g.id} hover>
+                        <TableCell>
+                          <Box
+                            component='img'
+                            src={g.header_image || gameThumbnail(g.appid)}
+                            alt=''
+                            onError={handleImageError}
+                            sx={{ width: 48, height: 28, objectFit: 'cover', borderRadius: 0.5, opacity: allowed ? 1 : 0.35 }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='body2' sx={{ fontWeight: 600, opacity: allowed ? 1 : 0.5 }}>
+                            {g.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant='caption' sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                            {g.appid}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size='small'
+                            label={g.is_shared ? 'Family Share' : 'Owned'}
+                            color={g.is_shared ? 'default' : 'info'}
+                            variant='tonal'
+                          />
+                        </TableCell>
+                        <TableCell align='center'>
+                          <Switch
+                            size='small'
+                            checked={allowed}
+                            disabled={!restrictEnabled}
+                            onChange={e => onToggleGame(g.appid, e.target.checked)}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Save bar */}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Typography variant='caption' color='text.secondary' sx={{ alignSelf: 'center', mr: 1 }}>
+                {isDirty ? 'Ada perubahan belum tersimpan' : 'Tersimpan'}
+              </Typography>
+              <Button
+                variant='contained'
+                disabled={!isDirty || savePending || (restrictEnabled === true && allowedCount === 0)}
+                onClick={onSave}
+                startIcon={<i className={savePending ? 'tabler-loader-2' : 'tabler-device-floppy'} />}
+              >
+                {savePending ? 'Menyimpan…' : 'Simpan Restriksi'}
+              </Button>
+            </Box>
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

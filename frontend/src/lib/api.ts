@@ -883,7 +883,16 @@ export interface SteamAccount {
   game_count: number
   is_active: boolean
   show_in_catalog_when_disabled: boolean
+  allowed_appids: number[] | null
   created_at: string
+}
+
+export interface SteamAccountGame {
+  id: number
+  appid: number
+  name: string
+  header_image: string | null
+  is_shared: boolean
 }
 
 export interface DashboardStats {
@@ -1024,7 +1033,7 @@ export const adminApi = {
     return res.accounts
   },
   async getAccount(id: number) {
-    const res = await request<{ account: SteamAccount & { password: string } }>(
+    const res = await request<{ account: SteamAccount & { password: string; games: SteamAccountGame[] } }>(
       `/api/admin/accounts/${id}`
     )
 
@@ -1049,7 +1058,7 @@ export const adminApi = {
   deleteAccount(id: number) {
     return request<{ message: string }>(`/api/admin/accounts/${id}`, { method: 'DELETE' })
   },
-  updateAccount(id: number, data: Partial<{ password: string; is_active: boolean; show_in_catalog_when_disabled: boolean }>) {
+  updateAccount(id: number, data: Partial<{ password: string; is_active: boolean; show_in_catalog_when_disabled: boolean; allowed_appids: number[] | null }>) {
     return request<{ message: string; account: SteamAccount; reassigned_orders?: number[]; orphaned_orders?: number[] }>(`/api/admin/accounts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
