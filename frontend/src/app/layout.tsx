@@ -15,6 +15,7 @@ import { getSystemMode } from '@core/utils/serverHelpers'
 
 // Component Imports
 import QueryProvider from '@components/QueryProvider'
+import TawkIdentity from '@components/TawkIdentity'
 import { AuthProvider } from '@/contexts/AuthContext'
 
 // Style Imports
@@ -46,7 +47,10 @@ const RootLayout = async (props: ChildrenType) => {
       <body className='flex is-full min-bs-full flex-auto flex-col'>
         <InitColorSchemeScript attribute='data' defaultMode={systemMode} />
         <QueryProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <TawkIdentity />
+            {children}
+          </AuthProvider>
         </QueryProvider>
 
         {/* Tawk.to live chat widget — loads after page is interactive */}
