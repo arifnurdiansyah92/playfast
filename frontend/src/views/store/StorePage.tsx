@@ -28,10 +28,10 @@ import InputLabel from '@mui/material/InputLabel'
 import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 
 const SORT_OPTIONS = [
-  { value: '', label: 'Relevan' },
+  { value: '', label: 'Terbaru & Termahal' },
   { value: 'price_asc', label: 'Harga: Termurah' },
   { value: 'price_desc', label: 'Harga: Termahal' },
-  { value: 'newest', label: 'Terbaru' },
+  { value: 'newest', label: 'Tahun Rilis Terbaru' },
   { value: 'popular', label: 'Terpopuler' },
 ] as const
 

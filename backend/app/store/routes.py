@@ -530,7 +530,12 @@ def list_games():
     elif sort == "name":
         query = query.order_by(Game.name.asc())
     elif sort == "newest":
-        query = query.order_by(Game.created_at.desc(), Game.name.asc())
+        # "Newest" = newest Steam release date, not catalog add date.
+        # Falls back alphabetically when release_date isn't known.
+        query = query.order_by(
+            Game.release_date.desc().nullslast(),
+            Game.name.asc(),
+        )
     elif sort == "popular":
         # Sort by order count descending
         order_count = (
@@ -541,7 +546,15 @@ def list_games():
         )
         query = query.order_by(order_count.desc(), Game.name.asc())
     else:
-        query = query.order_by(Game.name.asc())
+        # Default (no explicit sort) = newest release first, then most
+        # expensive at Steam first. Surfaces the headline value prop —
+        # recent AAA at Playfast pricing — at the top of the catalog
+        # without the user having to pick a sort.
+        query = query.order_by(
+            Game.release_date.desc().nullslast(),
+            Game.original_price.desc().nullslast(),
+            Game.name.asc(),
+        )
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
