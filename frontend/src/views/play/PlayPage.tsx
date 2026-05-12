@@ -140,6 +140,21 @@ const PlayPage = ({ orderId }: Props) => {
 
   const displayGame = shouldOverride && overrideGame ? overrideGame : order?.game
 
+  // Reflect the played game in the tab title so it shows up in tab history,
+  // tab switcher, and analytics page_title (the order ID alone tells us
+  // nothing about which title the user actually opened).
+  useEffect(() => {
+    const original = document.title
+
+    if (displayGame?.name) {
+      document.title = `Main ${displayGame.name} | Playfast`
+    }
+
+    return () => {
+      document.title = original
+    }
+  }, [displayGame?.name])
+
   const { data: instructionsData } = useQuery({
     queryKey: ['instructions', orderId, overrideAppid],
     queryFn: () => storeApi.getInstructions(orderId, overrideAppid ?? undefined),

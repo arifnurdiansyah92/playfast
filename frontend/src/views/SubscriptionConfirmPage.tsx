@@ -100,6 +100,20 @@ const SubscriptionConfirmPage = ({ subId }: Props) => {
     fetchDetail()
   }, [fetchDetail])
 
+  // Reflect the subscription plan in the tab title for tracking.
+  useEffect(() => {
+    const original = document.title
+    const label = data?.subscription.plan_label
+
+    if (label) {
+      document.title = `Subscription ${label} | Playfast`
+    }
+
+    return () => {
+      document.title = original
+    }
+  }, [data?.subscription.plan_label])
+
   const shouldPoll = data?.subscription.status === 'pending_payment'
 
   useEffect(() => {

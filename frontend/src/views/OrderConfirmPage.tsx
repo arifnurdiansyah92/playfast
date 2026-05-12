@@ -89,6 +89,19 @@ const OrderConfirmPage = ({ orderId }: Props) => {
     fetchOrder()
   }, [fetchOrder])
 
+  // Reflect the ordered game in the tab title — order ID alone is opaque.
+  useEffect(() => {
+    const original = document.title
+
+    if (order?.game?.name) {
+      document.title = `Pesanan ${order.game.name} | Playfast`
+    }
+
+    return () => {
+      document.title = original
+    }
+  }, [order?.game?.name])
+
   // Poll for status updates if pending_payment
   useEffect(() => {
     if (!order || order.status !== 'pending_payment') return
