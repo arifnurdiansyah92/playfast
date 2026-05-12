@@ -60,6 +60,9 @@ const AdminUsersPage = () => {
   const [editReferralCode, setEditReferralCode] = useState('')
   const [editReferralError, setEditReferralError] = useState('')
   const [regenConfirm, setRegenConfirm] = useState<{ id: number; email: string } | null>(null)
+  const [editEmailUser, setEditEmailUser] = useState<{ id: number; email: string } | null>(null)
+  const [editEmailValue, setEditEmailValue] = useState('')
+  const [editEmailError, setEditEmailError] = useState('')
 
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounced(search)
@@ -138,6 +141,39 @@ const AdminUsersPage = () => {
     },
     onError: (err: any) => { setSnackMsg(err.message || 'Failed'); setRegenConfirm(null) }
   })
+
+  const editEmailMutation = useMutation({
+    mutationFn: ({ id, email }: { id: number; email: string }) =>
+      adminApi.updateUser(id, { email }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      setEditEmailUser(null)
+      setEditEmailValue('')
+      setEditEmailError('')
+      setSnackMsg('Email updated')
+    },
+    onError: (err: any) => setEditEmailError(err.message || 'Failed to update email')
+  })
+
+  const handleEditEmailSubmit = () => {
+    if (!editEmailUser) return
+    const email = editEmailValue.trim().toLowerCase()
+
+    if (!email) {
+      setEditEmailError('Email tidak boleh kosong')
+
+      return
+    }
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      setEditEmailError('Format email tidak valid')
+
+      return
+    }
+
+    setEditEmailError('')
+    editEmailMutation.mutate({ id: editEmailUser.id, email })
+  }
 
   const handleEditReferralSubmit = () => {
     if (!editReferralUser) return
@@ -245,19 +281,33 @@ return (
                     <TableRow key={u.id} hover>
                       <TableCell>#{u.id}</TableCell>
                       <TableCell>
-                        <Typography
-                          variant='body2'
-                          sx={{
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            color: 'primary.main',
-                            '&:hover': { textDecoration: 'underline' },
-                          }}
-                          onClick={() => router.push(`/admin/users/${u.id}`)}
-                        >
-                          {u.email}
-                          {isSelf && <Chip label='You' size='small' sx={{ ml: 1 }} variant='tonal' color='info' />}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography
+                            variant='body2'
+                            sx={{
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              color: 'primary.main',
+                              '&:hover': { textDecoration: 'underline' },
+                            }}
+                            onClick={() => router.push(`/admin/users/${u.id}`)}
+                          >
+                            {u.email}
+                            {isSelf && <Chip label='You' size='small' sx={{ ml: 1 }} variant='tonal' color='info' />}
+                          </Typography>
+                          <Tooltip title='Edit email'>
+                            <IconButton
+                              size='small'
+                              onClick={() => {
+                                setEditEmailUser({ id: u.id, email: u.email })
+                                setEditEmailValue(u.email)
+                                setEditEmailError('')
+                              }}
+                            >
+                              <i className='tabler-pencil' style={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -473,6 +523,44 @@ return (
             disabled={editReferralMutation.isPending || !editReferralCode.trim()}
           >
             {editReferralMutation.isPending ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Email Dialog */}
+      <Dialog
+        open={!!editEmailUser}
+        onClose={() => { setEditEmailUser(null); setEditEmailError('') }}
+        maxWidth='xs'
+        fullWidth
+      >
+        <DialogTitle>Edit Email</DialogTitle>
+        <DialogContent>
+          <Typography color='text.secondary' sx={{ mb: 2 }}>
+            Ubah email untuk <strong>{editEmailUser?.email}</strong>. Email baru harus unik dan akan otomatis di-set unverified.
+          </Typography>
+          <CustomTextField
+            fullWidth
+            type='email'
+            label='Email Baru'
+            value={editEmailValue}
+            onChange={e => {
+              setEditEmailValue(e.target.value)
+              setEditEmailError('')
+            }}
+            placeholder='user@example.com'
+            error={!!editEmailError}
+            helperText={editEmailError || ' '}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setEditEmailUser(null); setEditEmailError('') }}>Batal</Button>
+          <Button
+            variant='contained'
+            onClick={handleEditEmailSubmit}
+            disabled={editEmailMutation.isPending || !editEmailValue.trim()}
+          >
+            {editEmailMutation.isPending ? 'Menyimpan...' : 'Simpan'}
           </Button>
         </DialogActions>
       </Dialog>

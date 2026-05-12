@@ -1247,7 +1247,7 @@ return res.orders
   getUserProfile(id: number) {
     return request<UserProfile>(`/api/admin/users/${id}/profile`)
   },
-  updateUser(id: number, data: Partial<{ is_admin: boolean; is_active: boolean; password: string; referral_code: string }>) {
+  updateUser(id: number, data: Partial<{ is_admin: boolean; is_active: boolean; password: string; referral_code: string; email: string }>) {
     return request<{ user: User }>(`/api/admin/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)

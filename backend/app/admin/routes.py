@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -497,6 +498,25 @@ def update_user(user_id: int):
 
     if "password" in data and data["password"]:
         target.set_password(data["password"])
+
+    if "email" in data:
+        new_email = (data.get("email") or "").strip().lower()
+        if not new_email:
+            return jsonify({"error": "Email cannot be empty"}), 400
+        if "@" not in new_email or not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", new_email):
+            return jsonify({"error": "Invalid email format"}), 400
+        if new_email != target.email:
+            existing = User.query.filter(
+                User.email == new_email,
+                User.id != target.id,
+            ).first()
+            if existing:
+                return jsonify({"error": f"Email '{new_email}' is already in use"}), 409
+            target.email = new_email
+            # Owner of the new address hasn't proven they control it. Drop the
+            # verified flag — they can re-verify or stay unverified, admin's
+            # call.
+            target.email_verified = False
 
     if "referral_code" in data:
         new_code = (data["referral_code"] or "").strip().upper()
