@@ -125,43 +125,49 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
             <MenuItem href='/admin' icon={<i className='tabler-dashboard' />}>
               Dashboard
             </MenuItem>
-            <SubMenu label='Kelola' icon={<i className='tabler-settings' />}>
-              <MenuItem href='/admin/accounts' icon={<i className='tabler-users' />}>
-                Akun Steam
-              </MenuItem>
-              <MenuItem href='/admin/games' icon={<i className='tabler-device-gamepad' />}>
-                Game
-              </MenuItem>
+            <SubMenu label='Pelanggan' icon={<i className='tabler-users' />}>
               <MenuItem href='/admin/orders' icon={<i className='tabler-receipt' />}>
                 Pesanan
               </MenuItem>
-              <MenuItem href='/admin/account-flags' icon={<i className='tabler-flag' />}>
-                Account Flags
-              </MenuItem>
-              <MenuItem href='/admin/game-requests' icon={<i className='tabler-bulb' />}>
-                Game Requests
-              </MenuItem>
-              <MenuItem href='/admin/reviews' icon={<i className='tabler-message-star' />}>
-                Reviews
-              </MenuItem>
-              <MenuItem href='/admin/creator-applications' icon={<i className='tabler-user-star' />}>
-                Creator Applications
-              </MenuItem>
-              <MenuItem href='/admin/email-blast' icon={<i className='tabler-mail-fast' />}>
-                Email Blast
+              <MenuItem href='/admin/users' icon={<i className='tabler-user' />}>
+                Pengguna
               </MenuItem>
               <MenuItem href='/admin/subscriptions' icon={<i className='tabler-crown' />}>
                 Langganan
               </MenuItem>
-              <MenuItem href='/admin/users' icon={<i className='tabler-users' />}>
-                Pengguna
+              <MenuItem href='/admin/reviews' icon={<i className='tabler-message-star' />}>
+                Reviews
               </MenuItem>
+            </SubMenu>
+            <SubMenu label='Katalog & Akun' icon={<i className='tabler-device-gamepad-2' />}>
+              <MenuItem href='/admin/games' icon={<i className='tabler-device-gamepad' />}>
+                Game
+              </MenuItem>
+              <MenuItem href='/admin/accounts' icon={<i className='tabler-server' />}>
+                Akun Steam
+              </MenuItem>
+              <MenuItem href='/admin/game-requests' icon={<i className='tabler-bulb' />}>
+                Game Requests
+              </MenuItem>
+              <MenuItem href='/admin/account-flags' icon={<i className='tabler-flag' />}>
+                Account Flags
+              </MenuItem>
+            </SubMenu>
+            <SubMenu label='Marketing' icon={<i className='tabler-rocket' />}>
               <MenuItem href='/admin/promo-codes' icon={<i className='tabler-discount' />}>
                 Promo Codes
               </MenuItem>
               <MenuItem href='/admin/referrals' icon={<i className='tabler-share' />}>
                 Referrals
               </MenuItem>
+              <MenuItem href='/admin/email-blast' icon={<i className='tabler-mail-fast' />}>
+                Email Blast
+              </MenuItem>
+              <MenuItem href='/admin/creator-applications' icon={<i className='tabler-user-star' />}>
+                Creator Applications
+              </MenuItem>
+            </SubMenu>
+            <SubMenu label='Sistem' icon={<i className='tabler-settings' />}>
               <MenuItem href='/admin/reports' icon={<i className='tabler-report-money' />}>
                 Laporan Transaksi
               </MenuItem>
