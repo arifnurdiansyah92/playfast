@@ -2,6 +2,8 @@
 import Button from '@mui/material/Button'
 
 // Type Imports
+import type { Metadata } from 'next'
+
 import type { ChildrenType } from '@core/types'
 
 // Layout Imports
@@ -21,6 +23,10 @@ import ReviewNudgeModal from '@components/ReviewNudgeModal'
 
 // Util Imports
 import { getMode, getSystemMode } from '@core/utils/serverHelpers'
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false }
+}
 
 const Layout = async (props: ChildrenType) => {
   const { children } = props

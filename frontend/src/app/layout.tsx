@@ -8,6 +8,8 @@ import InitColorSchemeScript from '@mui/material/InitColorSchemeScript'
 import 'react-perfect-scrollbar/dist/css/styles.css'
 
 // Type Imports
+import type { Metadata } from 'next'
+
 import type { ChildrenType } from '@core/types'
 
 // Util Imports
@@ -24,9 +26,32 @@ import '@/app/globals.css'
 // Generated Icon CSS Imports
 import '@assets/iconify-icons/generated-icons.css'
 
-export const metadata = {
-  title: 'Playfast - Akses Game Steam Instan',
-  description: 'Main game Steam apapun secara instan. Kode Steam Guard otomatis.'
+export const metadata: Metadata = {
+  metadataBase: new URL('https://playfast.id'),
+  title: {
+    default: 'Akses Game Steam Instan — Mulai Rp 50K | Playfast',
+    template: '%s | Playfast'
+  },
+  description:
+    'Akses 300+ game Steam dengan harga mulai Rp 50K. Kode Steam Guard otomatis 24/7 — login langsung, no nunggu seller. Coba Premium hari ini.',
+  applicationName: 'Playfast',
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: 'Playfast',
+    locale: 'id_ID',
+    url: 'https://playfast.id',
+    title: 'Akses Game Steam Instan — Mulai Rp 50K | Playfast',
+    description: 'Akses 300+ game Steam dengan harga mulai Rp 50K. Kode Steam Guard otomatis 24/7.',
+    images: [{ url: '/images/brand/logo-horizontal.png', width: 1200, height: 630, alt: 'Playfast' }]
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Akses Game Steam Instan — Mulai Rp 50K | Playfast',
+    description: 'Akses 300+ game Steam dengan harga mulai Rp 50K. Kode Steam Guard otomatis 24/7.',
+    images: ['/images/brand/logo-horizontal.png']
+  },
+  robots: { index: true, follow: true }
 }
 
 const RootLayout = async (props: ChildrenType) => {
@@ -69,6 +94,50 @@ s1.setAttribute('crossorigin','*');
 s0.parentNode.insertBefore(s1,s0);
 })();
             `,
+          }}
+        />
+
+        {/* Organization JSON-LD */}
+        <Script
+          id='ld-organization'
+          type='application/ld+json'
+          strategy='afterInteractive'
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'Playfast',
+              url: 'https://playfast.id',
+              logo: 'https://playfast.id/images/brand/logo-horizontal.png',
+              sameAs: [],
+              contactPoint: {
+                '@type': 'ContactPoint',
+                email: 'support@playfast.id',
+                contactType: 'customer support',
+                areaServed: 'ID',
+                availableLanguage: ['id', 'en']
+              }
+            })
+          }}
+        />
+
+        {/* WebSite JSON-LD */}
+        <Script
+          id='ld-website'
+          type='application/ld+json'
+          strategy='afterInteractive'
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebSite',
+              name: 'Playfast',
+              url: 'https://playfast.id',
+              potentialAction: {
+                '@type': 'SearchAction',
+                target: 'https://playfast.id/store?q={search_term_string}',
+                'query-input': 'required name=search_term_string'
+              }
+            })
           }}
         />
       </body>

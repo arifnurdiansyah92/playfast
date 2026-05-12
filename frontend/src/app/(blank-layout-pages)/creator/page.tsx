@@ -3,9 +3,22 @@ import type { Metadata } from 'next'
 import CreatorLandingPage from '@/views/CreatorLandingPage'
 
 export const metadata: Metadata = {
-  title: 'Jadi Playfast Creator — 10% Revenue Share',
+  title: 'Playfast Creator Program — Affiliate untuk Konten Kreator',
   description:
-    'Bantu audience kamu akses game AAA original mulai Rp 50 ribu. Dapat promo code personal, 10% revenue share, lifetime attribution. Apply gratis.',
+    'Gabung program affiliate Playfast. Dapatkan 20% komisi dari setiap pembelian via link kamu. Cocok untuk gaming creator dan reviewer Indonesia.',
+  alternates: { canonical: '/creator' },
+  openGraph: {
+    title: 'Playfast Creator Program — Affiliate untuk Konten Kreator',
+    description:
+      'Gabung program affiliate Playfast. Dapatkan 20% komisi dari setiap pembelian via link kamu. Cocok untuk gaming creator dan reviewer Indonesia.',
+    url: 'https://playfast.id/creator',
+    type: 'website'
+  },
+  twitter: {
+    title: 'Playfast Creator Program — Affiliate untuk Konten Kreator',
+    description:
+      'Gabung program affiliate Playfast. Dapatkan 20% komisi dari setiap pembelian via link kamu. Cocok untuk gaming creator dan reviewer Indonesia.'
+  }
 }
 
 const CreatorRoute = () => {

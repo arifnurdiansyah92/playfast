@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -36,7 +35,6 @@ const textPrimary = '#e8eaed'
 const textSecondary = '#9aa0a6'
 
 const LandingPage = () => {
-  const router = useRouter()
   const { user, loading } = useAuth()
   const [games, setGames] = useState<Game[]>([])
   const [gamesLoading, setGamesLoading] = useState(true)
@@ -260,6 +258,7 @@ const LandingPage = () => {
 
             <Typography
               variant='h2'
+              component='h1'
               sx={{
                 fontWeight: 800, mb: 2.5,
                 fontSize: { xs: '2.2rem', sm: '2.8rem', md: '3.5rem' },
@@ -473,7 +472,7 @@ const LandingPage = () => {
                 : games.map(game => (
                   <Grid size={{ xs: 12, sm: 6, md: 3 }} key={game.id}>
                     <Card sx={{ ...cardSx, '&:hover': { ...cardSx['&:hover'], borderColor: gold } }}>
-                      <CardActionArea onClick={() => router.push(`/game/${game.appid}`)}>
+                      <CardActionArea component={Link} href={`/game/${game.appid}`}>
                         <Box sx={{ position: 'relative' }}>
                           <CardMedia
                             component='img' height={130}
@@ -645,12 +644,14 @@ const LandingPage = () => {
                     {requestsData.added.map(r => (
                       <Card
                         key={r.id}
+                        component={Link}
+                        href={`/game/${r.appid}`}
                         sx={{
                           ...cardSx,
                           cursor: 'pointer',
+                          textDecoration: 'none',
                           '&:hover': { ...cardSx['&:hover'], borderColor: '#3ecf8e' },
                         }}
-                        onClick={() => router.push(`/game/${r.appid}`)}
                       >
                         <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
                           <Box
@@ -1101,6 +1102,23 @@ const LandingPage = () => {
               ))}
             </Box>
           </Container>
+          <script
+            type='application/ld+json'
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'FAQPage',
+                mainEntity: faqs.map(f => ({
+                  '@type': 'Question',
+                  name: f.q,
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: f.a,
+                  },
+                })),
+              }),
+            }}
+          />
         </Box>
 
         {/* ════════════════════ CTA ════════════════════ */}
