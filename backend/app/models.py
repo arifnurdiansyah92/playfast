@@ -27,7 +27,12 @@ class User(db.Model):
         nullable=False,
     )
 
-    orders = db.relationship("Order", backref="user", lazy="dynamic")
+    # NOTE: Order has two FKs to users (user_id, refunded_by_user_id) since
+    # the refund feature landed — disambiguate which one this relationship
+    # follows. Same below for Subscription.user.
+    orders = db.relationship(
+        "Order", backref="user", lazy="dynamic", foreign_keys="Order.user_id"
+    )
     assignments = db.relationship("Assignment", backref="user", lazy="dynamic")
     code_request_logs = db.relationship(
         "CodeRequestLog", backref="user", lazy="dynamic"
@@ -660,7 +665,11 @@ class Subscription(db.Model):
         nullable=False,
     )
 
-    user = db.relationship("User", backref=db.backref("subscriptions", lazy="dynamic"))
+    user = db.relationship(
+        "User",
+        backref=db.backref("subscriptions", lazy="dynamic"),
+        foreign_keys=[user_id],
+    )
 
     amount_subtotal = db.Column(db.Integer, nullable=True)
     promo_discount = db.Column(db.Integer, nullable=False, default=0)
