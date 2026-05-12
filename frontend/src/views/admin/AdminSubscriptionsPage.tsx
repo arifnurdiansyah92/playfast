@@ -25,8 +25,15 @@ import MenuItem from '@mui/material/MenuItem'
 import Pagination from '@mui/material/Pagination'
 import Tooltip from '@mui/material/Tooltip'
 import IconButton from '@mui/material/IconButton'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
+import TextField from '@mui/material/TextField'
+import Button from '@mui/material/Button'
 
 import { adminApi, formatIDR } from '@/lib/api'
+import type { Subscription } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
@@ -34,6 +41,7 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info'> = {
   pending_payment: 'warning',
   expired: 'error',
   cancelled: 'info',
+  refunded: 'info',
 }
 
 const AdminSubscriptionsPage = () => {
@@ -42,6 +50,8 @@ const AdminSubscriptionsPage = () => {
   const [snackMsg, setSnackMsg] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [refundSub, setRefundSub] = useState<Subscription | null>(null)
+  const [refundNote, setRefundNote] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-subscriptions', statusFilter, page],
@@ -65,6 +75,20 @@ const AdminSubscriptionsPage = () => {
       setSnackMsg(res.message)
     },
     onError: (err: any) => setSnackMsg(`Failed: ${err.message}`),
+  })
+
+  const refundMutation = useMutation({
+    mutationFn: ({ id, note }: { id: number; note: string }) => adminApi.refundSubscription(id, note),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] })
+      const revokedNote = res.revoked_claim_count > 0 ? ` — ${res.revoked_claim_count} game claim revoked` : ''
+
+      setSnackMsg(`${res.message}${revokedNote}`)
+      setRefundSub(null)
+      setRefundNote('')
+    },
+    onError: (err: any) => setSnackMsg(`Refund failed: ${err.message}`),
   })
 
   const subs = data?.subscriptions ?? []
@@ -92,6 +116,7 @@ const AdminSubscriptionsPage = () => {
               <MenuItem value='pending_payment'>Pending</MenuItem>
               <MenuItem value='expired'>Expired</MenuItem>
               <MenuItem value='cancelled'>Cancelled</MenuItem>
+              <MenuItem value='refunded'>Refunded</MenuItem>
             </Select>
           </FormControl>
         </CardContent>
@@ -167,6 +192,17 @@ const AdminSubscriptionsPage = () => {
                           </IconButton>
                         </Tooltip>
                       )}
+                      {(sub.status === 'active' || sub.status === 'expired' || sub.status === 'cancelled') && (
+                        <Tooltip title='Refund subscription — expire + rollback promo/credit/referral + revoke claimed games'>
+                          <IconButton
+                            size='small'
+                            color='info'
+                            onClick={() => { setRefundSub(sub); setRefundNote('') }}
+                          >
+                            <i className='tabler-receipt-refund' />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -180,6 +216,38 @@ const AdminSubscriptionsPage = () => {
           )}
         </Card>
       )}
+
+      <Dialog open={!!refundSub} onClose={() => { setRefundSub(null); setRefundNote('') }} maxWidth='sm' fullWidth>
+        <DialogTitle>Refund Subscription #{refundSub?.id}</DialogTitle>
+        <DialogContent>
+          <Typography color='text.secondary' sx={{ mb: 2 }}>
+            Refund <strong>{refundSub?.plan_label}</strong> milik <strong>{refundSub?.user_email}</strong> (dibayar {refundSub?.amount ? formatIDR(refundSub.amount) : '-'}).
+          </Typography>
+          <Alert severity='warning' sx={{ mb: 2 }}>
+            Setelah refund: subscription langsung expired, semua game yang sudah diklaim via Premium ini direvoke, promo code di-rollback, referral credit & reward dikembalikan. Transfer uang manual di luar sistem.
+          </Alert>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label='Catatan (opsional)'
+            placeholder='Contoh: customer cancel karena salah pilih plan, transfer DANA 13 Mei'
+            value={refundNote}
+            onChange={e => setRefundNote(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setRefundSub(null); setRefundNote('') }}>Batal</Button>
+          <Button
+            variant='contained'
+            color='info'
+            onClick={() => refundSub && refundMutation.mutate({ id: refundSub.id, note: refundNote })}
+            disabled={refundMutation.isPending}
+          >
+            {refundMutation.isPending ? 'Memproses...' : 'Refund Subscription'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar open={!!snackMsg} autoHideDuration={3000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>

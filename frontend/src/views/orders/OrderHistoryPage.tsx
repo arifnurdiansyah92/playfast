@@ -35,6 +35,7 @@ const statusConfig: Record<string, { label: string; color: 'success' | 'warning'
   cancelled: { label: 'Dibatalkan', color: 'default' },
   expired: { label: 'Kedaluwarsa', color: 'default' },
   revoked: { label: 'Dicabut', color: 'error' },
+  refunded: { label: 'Refunded', color: 'info' },
 }
 
 const paymentTypeLabels: Record<string, string> = {
@@ -71,11 +72,12 @@ function formatDate(iso: string) {
   })
 }
 
-const subStatusConfig: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' }> = {
+const subStatusConfig: Record<string, { label: string; color: 'success' | 'warning' | 'error' | 'default' | 'info' }> = {
   active: { label: 'Aktif', color: 'success' },
   pending_payment: { label: 'Menunggu Bayar', color: 'warning' },
   expired: { label: 'Kedaluwarsa', color: 'default' },
   cancelled: { label: 'Dibatalkan', color: 'error' },
+  refunded: { label: 'Refunded', color: 'info' },
 }
 
 const SubscriptionHistorySection = ({ isLoading, subscriptions }: { isLoading: boolean; subscriptions: Subscription[] }) => {

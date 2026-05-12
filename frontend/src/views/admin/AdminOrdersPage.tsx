@@ -23,6 +23,10 @@ import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 import Snackbar from '@mui/material/Snackbar'
 import Tooltip from '@mui/material/Tooltip'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
 
 import { adminApi, gameThumbnail, handleImageError } from '@/lib/api'
 import type { Order } from '@/lib/api'
@@ -36,6 +40,8 @@ const AdminOrdersPage = () => {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [snackMsg, setSnackMsg] = useState('')
   const [rotateOrder, setRotateOrder] = useState<Order | null>(null)
+  const [refundOrder, setRefundOrder] = useState<Order | null>(null)
+  const [refundNote, setRefundNote] = useState('')
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ['admin-orders'],
@@ -51,6 +57,17 @@ const AdminOrdersPage = () => {
   const restoreMutation = useMutation({
     mutationFn: (orderId: number) => adminApi.restoreAccess(orderId),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-orders'] }); setSnackMsg('Access restored') }
+  })
+
+  const refundMutation = useMutation({
+    mutationFn: ({ orderId, note }: { orderId: number; note: string }) => adminApi.refundOrder(orderId, note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] })
+      setSnackMsg('Order refunded')
+      setRefundOrder(null)
+      setRefundNote('')
+    },
+    onError: (err: any) => setSnackMsg(err?.message || 'Refund failed'),
   })
 
   const confirmMutation = useMutation({
@@ -112,23 +129,26 @@ const AdminOrdersPage = () => {
   if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
 
   const statusColor = (status: string) => {
+    if (status === 'refunded') return 'info' as const
     if (status === 'revoked' || status === 'cancelled') return 'error' as const
     if (status === 'fulfilled') return 'success' as const
     if (status === 'pending_payment') return 'warning' as const
-    
-return 'default' as const
+
+    return 'default' as const
   }
 
   const pendingCount = orders?.filter(o => o.status === 'pending_payment').length ?? 0
   const fulfilledCount = orders?.filter(o => o.status === 'fulfilled').length ?? 0
   const revokedCount = orders?.filter(o => o.status === 'revoked').length ?? 0
+  const refundedCount = orders?.filter(o => o.status === 'refunded').length ?? 0
 
-  const statuses: { label: string; value: string; count: number; color?: 'primary' | 'warning' | 'success' | 'error' }[] = [
+  const statuses: { label: string; value: string; count: number; color?: 'primary' | 'warning' | 'success' | 'error' | 'info' }[] = [
     { label: 'All', value: '', count: orders?.length ?? 0 },
     { label: 'Pending', value: 'pending_payment', count: pendingCount },
     { label: 'Fulfilled', value: 'fulfilled', count: fulfilledCount },
     { label: 'Unassigned', value: 'unassigned', count: unassignedCount, color: 'warning' },
     { label: 'Revoked', value: 'revoked', count: revokedCount, color: 'error' },
+    { label: 'Refunded', value: 'refunded', count: refundedCount, color: 'info' },
   ]
 
   return (
@@ -241,6 +261,13 @@ return 'default' as const
                         ) : order.status === 'fulfilled' ? (
                           <Button size='small' variant='outlined' color='error' onClick={() => revokeMutation.mutate(order.id)} disabled={revokeMutation.isPending}>Revoke</Button>
                         ) : null}
+                        {(order.status === 'fulfilled' || order.status === 'revoked') && (
+                          <Tooltip title='Refund order — revoke akses + rollback promo/credit/referral reward'>
+                            <IconButton size='small' color='info' onClick={() => { setRefundOrder(order); setRefundNote('') }}>
+                              <i className='tabler-receipt-refund' style={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         {order.status === 'fulfilled' && !order.is_revoked && (
                           <Tooltip title='Rotasi ke akun lain (mis. Denuvo activation limit)'>
                             <IconButton size='small' onClick={() => setRotateOrder(order)}>
@@ -266,6 +293,38 @@ return 'default' as const
         onSuccess={(msg) => setSnackMsg(msg)}
         invalidateKeys={[['admin-orders']]}
       />
+
+      <Dialog open={!!refundOrder} onClose={() => { setRefundOrder(null); setRefundNote('') }} maxWidth='sm' fullWidth>
+        <DialogTitle>Refund Order #{refundOrder?.id}</DialogTitle>
+        <DialogContent>
+          <Typography color='text.secondary' sx={{ mb: 2 }}>
+            Refund <strong>{refundOrder?.game?.name}</strong> milik <strong>{refundOrder?.user_email || `User #${refundOrder?.user_id}`}</strong>.
+          </Typography>
+          <Alert severity='warning' sx={{ mb: 2 }}>
+            Setelah refund: akses Steam direvoke, promo code di-rollback (slot kembali), referral credit dikembalikan, dan referral reward (kalau ada) ditarik dari referrer. Transfer uang sendiri di-handle manual di luar sistem.
+          </Alert>
+          <TextField
+            fullWidth
+            multiline
+            rows={3}
+            label='Catatan (opsional)'
+            placeholder='Contoh: customer minta refund karena game ga bisa dibuka, sudah ditransfer DANA 13 Mei'
+            value={refundNote}
+            onChange={e => setRefundNote(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setRefundOrder(null); setRefundNote('') }}>Batal</Button>
+          <Button
+            variant='contained'
+            color='info'
+            onClick={() => refundOrder && refundMutation.mutate({ orderId: refundOrder.id, note: refundNote })}
+            disabled={refundMutation.isPending}
+          >
+            {refundMutation.isPending ? 'Memproses...' : 'Refund Order'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar open={!!snackMsg} autoHideDuration={3000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>

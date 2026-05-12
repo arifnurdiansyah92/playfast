@@ -226,7 +226,7 @@ class Order(db.Model):
     )
     status = db.Column(
         db.String(30), default="pending_payment", nullable=False, index=True
-    )  # pending_payment, fulfilled, cancelled, revoked, expired
+    )  # pending_payment, fulfilled, cancelled, revoked, expired, refunded
     type = db.Column(
         db.String(20), default="purchase", nullable=False
     )  # purchase, subscription
@@ -239,6 +239,9 @@ class Order(db.Model):
     promo_discount = db.Column(db.Integer, nullable=False, default=0)
     credit_applied = db.Column(db.Integer, nullable=False, default=0)
     promo_code_id = db.Column(db.Integer, db.ForeignKey("promo_codes.id"), nullable=True)
+    refunded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    refund_note = db.Column(db.Text, nullable=True)
+    refunded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
@@ -266,6 +269,9 @@ class Order(db.Model):
             "credit_applied": self.credit_applied,
             "promo_code_id": self.promo_code_id,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
+            "refunded_at": self.refunded_at.isoformat() if self.refunded_at else None,
+            "refund_note": self.refund_note,
+            "refunded_by_user_id": self.refunded_by_user_id,
             "created_at": self.created_at.isoformat(),
             "assignment_id": self.assignment_id,
         }
@@ -638,7 +644,7 @@ class Subscription(db.Model):
     plan = db.Column(db.String(20), nullable=False)  # monthly, 3monthly, yearly
     status = db.Column(
         db.String(20), default="pending_payment", nullable=False, index=True
-    )  # pending_payment, active, expired, cancelled
+    )  # pending_payment, active, expired, cancelled, refunded
     amount = db.Column(db.Integer, nullable=False)
     starts_at = db.Column(db.DateTime(timezone=True), nullable=True)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -660,6 +666,9 @@ class Subscription(db.Model):
     promo_discount = db.Column(db.Integer, nullable=False, default=0)
     credit_applied = db.Column(db.Integer, nullable=False, default=0)
     promo_code_id = db.Column(db.Integer, db.ForeignKey("promo_codes.id"), nullable=True)
+    refunded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    refund_note = db.Column(db.Text, nullable=True)
+    refunded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
     def activate(self):
         """Activate this subscription, setting start/expiry dates."""
@@ -694,6 +703,9 @@ class Subscription(db.Model):
             "midtrans_order_id": self.midtrans_order_id,
             "payment_type": self.payment_type,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
+            "refunded_at": self.refunded_at.isoformat() if self.refunded_at else None,
+            "refund_note": self.refund_note,
+            "refunded_by_user_id": self.refunded_by_user_id,
             "created_at": self.created_at.isoformat(),
         }
         if include_snap_token:

@@ -2214,6 +2214,100 @@ def revoke_access(order_id: int):
     return jsonify({"message": "Access revoked", "order_id": order_id}), 200
 
 
+def _rollback_promo_and_referral(*, order=None, subscription=None):
+    """Common rollback helpers for refunding an order or subscription.
+
+    - Deletes the PromoCodeUsage row (frees the slot for max_uses_total).
+    - Refunds the buyer's referral_credit that was applied at checkout.
+    - Reverses the ReferralReward triggered by this purchase (deletes the row
+      and claws back credit from the referrer, floored at zero).
+
+    Money refund itself is out-of-band; this only mutates internal accounting.
+    """
+    target = order or subscription
+    if target is None:
+        return
+
+    # Return any referral credit the buyer applied to checkout.
+    if (target.credit_applied or 0) > 0:
+        user = db.session.get(User, target.user_id)
+        if user is not None:
+            user.referral_credit = (user.referral_credit or 0) + target.credit_applied
+
+    # Free up the promo slot.
+    if target.promo_code_id:
+        usage_q = PromoCodeUsage.query.filter_by(promo_code_id=target.promo_code_id, user_id=target.user_id)
+        if order is not None:
+            usage_q = usage_q.filter_by(order_id=order.id)
+        else:
+            usage_q = usage_q.filter_by(subscription_id=subscription.id)
+        for usage in usage_q.all():
+            db.session.delete(usage)
+
+    # Reverse any referral reward triggered by this exact order/subscription.
+    reward_q = ReferralReward.query
+    if order is not None:
+        reward_q = reward_q.filter_by(trigger_order_id=order.id)
+    else:
+        reward_q = reward_q.filter_by(trigger_subscription_id=subscription.id)
+    for reward in reward_q.all():
+        referrer = db.session.get(User, reward.referrer_user_id)
+        if referrer is not None:
+            referrer.referral_credit = max(0, (referrer.referral_credit or 0) - (reward.credit_awarded or 0))
+        db.session.delete(reward)
+
+
+@admin_bp.route("/orders/<int:order_id>/refund", methods=["POST"])
+@admin_required
+def refund_order(order_id: int):
+    """Mark a paid order as refunded.
+
+    Triggered manually after the admin transfers money back out-of-band.
+    Side effects:
+      - Status moves to 'refunded'.
+      - Active Steam assignment (if any) is revoked so the buyer can't keep
+        playing on a free pass.
+      - Promo usage row + buyer's applied credit + referrer's reward are
+        all rolled back so the books reconcile.
+    """
+    order = db.session.get(Order, order_id)
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+
+    if order.status == "refunded":
+        return jsonify({"error": "Order already refunded"}), 409
+
+    # Only paid orders can be refunded. pending_payment isn't "paid yet"; it
+    # should be cancelled instead.
+    if order.status not in ("fulfilled", "revoked"):
+        return jsonify({
+            "error": f"Order status '{order.status}' tidak bisa di-refund. Hanya order yang sudah fulfilled/revoked."
+        }), 400
+
+    data = request.get_json(silent=True) or {}
+    note = (data.get("note") or "").strip() or None
+    admin_id = int(get_jwt_identity())
+
+    # Revoke the assignment so the buyer loses access to the credentials.
+    if order.assignment and not order.assignment.is_revoked:
+        order.assignment.is_revoked = True
+        order.assignment.revoked_at = datetime.now(timezone.utc)
+
+    _rollback_promo_and_referral(order=order)
+
+    order.status = "refunded"
+    order.refunded_at = datetime.now(timezone.utc)
+    order.refund_note = note
+    order.refunded_by_user_id = admin_id
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Order refunded",
+        "order": order.to_dict(),
+    }), 200
+
+
 @admin_bp.route("/orders/<int:order_id>/restore", methods=["POST"])
 @admin_required
 def restore_access(order_id: int):
@@ -2406,6 +2500,64 @@ def revoke_subscription(sub_id: int):
     return jsonify({
         "message": "Subscription dibatalkan",
         "subscription": sub.to_dict(include_snap_token=True),
+    }), 200
+
+
+@admin_bp.route("/subscriptions/<int:sub_id>/refund", methods=["POST"])
+@admin_required
+def refund_subscription(sub_id: int):
+    """Mark an active subscription as refunded.
+
+    Side effects:
+      - Status moves to 'refunded', expires_at set to now so is_active flips
+        immediately.
+      - Any subscription-typed orders the user already claimed via this
+        subscription get their Steam assignment revoked — they shouldn't
+        keep premium access after a refund.
+      - Promo / credit / referral reward rollback (same as order refund).
+    """
+    sub = db.session.get(Subscription, sub_id)
+    if not sub:
+        return jsonify({"error": "Subscription not found"}), 404
+
+    if sub.status == "refunded":
+        return jsonify({"error": "Subscription already refunded"}), 409
+
+    if sub.status not in ("active", "expired", "cancelled"):
+        return jsonify({
+            "error": f"Subscription status '{sub.status}' tidak bisa di-refund. Hanya subscription yang sudah dibayar."
+        }), 400
+
+    data = request.get_json(silent=True) or {}
+    note = (data.get("note") or "").strip() or None
+    admin_id = int(get_jwt_identity())
+
+    # Revoke every game claimed via subscription so the buyer loses premium
+    # access immediately. Subscription-typed orders are the per-game claims
+    # (type='subscription', payment_type='subscription'), not the
+    # subscription purchase itself (which lives in the Subscription table).
+    claimed_orders = Order.query.filter_by(
+        user_id=sub.user_id, type="subscription", status="fulfilled"
+    ).all()
+    for o in claimed_orders:
+        if o.assignment and not o.assignment.is_revoked:
+            o.assignment.is_revoked = True
+            o.assignment.revoked_at = datetime.now(timezone.utc)
+
+    _rollback_promo_and_referral(subscription=sub)
+
+    sub.status = "refunded"
+    sub.expires_at = datetime.now(timezone.utc)
+    sub.refunded_at = datetime.now(timezone.utc)
+    sub.refund_note = note
+    sub.refunded_by_user_id = admin_id
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Subscription refunded",
+        "subscription": sub.to_dict(include_snap_token=True),
+        "revoked_claim_count": sum(1 for o in claimed_orders if o.assignment),
     }), 200
 
 

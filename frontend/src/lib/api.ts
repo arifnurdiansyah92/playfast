@@ -241,6 +241,9 @@ export interface Order {
   promo_discount: number
   credit_applied: number
   promo_code_id: number | null
+  refunded_at?: string | null
+  refund_note?: string | null
+  refunded_by_user_id?: number | null
 }
 
 export interface SteamGuardCode {
@@ -436,6 +439,9 @@ export interface Subscription {
   promo_discount: number
   credit_applied: number
   promo_code_id: number | null
+  refunded_at?: string | null
+  refund_note?: string | null
+  refunded_by_user_id?: number | null
 }
 
 export interface PromoCode {
@@ -1196,6 +1202,12 @@ return res.orders
   restoreAccess(orderId: number) {
     return request<{ message: string }>(`/api/admin/orders/${orderId}/restore`, { method: 'POST' })
   },
+  refundOrder(orderId: number, note?: string) {
+    return request<{ message: string; order: Order }>(`/api/admin/orders/${orderId}/refund`, {
+      method: 'POST',
+      body: JSON.stringify({ note: note || null }),
+    })
+  },
   retryFulfillOrder(orderId: number) {
     return request<{ message: string; order: Order }>(`/api/admin/orders/${orderId}/retry-fulfill`, { method: 'POST' })
   },
@@ -1334,6 +1346,12 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
   },
   revokeSubscription(id: number) {
     return request<{ message: string; subscription: Subscription }>(`/api/admin/subscriptions/${id}/revoke`, { method: 'POST' })
+  },
+  refundSubscription(id: number, note?: string) {
+    return request<{ message: string; subscription: Subscription; revoked_claim_count: number }>(`/api/admin/subscriptions/${id}/refund`, {
+      method: 'POST',
+      body: JSON.stringify({ note: note || null }),
+    })
   },
   grantLifetime(userId: number) {
     return request<{ message: string; subscription: Subscription }>('/api/admin/subscriptions/grant-lifetime', {

@@ -199,6 +199,15 @@ def _run_schema_upgrades():
         "ALTER TABLE email_campaign_recipients ALTER COLUMN user_id DROP NOT NULL",
         "ALTER TABLE email_campaign_recipients DROP CONSTRAINT IF EXISTS uq_email_campaign_recipient",
         "ALTER TABLE email_campaign_recipients ADD CONSTRAINT uq_email_campaign_recipient_email UNIQUE (campaign_id, email)",
+        # Refund tracking — status moves to 'refunded' + provenance fields.
+        # Amount refunded is always the original `amount` (no partial refunds
+        # yet). Refund happens out-of-band; this just records the decision.
+        "ALTER TABLE orders ADD COLUMN refunded_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE orders ADD COLUMN refund_note TEXT",
+        "ALTER TABLE orders ADD COLUMN refunded_by_user_id INTEGER REFERENCES users(id)",
+        "ALTER TABLE subscriptions ADD COLUMN refunded_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE subscriptions ADD COLUMN refund_note TEXT",
+        "ALTER TABLE subscriptions ADD COLUMN refunded_by_user_id INTEGER REFERENCES users(id)",
     ]
     for stmt in alter_statements:
         try:
