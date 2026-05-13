@@ -309,16 +309,26 @@ def list_my_requests():
 @game_requests_bp.route("", methods=["GET"])
 @jwt_required()
 def list_all_requests():
-    """List all pending game requests for the community feed.
+    """Game requests visible to signed-in users.
 
-    Sorted by vote count desc, then created_at desc. Each item carries a
-    `voted` flag so the UI can render vote/unvote affordances. Resolved
-    requests (added/rejected) are excluded — users can't act on them and
-    they belong in /mine for the requester's own history.
+    Returns pending + added entries so the frontend can split them into
+    separate tabs (community vote vs already-added history). Rejected
+    entries stay hidden — nothing actionable to show.
+
+    Sorted by status (pending first), then vote count desc, then date desc.
+    Each item carries a `voted` flag so the UI can render vote affordances.
     """
     user_id = int(get_jwt_identity())
-    items = GameRequest.query.filter_by(status="pending").all()
-    items.sort(key=lambda r: (r.request_count(), r.created_at), reverse=True)
+    items = GameRequest.query.filter(
+        GameRequest.status.in_(["pending", "added"])
+    ).all()
+    items.sort(
+        key=lambda r: (
+            0 if r.status == "pending" else 1,
+            -(r.request_count()),
+            r.created_at,
+        ),
+    )
     return jsonify({
         "items": [r.to_dict(current_user_id=user_id) for r in items],
     }), 200

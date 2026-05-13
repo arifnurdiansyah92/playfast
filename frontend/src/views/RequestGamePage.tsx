@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 
+import Link from 'next/link'
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
@@ -16,6 +18,7 @@ import Skeleton from '@mui/material/Skeleton'
 import TextField from '@mui/material/TextField'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
+
 
 import type { GameRequest } from '@/lib/api'
 import { gameRequestsApi, formatIDR, handleImageError, gameHeaderImage } from '@/lib/api'
@@ -42,7 +45,7 @@ const RequestGamePage = () => {
   const [steamUrl, setSteamUrl] = useState('')
   const [snackMsg, setSnackMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
-  const [tab, setTab] = useState<'mine' | 'community'>('mine')
+  const [tab, setTab] = useState<'mine' | 'community' | 'added'>('mine')
 
   const { data: myRequests = [], isLoading } = useQuery({
     queryKey: ['my-game-requests'],
@@ -60,6 +63,13 @@ const RequestGamePage = () => {
   // Once they vote, the request "moves" to the Mine tab on next invalidation.
   const communityRequests = useMemo(
     () => allRequests.filter(r => !r.voted && r.status === 'pending'),
+    [allRequests]
+  )
+
+  // History of requests that already made it into the catalog — backed by
+  // the same `listAll` payload so no extra fetch.
+  const addedRequests = useMemo(
+    () => allRequests.filter(r => r.status === 'added'),
     [allRequests]
   )
 
@@ -130,6 +140,7 @@ const RequestGamePage = () => {
 
       return
     }
+
     submitMutation.mutate(trimmed)
   }
 
@@ -192,6 +203,15 @@ const RequestGamePage = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 Request komunitas
                 <Chip size='small' label={communityRequests.length} sx={{ height: 20, fontWeight: 700 }} />
+              </Box>
+            }
+          />
+          <Tab
+            value='added'
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                Riwayat ditambahkan
+                <Chip size='small' color='success' label={addedRequests.length} sx={{ height: 20, fontWeight: 700 }} />
               </Box>
             }
           />
@@ -334,6 +354,86 @@ const RequestGamePage = () => {
                           startIcon={<i className='tabler-thumb-up' />}
                         >
                           +1 Saya juga mau
+                        </Button>
+                        <Button
+                          size='small'
+                          variant='text'
+                          href={req.store_url}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          startIcon={<i className='tabler-external-link' />}
+                        >
+                          Lihat di Steam
+                        </Button>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          )
+        )}
+
+        {tab === 'added' && (
+          allLoading ? (
+            <Card><CardContent>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={64} sx={{ mb: 1 }} />)}</CardContent></Card>
+          ) : addedRequests.length === 0 ? (
+            <Card>
+              <CardContent sx={{ textAlign: 'center', py: 6 }}>
+                <i className='tabler-circle-check' style={{ fontSize: 48, opacity: 0.5 }} />
+                <Typography variant='body1' sx={{ mt: 2 }} color='text.secondary'>
+                  Belum ada game request yang ditambahkan ke katalog. Submit game yang kamu mau lewat form di atas!
+                </Typography>
+              </CardContent>
+            </Card>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {addedRequests.map(req => (
+                <Card key={req.id} variant='outlined'>
+                  <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                    <Box
+                      component='img'
+                      src={req.header_image || gameHeaderImage(req.appid)}
+                      alt={req.name}
+                      onError={handleImageError}
+                      sx={{ width: 140, height: 'auto', borderRadius: 1, objectFit: 'cover', flexShrink: 0 }}
+                    />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+                        <Typography variant='subtitle1' sx={{ fontWeight: 700 }}>{req.name}</Typography>
+                        <Chip
+                          size='small'
+                          icon={<i className='tabler-circle-check-filled' style={{ fontSize: 14 }} />}
+                          label='Sudah Ditambahkan'
+                          color='success'
+                          variant='tonal'
+                        />
+                        <Chip
+                          size='small'
+                          icon={<i className='tabler-users' style={{ fontSize: 14 }} />}
+                          label={`${req.request_count} orang request`}
+                          variant='outlined'
+                        />
+                      </Box>
+                      <Typography variant='caption' color='text.secondary' sx={{ display: 'block' }}>
+                        {req.original_price ? `Harga Steam: ${formatIDR(req.original_price)}` : 'Harga: —'}
+                        {req.resolved_at && (
+                          <>
+                            {' · '}
+                            Ditambahkan: {formatDate(req.resolved_at)}
+                          </>
+                        )}
+                      </Typography>
+                      <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Button
+                          component={Link}
+                          href={`/game/${req.appid}`}
+                          size='small'
+                          variant='contained'
+                          color='primary'
+                          startIcon={<i className='tabler-device-gamepad-2' />}
+                        >
+                          Lihat di Toko
                         </Button>
                         <Button
                           size='small'
