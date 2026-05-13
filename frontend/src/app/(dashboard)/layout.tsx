@@ -20,6 +20,7 @@ import VerticalFooter from '@components/layout/vertical/Footer'
 import HorizontalFooter from '@components/layout/horizontal/Footer'
 import ScrollToTop from '@core/components/scroll-to-top'
 import ReviewNudgeModal from '@components/ReviewNudgeModal'
+import EmailVerificationBanner from '@components/EmailVerificationBanner'
 
 // Util Imports
 import { getMode, getSystemMode } from '@core/utils/serverHelpers'
@@ -44,11 +45,13 @@ const Layout = async (props: ChildrenType) => {
         systemMode={systemMode}
         verticalLayout={
           <VerticalLayout navigation={<Navigation mode={mode} />} navbar={<Navbar />} footer={<VerticalFooter />}>
+            <EmailVerificationBanner />
             {children}
           </VerticalLayout>
         }
         horizontalLayout={
           <HorizontalLayout header={<Header />} footer={<HorizontalFooter />}>
+            <EmailVerificationBanner />
             {children}
           </HorizontalLayout>
         }
