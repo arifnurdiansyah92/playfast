@@ -24,6 +24,7 @@ import verticalMenuSectionStyles from '@core/styles/vertical/menuSectionStyles'
 
 // Context Imports
 import { useAuth } from '@/contexts/AuthContext'
+import { useWhatsappNumber } from '@/hooks/useWhatsappNumber'
 
 type RenderExpandIconProps = {
   level?: number
@@ -51,6 +52,8 @@ const HorizontalMenu = () => {
   const verticalNavOptions = useVerticalNav()
   const theme = useTheme()
   const { user } = useAuth()
+  const waNumber = useWhatsappNumber()
+  const waSupportUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent('Halo Playfast, saya butuh bantuan.')}`
 
   // Vars
   const { transitionDuration } = verticalNavOptions
@@ -98,6 +101,16 @@ const HorizontalMenu = () => {
         <MenuItem href='/promos' icon={<i className='tabler-discount' />}>
           Promo Saya
         </MenuItem>
+        {user && (
+          <MenuItem
+            href={waSupportUrl}
+            target='_blank'
+            rel='noopener noreferrer'
+            icon={<i className='tabler-brand-whatsapp' />}
+          >
+            Bantuan
+          </MenuItem>
+        )}
         {isAdmin && (
           <SubMenu label='Admin' icon={<i className='tabler-shield' />}>
             <MenuItem href='/admin' icon={<i className='tabler-dashboard' />}>
