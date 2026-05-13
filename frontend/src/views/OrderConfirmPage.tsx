@@ -145,7 +145,17 @@ const OrderConfirmPage = ({ orderId }: Props) => {
             <Typography color='text.secondary'>
               Selesaikan pembayaran untuk mendapatkan akses game.
             </Typography>
-            {order.snap_token ? (
+            {order.tripay_reference && order.snap_token ? (
+              <Button
+                variant='contained'
+                size='large'
+                sx={{ mt: 3, px: 4 }}
+                href={order.snap_token}
+                startIcon={<i className='tabler-external-link' />}
+              >
+                Bayar via Tripay
+              </Button>
+            ) : order.snap_token ? (
               <Button
                 variant='contained'
                 size='large'

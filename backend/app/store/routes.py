@@ -367,6 +367,10 @@ def subscribe():
                 return_url=f"{frontend_url}/subscription/{sub.id}",
             )
             sub.tripay_reference = tx.get("reference")
+            # Stash checkout_url in snap_token so the confirm page can
+            # re-link to Tripay if the customer closed the tab and came
+            # back — single nullable string column already exists.
+            sub.snap_token = tx.get("checkout_url")
             db.session.commit()
             return jsonify({
                 "message": "Subscription created, awaiting payment",
@@ -1125,6 +1129,9 @@ def create_order():
                 return_url=f"{frontend_url}/order/{order.id}",
             )
             order.tripay_reference = tx.get("reference")
+            # Same dual-purpose-snap-token trick as the subscription branch
+            # so the order page can re-link to Tripay later.
+            order.snap_token = tx.get("checkout_url")
             db.session.commit()
             return jsonify({
                 "message": "Order created, awaiting payment",

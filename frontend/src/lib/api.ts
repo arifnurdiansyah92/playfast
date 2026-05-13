@@ -241,6 +241,7 @@ export interface Order {
   promo_discount: number
   credit_applied: number
   promo_code_id: number | null
+  tripay_reference?: string | null
   refunded_at?: string | null
   refund_note?: string | null
   refunded_by_user_id?: number | null
@@ -439,6 +440,7 @@ export interface Subscription {
   promo_discount: number
   credit_applied: number
   promo_code_id: number | null
+  tripay_reference?: string | null
   refunded_at?: string | null
   refund_note?: string | null
   refunded_by_user_id?: number | null

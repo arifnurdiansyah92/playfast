@@ -172,7 +172,17 @@ const SubscriptionConfirmPage = ({ subId }: Props) => {
             <Typography color='text.secondary'>
               Selesaikan pembayaran untuk mengaktifkan subscription.
             </Typography>
-            {isMidtrans && sub.snap_token ? (
+            {sub.tripay_reference && sub.snap_token ? (
+              <Button
+                variant='contained'
+                size='large'
+                sx={{ mt: 3, px: 4 }}
+                href={sub.snap_token}
+                startIcon={<i className='tabler-external-link' />}
+              >
+                Bayar via Tripay
+              </Button>
+            ) : isMidtrans && sub.snap_token ? (
               <Button
                 variant='contained'
                 size='large'
