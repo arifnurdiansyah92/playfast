@@ -382,7 +382,9 @@ def subscribe():
         except RuntimeError as e:
             db.session.rollback()
             logger.exception("Tripay create failed for subscription: %s", e)
-            return jsonify({"error": "Payment service unavailable, please try again later"}), 502
+            # Surface Tripay's own message — usually "Invalid signature",
+            # "Method not available", etc. — so admin can fix the config.
+            return jsonify({"error": f"Tripay: {e}"}), 502
     else:
         try:
             snap = _get_snap()
@@ -1143,7 +1145,7 @@ def create_order():
         except RuntimeError as e:
             db.session.rollback()
             logger.exception("Tripay create failed for order: %s", e)
-            return jsonify({"error": "Payment service unavailable, please try again later"}), 502
+            return jsonify({"error": f"Tripay: {e}"}), 502
     else:
         # Midtrans mode (sandbox or production)
         try:

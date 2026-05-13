@@ -165,12 +165,22 @@ def create_transaction(
         raise RuntimeError(f"Tripay bad response ({resp.status_code})")
 
     if not body.get("success"):
-        logger.error("Tripay create failed: %s", body)
-        raise RuntimeError(body.get("message") or "Tripay create failed")
+        # Tripay's `message` is human-readable; their `errors` field (when
+        # present) carries field-level validation details. Surface whichever
+        # has more signal so the admin can fix config quickly.
+        msg = body.get("message")
+        errs = body.get("errors") or body.get("data")
+        if errs and isinstance(errs, (dict, list)) and not msg:
+            msg = str(errs)
+        logger.error(
+            "Tripay create failed (status=%s method=%s ref=%s amount=%s): %s",
+            resp.status_code, payload["method"], merchant_ref, amount, body,
+        )
+        raise RuntimeError(msg or f"create rejected (HTTP {resp.status_code})")
 
     data = body.get("data") or {}
     if not data.get("checkout_url"):
         logger.error("Tripay missing checkout_url: %s", body)
-        raise RuntimeError("Tripay missing checkout_url")
+        raise RuntimeError("response missing checkout_url")
 
     return data
