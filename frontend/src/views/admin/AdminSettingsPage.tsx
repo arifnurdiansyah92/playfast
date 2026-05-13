@@ -86,8 +86,22 @@ const AdminSettingsPage = () => {
           avatar={<i className='tabler-credit-card' style={{ fontSize: 24 }} />}
           action={
             <Chip
-              label={paymentMode === 'manual' ? 'Manual' : paymentMode === 'midtrans_production' ? 'Production' : 'Sandbox'}
-              color={paymentMode === 'midtrans_production' ? 'success' : paymentMode === 'manual' ? 'warning' : 'info'}
+              label={
+                paymentMode === 'manual'
+                  ? 'Manual'
+                  : paymentMode === 'tripay'
+                    ? `Tripay ${form.tripay_is_production === 'true' ? 'Prod' : 'Sandbox'}`
+                    : paymentMode === 'midtrans_production'
+                      ? 'Midtrans Prod'
+                      : 'Midtrans Sandbox'
+              }
+              color={
+                paymentMode === 'midtrans_production' || (paymentMode === 'tripay' && form.tripay_is_production === 'true')
+                  ? 'success'
+                  : paymentMode === 'manual'
+                    ? 'warning'
+                    : 'info'
+              }
               variant='tonal'
             />
           }
@@ -113,6 +127,19 @@ const AdminSettingsPage = () => {
                 <Box>
                   <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>Midtrans Production</Typography>
                   <Typography variant='caption' color='text.secondary'>Live payments. Real money. GoPay, Bank Transfer, Credit Card, etc.</Typography>
+                </Box>
+              }
+              sx={{ mb: 2, alignItems: 'flex-start', '& .MuiRadio-root': { mt: 0.5 } }}
+            />
+            <FormControlLabel
+              value='tripay'
+              control={<Radio />}
+              label={
+                <Box>
+                  <Typography variant='subtitle2' sx={{ fontWeight: 600 }}>Tripay</Typography>
+                  <Typography variant='caption' color='text.secondary'>
+                    Aggregator QRIS / VA / e-wallet dengan fee 0.7% + Rp 750. Order otomatis confirm via callback. Pilih sandbox/production di bawah.
+                  </Typography>
                 </Box>
               }
               sx={{ mb: 2, alignItems: 'flex-start', '& .MuiRadio-root': { mt: 0.5 } }}
@@ -169,6 +196,118 @@ const AdminSettingsPage = () => {
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
                 <CustomTextField fullWidth label='Client Key' value={form.midtrans_production_client_key || ''} onChange={e => handleChange('midtrans_production_client_key', e.target.value)} placeholder='Mid-client-...' />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tripay Settings */}
+      {paymentMode === 'tripay' && (
+        <Card>
+          <CardHeader title='Tripay Settings' avatar={<i className='tabler-key' style={{ fontSize: 24 }} />} />
+          <Divider />
+          <CardContent>
+            <Alert severity='info' sx={{ mb: 3 }}>
+              <Typography variant='subtitle2' sx={{ fontWeight: 700, mb: 0.5 }}>Callback URL</Typography>
+              <Typography variant='body2' sx={{ fontFamily: 'monospace', mb: 1 }}>
+                https://playfast.id/callback/tripay
+              </Typography>
+              <Typography variant='caption'>
+                Salin URL ini ke pengaturan callback di dashboard Tripay. Default payment method: <strong>QRIS2</strong> (bisa diubah di bawah, isi pakai kode channel Tripay seperti QRIS2, BRIVA, BNIVA, OVO, GOPAY, dll).
+              </Typography>
+            </Alert>
+
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12 }}>
+                <FormControlLabel
+                  control={
+                    <Radio
+                      checked={form.tripay_is_production === 'true'}
+                      onChange={() => handleChange('tripay_is_production', 'true')}
+                    />
+                  }
+                  label='Production (real money)'
+                />
+                <FormControlLabel
+                  control={
+                    <Radio
+                      checked={form.tripay_is_production !== 'true'}
+                      onChange={() => handleChange('tripay_is_production', 'false')}
+                    />
+                  }
+                  label='Sandbox (testing)'
+                />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <CustomTextField
+                  fullWidth
+                  label='Default Payment Method'
+                  value={form.tripay_payment_method || ''}
+                  onChange={e => handleChange('tripay_payment_method', e.target.value)}
+                  placeholder='QRIS2'
+                  helperText='Kode channel Tripay yang dipakai saat create transaction. QRIS2 paling fleksibel — bisa dibayar pakai semua aplikasi yang support QRIS.'
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Typography variant='subtitle2' sx={{ fontWeight: 700, mt: 1 }}>Sandbox Credentials</Typography>
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <CustomTextField
+                  fullWidth
+                  label='Merchant Code'
+                  value={form.tripay_sandbox_merchant_code || ''}
+                  onChange={e => handleChange('tripay_sandbox_merchant_code', e.target.value)}
+                  placeholder='T01234'
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <CustomTextField
+                  fullWidth
+                  label='API Key'
+                  value={form.tripay_sandbox_api_key || ''}
+                  onChange={e => handleChange('tripay_sandbox_api_key', e.target.value)}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <CustomTextField
+                  fullWidth
+                  label='Private Key'
+                  type='password'
+                  value={form.tripay_sandbox_private_key || ''}
+                  onChange={e => handleChange('tripay_sandbox_private_key', e.target.value)}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Typography variant='subtitle2' sx={{ fontWeight: 700, mt: 1 }}>Production Credentials</Typography>
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <CustomTextField
+                  fullWidth
+                  label='Merchant Code'
+                  value={form.tripay_production_merchant_code || ''}
+                  onChange={e => handleChange('tripay_production_merchant_code', e.target.value)}
+                  placeholder='T01234'
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <CustomTextField
+                  fullWidth
+                  label='API Key'
+                  value={form.tripay_production_api_key || ''}
+                  onChange={e => handleChange('tripay_production_api_key', e.target.value)}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <CustomTextField
+                  fullWidth
+                  label='Private Key'
+                  type='password'
+                  value={form.tripay_production_private_key || ''}
+                  onChange={e => handleChange('tripay_production_private_key', e.target.value)}
+                />
               </Grid>
             </Grid>
           </CardContent>

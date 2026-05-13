@@ -210,16 +210,19 @@ def payment_config():
         "payment_mode": mode,
         "whatsapp_number": SiteSetting.get("manual_whatsapp_number"),
     }
-    if mode != "manual":
-        if mode == "midtrans_production":
-            result["client_key"] = SiteSetting.get("midtrans_production_client_key")
-            result["snap_url"] = "https://app.midtrans.com/snap/snap.js"
-        else:
-            result["client_key"] = SiteSetting.get("midtrans_sandbox_client_key")
-            result["snap_url"] = "https://app.sandbox.midtrans.com/snap/snap.js"
-    else:
+    if mode == "manual":
         result["qris_image_url"] = SiteSetting.get("manual_qris_image_url")
         result["instructions"] = SiteSetting.get("manual_payment_instructions")
+    elif mode == "tripay":
+        # Tripay hosts its own checkout, so the frontend only needs to know
+        # the mode — it gets the checkout URL when it actually creates a tx.
+        result["tripay_method"] = SiteSetting.get("tripay_payment_method") or "QRIS2"
+    elif mode == "midtrans_production":
+        result["client_key"] = SiteSetting.get("midtrans_production_client_key")
+        result["snap_url"] = "https://app.midtrans.com/snap/snap.js"
+    else:
+        result["client_key"] = SiteSetting.get("midtrans_sandbox_client_key")
+        result["snap_url"] = "https://app.sandbox.midtrans.com/snap/snap.js"
     return jsonify(result), 200
 
 
@@ -346,6 +349,36 @@ def subscribe():
                 "instructions": SiteSetting.get("manual_payment_instructions"),
             },
         }), 201
+    elif payment_mode == "tripay":
+        from app.tripay import service as tripay
+        if not tripay.is_configured():
+            db.session.rollback()
+            return jsonify({"error": "Tripay belum dikonfigurasi. Hubungi admin."}), 503
+
+        try:
+            frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
+            tx = tripay.create_transaction(
+                merchant_ref=midtrans_order_id,
+                amount=final_amount,
+                customer_email=user.email if user else "",
+                customer_name=(user.email.split("@")[0] if user and user.email else "Customer"),
+                item_name=f"Playfast {Subscription.PLAN_LABELS.get(plan, plan)} Subscription",
+                callback_url=f"{frontend_url}/callback/tripay",
+                return_url=f"{frontend_url}/subscription/{sub.id}",
+            )
+            sub.tripay_reference = tx.get("reference")
+            db.session.commit()
+            return jsonify({
+                "message": "Subscription created, awaiting payment",
+                "subscription": sub.to_dict(include_snap_token=True),
+                "payment_mode": "tripay",
+                "checkout_url": tx.get("checkout_url"),
+                "tripay_reference": tx.get("reference"),
+            }), 201
+        except RuntimeError as e:
+            db.session.rollback()
+            logger.exception("Tripay create failed for subscription: %s", e)
+            return jsonify({"error": "Payment service unavailable, please try again later"}), 502
     else:
         try:
             snap = _get_snap()
@@ -1074,6 +1107,36 @@ def create_order():
                 "instructions": SiteSetting.get("manual_payment_instructions"),
             },
         }), 201
+    elif payment_mode == "tripay":
+        from app.tripay import service as tripay
+        if not tripay.is_configured():
+            db.session.rollback()
+            return jsonify({"error": "Tripay belum dikonfigurasi. Hubungi admin."}), 503
+
+        try:
+            frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
+            tx = tripay.create_transaction(
+                merchant_ref=midtrans_order_id,
+                amount=final_amount,
+                customer_email=user_obj.email if user_obj else "",
+                customer_name=(user_obj.email.split("@")[0] if user_obj and user_obj.email else "Customer"),
+                item_name=game.name[:50],
+                callback_url=f"{frontend_url}/callback/tripay",
+                return_url=f"{frontend_url}/order/{order.id}",
+            )
+            order.tripay_reference = tx.get("reference")
+            db.session.commit()
+            return jsonify({
+                "message": "Order created, awaiting payment",
+                "order": order.to_dict(),
+                "payment_mode": "tripay",
+                "checkout_url": tx.get("checkout_url"),
+                "tripay_reference": tx.get("reference"),
+            }), 201
+        except RuntimeError as e:
+            db.session.rollback()
+            logger.exception("Tripay create failed for order: %s", e)
+            return jsonify({"error": "Payment service unavailable, please try again later"}), 502
     else:
         # Midtrans mode (sandbox or production)
         try:
@@ -1229,6 +1292,120 @@ def midtrans_webhook():
     else:
         logger.info("Midtrans webhook: unhandled status %s for %s", transaction_status, order_id)
         return jsonify({"status": "ignored"}), 200
+
+
+@store_bp.route("/callback/tripay", methods=["POST"])
+def tripay_callback():
+    """Handle Tripay payment callback.
+
+    Public endpoint — no JWT. Authenticity is verified via HMAC-SHA256 of
+    the raw request body using the merchant's private key, sent in the
+    `X-Callback-Signature` header. Tripay also includes `X-Callback-Event`
+    (usually `payment_status`) which we don't currently switch on.
+
+    Idempotent: rerunning the callback on an already-fulfilled order is a
+    no-op so duplicate webhooks don't cause double fulfillment.
+    """
+    from app.tripay import service as tripay
+
+    raw_body = request.get_data() or b""
+    sig = request.headers.get("X-Callback-Signature", "")
+
+    if not tripay.verify_callback_signature(raw_body, sig):
+        logger.warning("Tripay callback signature mismatch")
+        return jsonify({"success": False, "message": "Invalid signature"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    reference = payload.get("reference", "")
+    merchant_ref = payload.get("merchant_ref", "")
+    status = (payload.get("status") or "").upper()
+    paid_amount = int(payload.get("total_amount") or payload.get("amount_received") or 0)
+    payment_method = payload.get("payment_method") or payload.get("payment_method_code") or "tripay"
+
+    logger.info(
+        "Tripay callback: ref=%s merchant_ref=%s status=%s amount=%s",
+        reference, merchant_ref, status, paid_amount,
+    )
+
+    # Subscription path — merchant_ref starts with SUB-
+    if merchant_ref.startswith("SUB-"):
+        sub = (
+            Subscription.query.filter_by(tripay_reference=reference).first()
+            or Subscription.query.filter_by(midtrans_order_id=merchant_ref).first()
+        )
+        if not sub:
+            logger.warning("Tripay callback: subscription not found ref=%s merchant_ref=%s", reference, merchant_ref)
+            return jsonify({"success": False, "message": "Subscription not found"}), 404
+
+        if status == tripay.STATUS_PAID:
+            if sub.status == "pending_payment":
+                # Refuse to fulfill if Tripay says they collected less than
+                # we asked for — defensive against tampering / partial pay.
+                if paid_amount and paid_amount < sub.amount:
+                    logger.warning(
+                        "Tripay callback amount mismatch sub %s: expected %s got %s",
+                        sub.id, sub.amount, paid_amount,
+                    )
+                    return jsonify({"success": False, "message": "Amount mismatch"}), 400
+
+                sub.payment_type = f"tripay:{payment_method}"
+                sub.paid_at = datetime.now(timezone.utc)
+                sub.activate()
+                _maybe_award_referrer(sub, is_subscription=True)
+                db.session.commit()
+                _send_subscription_welcome(sub)
+                logger.info("Subscription %s activated via Tripay", sub.id)
+            return jsonify({"success": True}), 200
+
+        if status in (tripay.STATUS_EXPIRED, tripay.STATUS_FAILED):
+            if sub.status == "pending_payment":
+                sub.status = "cancelled"
+                db.session.commit()
+            return jsonify({"success": True}), 200
+
+        return jsonify({"success": True, "status": "ignored"}), 200
+
+    # Order path — anything else, look up by reference first
+    order = (
+        Order.query.filter_by(tripay_reference=reference).first()
+        or Order.query.filter_by(midtrans_order_id=merchant_ref).first()
+    )
+    if not order:
+        logger.warning("Tripay callback: order not found ref=%s merchant_ref=%s", reference, merchant_ref)
+        return jsonify({"success": False, "message": "Order not found"}), 404
+
+    if status == tripay.STATUS_PAID:
+        if order.status == "pending_payment":
+            if paid_amount and order.amount and paid_amount < order.amount:
+                logger.warning(
+                    "Tripay callback amount mismatch order %s: expected %s got %s",
+                    order.id, order.amount, paid_amount,
+                )
+                return jsonify({"success": False, "message": "Amount mismatch"}), 400
+
+            order.payment_type = f"tripay:{payment_method}"
+            order.paid_at = datetime.now(timezone.utc)
+            db.session.flush()
+
+            success = _fulfill_order(order)
+            if not success:
+                logger.error("Tripay callback: paid but fulfillment failed for order %s", order.id)
+                # Mirror the Midtrans path — leave as fulfilled so admin can
+                # rotate manually rather than leaving it stuck pending.
+                order.status = "fulfilled"
+                db.session.commit()
+            else:
+                _maybe_award_referrer(order, is_subscription=False)
+                db.session.commit()
+        return jsonify({"success": True}), 200
+
+    if status in (tripay.STATUS_EXPIRED, tripay.STATUS_FAILED):
+        if order.status == "pending_payment":
+            order.status = "cancelled"
+            db.session.commit()
+        return jsonify({"success": True}), 200
+
+    return jsonify({"success": True, "status": "ignored"}), 200
 
 
 # ---------------------------------------------------------------------------

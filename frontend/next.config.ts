@@ -13,6 +13,12 @@ const nextConfig: NextConfig = {
       {
         source: '/api/:path*',
         destination: `${apiUrl}/api/:path*`
+      },
+      {
+        // Tripay calls this exact URL — proxy to the Flask handler so the
+        // signed POST body reaches backend untouched.
+        source: '/callback/tripay',
+        destination: `${apiUrl}/api/store/callback/tripay`
       }
     ]
   }

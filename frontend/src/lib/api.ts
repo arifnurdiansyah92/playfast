@@ -569,6 +569,8 @@ return res.game
       subscription: Subscription
       payment_mode: string
       snap_token?: string
+      checkout_url?: string
+      tripay_reference?: string
       manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
     }>('/api/store/subscription/subscribe', {
       method: 'POST',
@@ -596,6 +598,8 @@ return res.game
       order: Order
       payment_mode: string
       snap_token?: string
+      checkout_url?: string
+      tripay_reference?: string
       manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
       already_owned?: boolean
     }>('/api/store/orders', {

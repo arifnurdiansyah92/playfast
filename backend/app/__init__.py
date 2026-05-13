@@ -208,6 +208,13 @@ def _run_schema_upgrades():
         "ALTER TABLE subscriptions ADD COLUMN refunded_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE subscriptions ADD COLUMN refund_note TEXT",
         "ALTER TABLE subscriptions ADD COLUMN refunded_by_user_id INTEGER REFERENCES users(id)",
+        # Tripay gateway: store the Tripay-side reference so the callback can
+        # look up the order/sub by that ID. Indexed since the webhook fires
+        # on the lookup path.
+        "ALTER TABLE orders ADD COLUMN tripay_reference VARCHAR(100)",
+        "ALTER TABLE subscriptions ADD COLUMN tripay_reference VARCHAR(100)",
+        "CREATE INDEX IF NOT EXISTS ix_orders_tripay_reference ON orders (tripay_reference)",
+        "CREATE INDEX IF NOT EXISTS ix_subscriptions_tripay_reference ON subscriptions (tripay_reference)",
     ]
     for stmt in alter_statements:
         try:

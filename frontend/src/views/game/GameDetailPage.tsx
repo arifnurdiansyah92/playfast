@@ -5,7 +5,6 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-import CheckoutReviewModal from '@/components/CheckoutReviewModal'
 
 import { useQuery } from '@tanstack/react-query'
 
@@ -23,6 +22,8 @@ import Breadcrumbs from '@mui/material/Breadcrumbs'
 import IconButton from '@mui/material/IconButton'
 import Dialog from '@mui/material/Dialog'
 import Grid from '@mui/material/Grid'
+
+import CheckoutReviewModal from '@/components/CheckoutReviewModal'
 
 import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
@@ -70,7 +71,8 @@ const GameDetailPage = ({ appid }: Props) => {
   const handleBuy = async () => {
     if (!user) {
       router.push(`/register?redirect=/game/${appid}`)
-      return
+      
+return
     }
 
     setError('')
@@ -81,7 +83,8 @@ const GameDetailPage = ({ appid }: Props) => {
 
       if (result.payment_mode === 'subscription') {
         router.push(`/play/${result.order.id}`)
-        return
+        
+return
       }
 
       router.push(`/order/${result.order.id}`)
@@ -95,14 +98,26 @@ const GameDetailPage = ({ appid }: Props) => {
 
   const handleConfirmPurchase = async ({ promo_code, apply_credit }: { promo_code: string | null; apply_credit: boolean }) => {
     setSubmitting(true)
+
     try {
       const result = await storeApi.createOrder(game!.appid, {
         promo_code: promo_code ?? undefined,
         apply_credit,
       })
+
       if (result.already_owned) {
         setError('Kamu sudah punya akses ke game ini')
       }
+
+      // Tripay returns a hosted checkout URL — send the buyer there
+      // directly so they can finish paying before navigating to the order
+      // page (which auto-refreshes via webhook).
+      if (result.payment_mode === 'tripay' && result.checkout_url) {
+        window.location.href = result.checkout_url
+
+        return
+      }
+
       router.push(`/order/${result.order.id}`)
     } catch (err: any) {
       setError(err?.message || 'Gagal membuat pesanan')
@@ -331,12 +346,15 @@ const GameDetailPage = ({ appid }: Props) => {
       {/* Media Gallery */}
       {(() => {
         const mediaItems: { type: 'video' | 'screenshot'; thumbnail: string; full: string; mp4?: string; name?: string }[] = []
+
         for (const mv of game.movies ?? []) {
           mediaItems.push({ type: 'video', thumbnail: mv.thumbnail, full: mv.thumbnail, mp4: mv.mp4_max || mv.mp4_480, name: mv.name })
         }
+
         for (const ss of game.screenshots ?? []) {
           mediaItems.push({ type: 'screenshot', thumbnail: ss.thumbnail, full: ss.full })
         }
+
         if (mediaItems.length === 0) return null
 
         const current = mediaItems[selectedMedia] || mediaItems[0]
@@ -429,11 +447,14 @@ const GameDetailPage = ({ appid }: Props) => {
       >
         {(() => {
           const mediaItems: { type: 'video' | 'screenshot'; full: string }[] = []
+
           for (const mv of game.movies ?? []) mediaItems.push({ type: 'video', full: mv.thumbnail })
           for (const ss of game.screenshots ?? []) mediaItems.push({ type: 'screenshot', full: ss.full })
           const current = mediaItems[selectedMedia]
+
           if (!current) return null
-          return (
+          
+return (
             <Box sx={{ position: 'relative' }}>
               <Box
                 component='img'

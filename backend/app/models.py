@@ -237,6 +237,7 @@ class Order(db.Model):
     )  # purchase, subscription
     snap_token = db.Column(db.String(255), nullable=True)
     midtrans_order_id = db.Column(db.String(100), nullable=True, unique=True, index=True)
+    tripay_reference = db.Column(db.String(100), nullable=True, index=True)
     payment_type = db.Column(db.String(50), nullable=True)
     paid_at = db.Column(db.DateTime(timezone=True), nullable=True)
     amount = db.Column(db.Integer, nullable=True)  # actual amount paid in IDR
@@ -401,7 +402,7 @@ class SiteSetting(db.Model):
 
     # Default settings
     DEFAULTS = {
-        "payment_mode": "midtrans_sandbox",  # midtrans_sandbox | midtrans_production | manual
+        "payment_mode": "manual",  # manual | midtrans_sandbox | midtrans_production | tripay
         "midtrans_sandbox_server_key": "SB-Mid-server-7Fp0W-6BPItzBeHc4WmVz0rh",
         "midtrans_sandbox_client_key": "SB-Mid-client-VNwEU_8NEdo5N3og",
         "midtrans_production_server_key": "",
@@ -419,6 +420,17 @@ class SiteSetting(db.Model):
         "referral_min_order": "50000",
         "discord_invite_url": "",  # /discord on the site redirects here
         "tutorial_youtube_url": "",  # Tutorial video on landing — empty = hide section
+        # Tripay gateway: 2 envs (sandbox + production) like Midtrans.
+        # `payment_mode = "tripay"` activates this gateway; `tripay_is_production`
+        # picks which credential set + base URL to use.
+        "tripay_is_production": "false",  # "true" | "false"
+        "tripay_sandbox_api_key": "",
+        "tripay_sandbox_private_key": "",
+        "tripay_sandbox_merchant_code": "",
+        "tripay_production_api_key": "",
+        "tripay_production_private_key": "",
+        "tripay_production_merchant_code": "",
+        "tripay_payment_method": "QRIS2",  # Tripay channel code; QRIS covers most users
     }
 
     @classmethod
@@ -657,6 +669,7 @@ class Subscription(db.Model):
     midtrans_order_id = db.Column(
         db.String(100), nullable=True, unique=True, index=True
     )
+    tripay_reference = db.Column(db.String(100), nullable=True, index=True)
     snap_token = db.Column(db.String(255), nullable=True)
     payment_type = db.Column(db.String(50), nullable=True)
     paid_at = db.Column(db.DateTime(timezone=True), nullable=True)

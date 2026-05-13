@@ -66,6 +66,14 @@ const SubscribePage = () => {
     try {
       const result = await storeApi.subscribe(selectedPlan, { promo_code: promo_code ?? undefined, apply_credit })
 
+      // Tripay hosts its own checkout — send the user there so they can
+      // finish payment, then bounce back via return_url after success.
+      if (result.payment_mode === 'tripay' && result.checkout_url) {
+        window.location.href = result.checkout_url
+
+        return
+      }
+
       router.push(`/subscription/${result.subscription.id}`)
     } catch (err: any) {
       setError(err.message || 'Failed to subscribe')
