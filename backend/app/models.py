@@ -418,6 +418,7 @@ class SiteSetting(db.Model):
         "referral_referrer_credit": "10000",
         "referral_min_order": "50000",
         "discord_invite_url": "",  # /discord on the site redirects here
+        "tutorial_youtube_url": "",  # Tutorial video on landing — empty = hide section
     }
 
     @classmethod

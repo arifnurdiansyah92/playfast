@@ -53,6 +53,20 @@ const LandingPage = () => {
   } | null>(null)
 
   const [requestsLoading, setRequestsLoading] = useState(true)
+  const [tutorialYoutubeId, setTutorialYoutubeId] = useState<string | null>(null)
+
+  useEffect(() => {
+    storeApi.getTutorialUrl()
+      .then(({ url }) => {
+        if (!url) return
+
+        // Accept watch?v=, youtu.be/, /embed/, /shorts/ — strip extra params.
+        const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+
+        if (m) setTutorialYoutubeId(m[1])
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     storeApi.getFeaturedGames().then(featured => {
@@ -367,6 +381,53 @@ const LandingPage = () => {
             ))}
           </Grid>
         </Container>
+
+        {/* ════════════════════ TUTORIAL VIDEO ════════════════════ */}
+        {tutorialYoutubeId && (
+          <Container maxWidth='md' sx={{ pb: 10 }}>
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+              <Typography variant='overline' sx={{ color: gold, fontWeight: 700, letterSpacing: 2 }}>
+                Tutorial Video
+              </Typography>
+              <Typography variant='h4' sx={{ fontWeight: 700, mt: 0.5, mb: 1 }}>
+                Lihat Cara Pakainya
+              </Typography>
+              <Typography variant='body1' sx={{ color: textSecondary }}>
+                Dari beli sampai main — semua langkah dijelasin dalam satu video singkat.
+              </Typography>
+            </Box>
+
+            <Box
+              sx={{
+                position: 'relative',
+                paddingBottom: '56.25%',
+                height: 0,
+                overflow: 'hidden',
+                borderRadius: 2,
+                border: `1px solid ${darkCardBorder}`,
+                boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+                bgcolor: '#000',
+              }}
+            >
+              <Box
+                component='iframe'
+                src={`https://www.youtube-nocookie.com/embed/${tutorialYoutubeId}?rel=0`}
+                title='Cara Pakai Playfast'
+                allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
+                allowFullScreen
+                loading='lazy'
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 0,
+                }}
+              />
+            </Box>
+          </Container>
+        )}
 
         {/* ════════════════════ HOW IT WORKS ════════════════════ */}
         <Box sx={{ py: 10, bgcolor: 'rgba(0,0,0,0.2)' }}>

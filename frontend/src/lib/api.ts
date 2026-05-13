@@ -558,6 +558,9 @@ return res.game
   getPaymentConfig() {
     return request<{ payment_mode: string; client_key?: string; snap_url?: string; qris_image_url?: string; whatsapp_number?: string; instructions?: string }>('/api/store/payment-config')
   },
+  getTutorialUrl() {
+    return request<{ url: string }>('/api/store/site/tutorial-url')
+  },
   getSubscriptionPlans() {
     return request<{ plans: SubscriptionPlan[] }>('/api/store/subscription/plans')
   },

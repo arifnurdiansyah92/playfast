@@ -273,6 +273,29 @@ const AdminSettingsPage = () => {
         </CardContent>
       </Card>
 
+      {/* Landing Content */}
+      <Card>
+        <CardHeader
+          title='Landing Content'
+          avatar={<i className='tabler-video' style={{ fontSize: 24 }} />}
+        />
+        <Divider />
+        <CardContent>
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12 }}>
+              <CustomTextField
+                fullWidth
+                label='Tutorial YouTube URL'
+                value={form.tutorial_youtube_url || ''}
+                onChange={e => handleChange('tutorial_youtube_url', e.target.value)}
+                placeholder='https://www.youtube.com/watch?v=xxxxxxxxxxx atau https://youtu.be/xxxxxxxxxxx'
+                helperText='Video tutorial yang muncul di halaman depan. Kosongkan untuk sembunyikan section-nya.'
+              />
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
       <Snackbar open={!!snackMsg} autoHideDuration={3000} onClose={() => setSnackMsg('')} message={snackMsg} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} />
     </div>
   )

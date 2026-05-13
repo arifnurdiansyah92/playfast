@@ -188,6 +188,16 @@ def site_discord_url():
     return jsonify({"url": SiteSetting.get("discord_invite_url") or ""}), 200
 
 
+@store_bp.route("/site/tutorial-url", methods=["GET"])
+def site_tutorial_url():
+    """Public: YouTube tutorial video URL shown on the landing page.
+
+    Empty string when the admin hasn't set one — the landing hides the
+    section entirely in that case so we don't render a broken iframe.
+    """
+    return jsonify({"url": SiteSetting.get("tutorial_youtube_url") or ""}), 200
+
+
 @store_bp.route("/payment-config", methods=["GET"])
 def payment_config():
     """Public endpoint: returns payment mode + the WA contact number, plus
