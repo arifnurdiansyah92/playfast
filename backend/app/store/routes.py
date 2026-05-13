@@ -385,6 +385,10 @@ def subscribe():
             # Surface Tripay's own message — usually "Invalid signature",
             # "Method not available", etc. — so admin can fix the config.
             return jsonify({"error": f"Tripay: {e}"}), 502
+        except Exception as e:  # noqa: BLE001 — last-ditch so the worker never dies silently
+            db.session.rollback()
+            logger.exception("Unexpected error in Tripay subscription path: %s", e)
+            return jsonify({"error": f"Internal error: {type(e).__name__}: {e}"}), 500
     else:
         try:
             snap = _get_snap()
@@ -1119,6 +1123,10 @@ def create_order():
             db.session.rollback()
             return jsonify({"error": "Tripay belum dikonfigurasi. Hubungi admin."}), 503
 
+        logger.info(
+            "Tripay order start: order_id=%s amount=%s promo=%s credit=%s",
+            order.id, final_amount, pricing["promo_code_id"], pricing["credit_applied"],
+        )
         try:
             frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
             tx = tripay.create_transaction(
@@ -1130,11 +1138,13 @@ def create_order():
                 callback_url=f"{frontend_url}/callback/tripay",
                 return_url=f"{frontend_url}/order/{order.id}",
             )
+            logger.info("Tripay order: create OK ref=%s", tx.get("reference"))
             order.tripay_reference = tx.get("reference")
             # Same dual-purpose-snap-token trick as the subscription branch
             # so the order page can re-link to Tripay later.
             order.snap_token = tx.get("checkout_url")
             db.session.commit()
+            logger.info("Tripay order: commit OK order_id=%s", order.id)
             return jsonify({
                 "message": "Order created, awaiting payment",
                 "order": order.to_dict(),
@@ -1146,6 +1156,10 @@ def create_order():
             db.session.rollback()
             logger.exception("Tripay create failed for order: %s", e)
             return jsonify({"error": f"Tripay: {e}"}), 502
+        except Exception as e:  # noqa: BLE001 — last-ditch so the worker never dies silently
+            db.session.rollback()
+            logger.exception("Unexpected error in Tripay order path: %s", e)
+            return jsonify({"error": f"Internal error: {type(e).__name__}: {e}"}), 500
     else:
         # Midtrans mode (sandbox or production)
         try:

@@ -152,11 +152,17 @@ def create_transaction(
     headers = {"Authorization": f"Bearer {creds['api_key']}"}
     url = f"{_base_url()}/transaction/create"
 
+    logger.info(
+        "Tripay POST %s method=%s ref=%s amount=%s",
+        url, payload["method"], merchant_ref, amount,
+    )
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=15)
     except requests.RequestException as e:
         logger.exception("Tripay transport error: %s", e)
         raise RuntimeError("Tripay unreachable") from e
+
+    logger.info("Tripay HTTP %s in response", resp.status_code)
 
     try:
         body = resp.json()
