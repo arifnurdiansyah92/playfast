@@ -491,28 +491,54 @@ def admin_update_request(request_id: int):
         )
         header = matched_game.custom_header_image or matched_game.header_image or req.header_image
 
-        sent_count = 0
-        for vote in req.votes.all():
-            user = vote.user
-            if not user or not user.email:
-                continue
-            try:
-                send_game_request_fulfilled_email(
-                    to=user.email,
-                    game_name=display_name,
-                    game_url=game_url,
-                    header_image=header,
-                )
-                sent_count += 1
-            except Exception:
-                logger.exception(
-                    "Failed to enqueue fulfilled email for voter %s of request %s",
-                    user.id, req.id,
-                )
+        # Collect recipient emails now (need an active session), then hand
+        # the list off to a background thread. Sending inline would block
+        # the admin for ~N * 0.4 s and risks gunicorn worker timeout on
+        # large vote counts.
+        recipients = [v.user.email for v in req.votes.all() if v.user and v.user.email]
+        recipient_count = len(recipients)
 
+        # Mark as notified immediately so a duplicate click can't re-fire
+        # the notification. The actual sent_count is fixed up by the worker
+        # once the burst completes.
         req.notified_at = datetime.now(timezone.utc)
-        req.notified_count = sent_count
-        notify_message = f" · Notifikasi dikirim ke {sent_count} voter."
+        req.notified_count = recipient_count
+
+        app = current_app._get_current_object()
+        req_id = req.id
+
+        def _notify_voters_async():
+            with app.app_context():
+                sent = 0
+                for email in recipients:
+                    try:
+                        send_game_request_fulfilled_email(
+                            to=email,
+                            game_name=display_name,
+                            game_url=game_url,
+                            header_image=header,
+                        )
+                        sent += 1
+                    except Exception:
+                        logger.exception(
+                            "Failed to send fulfilled email to %s for request %s",
+                            email, req_id,
+                        )
+                    # Gentle pacing so SMTP / Brevo doesn't throttle us.
+                    time.sleep(0.4)
+
+                # Update with the real sent count once everyone's been
+                # tried — useful when some addresses bounce.
+                try:
+                    fresh = db.session.get(GameRequest, req_id)
+                    if fresh is not None:
+                        fresh.notified_count = sent
+                        db.session.commit()
+                except Exception:
+                    logger.exception("Failed to update notified_count for request %s", req_id)
+
+        threading.Thread(target=_notify_voters_async, daemon=True).start()
+        notify_message = f" · Notifikasi sedang dikirim ke {recipient_count} voter (background)."
 
     db.session.commit()
     return jsonify({

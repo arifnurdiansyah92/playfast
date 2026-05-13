@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { useMutation } from '@tanstack/react-query'
 
@@ -19,6 +19,9 @@ import Snackbar from '@mui/material/Snackbar'
 import { authApi } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
+const RESEND_COOLDOWN_S = 60
+const COOLDOWN_KEY_PREFIX = 'pf:verify-resend-until:'
+
 const EmailVerificationBanner = () => {
   const { user, loading, refreshUser } = useAuth()
   const [snack, setSnack] = useState('')
@@ -26,11 +29,55 @@ const EmailVerificationBanner = () => {
   const [newEmail, setNewEmail] = useState('')
   const [currentPw, setCurrentPw] = useState('')
   const [editError, setEditError] = useState('')
+  const [cooldownLeft, setCooldownLeft] = useState(0)
+
+  // Persist cooldown end-time in localStorage so a page reload doesn't
+  // grant the user a free resend before the server cooldown expires.
+  const cooldownKey = user ? `${COOLDOWN_KEY_PREFIX}${user.id}` : null
+
+  useEffect(() => {
+    if (!cooldownKey) return
+
+    const tick = () => {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(cooldownKey) : null
+      const until = raw ? parseInt(raw, 10) : 0
+      const left = Math.max(0, Math.ceil((until - Date.now()) / 1000))
+
+      setCooldownLeft(left)
+      if (left === 0 && raw) localStorage.removeItem(cooldownKey)
+    }
+
+    tick()
+    const id = setInterval(tick, 1000)
+
+    return () => clearInterval(id)
+  }, [cooldownKey])
+
+  const startCooldown = (seconds = RESEND_COOLDOWN_S) => {
+    if (!cooldownKey) return
+    const until = Date.now() + seconds * 1000
+
+    localStorage.setItem(cooldownKey, String(until))
+    setCooldownLeft(seconds)
+  }
 
   const resendMut = useMutation({
     mutationFn: () => authApi.resendVerification(),
-    onSuccess: r => setSnack(r.message || 'Link verifikasi sudah dikirim.'),
-    onError: (e: any) => setSnack(e?.message || 'Gagal kirim ulang.'),
+    onSuccess: r => {
+      startCooldown(RESEND_COOLDOWN_S)
+      setSnack(r.message || 'Link verifikasi sudah dikirim.')
+    },
+    onError: (e: any) => {
+      // Backend rate-limit returns 429 with retry_after seconds — honour it
+      // so the local cooldown matches even after a hard refresh.
+      const retryAfter = e?.body?.retry_after
+
+      if (typeof retryAfter === 'number' && retryAfter > 0) {
+        startCooldown(retryAfter)
+      }
+
+      setSnack(e?.message || 'Gagal kirim ulang.')
+    },
   })
 
   const updateMut = useMutation({
@@ -80,10 +127,14 @@ const EmailVerificationBanner = () => {
               variant='contained'
               color='warning'
               onClick={() => resendMut.mutate()}
-              disabled={resendMut.isPending}
-              startIcon={<i className='tabler-send' style={{ fontSize: 16 }} />}
+              disabled={resendMut.isPending || cooldownLeft > 0}
+              startIcon={<i className={cooldownLeft > 0 ? 'tabler-clock' : 'tabler-send'} style={{ fontSize: 16 }} />}
             >
-              {resendMut.isPending ? 'Mengirim…' : 'Kirim Ulang Verifikasi'}
+              {resendMut.isPending
+                ? 'Mengirim…'
+                : cooldownLeft > 0
+                  ? `Tunggu ${cooldownLeft}s`
+                  : 'Kirim Ulang Verifikasi'}
             </Button>
             <Button
               size='small'

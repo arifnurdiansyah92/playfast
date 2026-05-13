@@ -11,6 +11,7 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 LOGO_URL = "https://playfast.id/images/brand/logo-horizontal.png"
+ICON_URL = "https://playfast.id/images/brand/icon.png"
 SITE_URL = "https://playfast.id"
 
 
@@ -370,20 +371,34 @@ def _play_safety_fragment() -> str:
         </table>"""
 
 
-def _hero_block(gradient: str, glyph: str, eyebrow: str) -> str:
+def _hero_block(gradient: str, eyebrow: str, *, icon_url: str | None = None, glyph: str | None = None) -> str:
     """Tall hero header with a prominent badge + eyebrow label.
 
-    The previous design squeezed a 56px circle into 24px padding (~104px tall
-    total) which read as a thin strip. Bumping the padding and circle size
-    gives the email a proper "moment" before the body content kicks in.
+    Defaults to the Playfast icon for brand consistency. Callers can pass
+    `glyph` (an HTML entity / emoji) to fall back to a glyph badge — only
+    used if `icon_url` is explicitly `None`.
     """
+    if icon_url is None and glyph is None:
+        icon_url = ICON_URL
+
+    if icon_url:
+        badge = (
+            f'<img src="{icon_url}" alt="Playfast" width="56" height="56" '
+            f'style="display: block; width: 56px; height: 56px; border-radius: 14px;" />'
+        )
+    else:
+        badge = (
+            f'<table role="presentation" width="76" height="76" cellpadding="0" cellspacing="0" border="0" '
+            f'style="background: rgba(0,0,0,0.18); border-radius: 50%; box-shadow: 0 0 0 6px rgba(255,255,255,0.06);">'
+            f'<tr><td align="center" valign="middle" style="font-size: 36px; line-height: 76px;">{glyph}</td></tr>'
+            f'</table>'
+        )
+
     return f"""\
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: {gradient};">
         <tr>
           <td align="center" style="padding: 44px 24px 36px 24px;">
-            <table role="presentation" width="76" height="76" cellpadding="0" cellspacing="0" border="0" style="background: rgba(0,0,0,0.18); border-radius: 50%; box-shadow: 0 0 0 6px rgba(255,255,255,0.06);">
-              <tr><td align="center" valign="middle" style="font-size: 36px; line-height: 76px;">{glyph}</td></tr>
-            </table>
+            {badge}
             <p style="color: rgba(255,255,255,0.92); font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; margin: 16px 0 0;">
               {eyebrow}
             </p>
@@ -425,7 +440,6 @@ def send_order_welcome_email(to: str, game_name: str, play_url: str):
     safety = _play_safety_fragment()
     hero = _hero_block(
         gradient="linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)",
-        glyph="&#10003;",
         eyebrow="Pesanan Aktif",
     )
     cta = _cta_button(play_url, "Buka Halaman Main")
@@ -454,7 +468,6 @@ def send_subscription_welcome_email(to: str, plan_label: str, store_url: str):
     safety = _play_safety_fragment()
     hero = _hero_block(
         gradient="linear-gradient(135deg, #c9a84c 0%, #a88a2e 100%)",
-        glyph="&#127775;",
         eyebrow="Premium Aktif",
     )
     cta = _cta_button(store_url, "Jelajahi Katalog")

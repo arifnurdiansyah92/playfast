@@ -62,7 +62,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
       if (!retryRes.ok) {
         const body = await retryRes.json().catch(() => ({ error: retryRes.statusText }))
 
-        throw new ApiError(retryRes.status, body.error || body.message || retryRes.statusText)
+        throw new ApiError(retryRes.status, body.error || body.message || retryRes.statusText, body)
       }
 
       if (retryRes.status === 204) return undefined as T
@@ -79,7 +79,7 @@ return retryRes.json()
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }))
 
-    throw new ApiError(res.status, body.error || body.message || res.statusText)
+    throw new ApiError(res.status, body.error || body.message || res.statusText, body)
   }
 
   if (res.status === 204) return undefined as T
@@ -90,9 +90,14 @@ return res.json()
 export class ApiError extends Error {
   status: number
 
-  constructor(status: number, message: string) {
+  // Extra fields from the response body (e.g. `retry_after`, `code`). Callers
+  // that need rate-limit info can introspect this without parsing the message.
+  body: Record<string, any>
+
+  constructor(status: number, message: string, body: Record<string, any> = {}) {
     super(message)
     this.status = status
+    this.body = body
     this.name = 'ApiError'
   }
 }

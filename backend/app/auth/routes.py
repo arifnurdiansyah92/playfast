@@ -1,6 +1,7 @@
 """Authentication endpoints: register, login, logout, current user."""
 
 import re
+from datetime import datetime, timezone
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
@@ -273,10 +274,18 @@ def verify_email():
     return jsonify({"message": "Email berhasil diverifikasi!"}), 200
 
 
+RESEND_VERIFICATION_COOLDOWN_SECONDS = 60
+
+
 @auth_bp.route("/resend-verification", methods=["POST"])
 @jwt_required()
 def resend_verification():
-    """Resend the verification email for the current user."""
+    """Resend the verification email for the current user.
+
+    Rate-limited: at most one resend per `RESEND_VERIFICATION_COOLDOWN_SECONDS`
+    per user. Spamming the button (or a stolen token) shouldn't blast our
+    SMTP quota or land us on a Brevo greylist.
+    """
     user_id = int(get_jwt_identity())
     user = db.session.get(User, user_id)
 
@@ -286,6 +295,21 @@ def resend_verification():
     if user.email_verified:
         return jsonify({"message": "Email sudah terverifikasi"}), 200
 
+    last_token = (
+        EmailVerificationToken.query
+        .filter_by(user_id=user_id)
+        .order_by(EmailVerificationToken.created_at.desc())
+        .first()
+    )
+    if last_token is not None:
+        elapsed = (datetime.now(timezone.utc) - last_token.created_at).total_seconds()
+        remaining = RESEND_VERIFICATION_COOLDOWN_SECONDS - int(elapsed)
+        if remaining > 0:
+            return jsonify({
+                "error": f"Tunggu {remaining} detik lagi sebelum kirim ulang.",
+                "retry_after": remaining,
+            }), 429
+
     token = EmailVerificationToken.create_for_user(user.id)
     db.session.commit()
 
@@ -293,4 +317,7 @@ def resend_verification():
     verify_url = f"{frontend_url}/verify-email?token={token.token}"
     send_verification_email(user.email, verify_url)
 
-    return jsonify({"message": "Email verifikasi telah dikirim ulang."}), 200
+    return jsonify({
+        "message": "Email verifikasi telah dikirim ulang.",
+        "cooldown_seconds": RESEND_VERIFICATION_COOLDOWN_SECONDS,
+    }), 200
