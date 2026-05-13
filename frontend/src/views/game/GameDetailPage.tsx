@@ -65,7 +65,14 @@ const GameDetailPage = ({ appid }: Props) => {
 
   const isSubscribed = subStatus?.is_subscribed ?? false
 
-  const existingOrder = orders?.find(o => String(o.game?.appid) === String(appid))
+  // Treat only ACTIVE access as "owned" — refunded / revoked / cancelled
+  // / expired orders shouldn't block re-purchase. Mirrors the backend's
+  // duplicate-purchase check at /api/store/orders POST.
+  const existingOrder = orders?.find(o =>
+    String(o.game?.appid) === String(appid)
+    && o.status === 'fulfilled'
+    && !o.is_revoked,
+  )
 
   // Used only for subscribed users playing via subscription (no payment needed)
   const handleBuy = async () => {
