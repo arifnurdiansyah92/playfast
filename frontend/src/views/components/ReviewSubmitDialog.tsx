@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography'
 import Alert from '@mui/material/Alert'
 import IconButton from '@mui/material/IconButton'
 import Chip from '@mui/material/Chip'
+import CircularProgress from '@mui/material/CircularProgress'
 
 import { reviewsApi } from '@/lib/api'
 import type { Review } from '@/lib/api'
@@ -40,6 +41,12 @@ interface PreviewImage {
   preview?: string
 }
 
+const formatSize = (bytes: number) => {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
   const [rating, setRating] = useState(5)
   const [headline, setHeadline] = useState('')
@@ -48,11 +55,16 @@ const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
   const [removedIds, setRemovedIds] = useState<number[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fileErrors, setFileErrors] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
+
+  // Track all outstanding blob URLs so we can revoke them regardless of how the dialog closes.
+  const blobUrlsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (open) {
       setError(null)
+      setFileErrors([])
       setRemovedIds([])
 
       if (existing) {
@@ -69,57 +81,92 @@ const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
     }
   }, [open, existing])
 
-  // Cleanup blob URLs when component unmounts or images change
+  // Revoke any outstanding blob URLs when dialog closes (open → !open) or on unmount.
   useEffect(() => {
-    return () => {
-      images.forEach(img => {
-        if (img.preview) URL.revokeObjectURL(img.preview)
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (open) return
+
+    blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u))
+    blobUrlsRef.current.clear()
+  }, [open])
+
+  useEffect(() => () => {
+    blobUrlsRef.current.forEach(u => URL.revokeObjectURL(u))
+    blobUrlsRef.current.clear()
   }, [])
 
   const acceptFiles = (files: FileList | File[]) => {
-    setError(null)
-
     const arr = Array.from(files)
 
     const remaining = MAX_IMAGES - images.length
 
     if (remaining <= 0) {
-      setError(`Maksimal ${MAX_IMAGES} foto.`)
+      setFileErrors(prev => [...prev, `Maksimal ${MAX_IMAGES} foto sudah tercapai.`])
 
       return
     }
 
     const accepted: PreviewImage[] = []
+    const newErrors: string[] = []
 
     for (const f of arr.slice(0, remaining)) {
       if (!ALLOWED.includes(f.type)) {
-        setError(`Format ${f.name} tidak didukung. Gunakan JPG/PNG/WEBP/GIF.`)
+        newErrors.push(`${f.name} — format tidak didukung`)
 
         continue
       }
 
       if (f.size > MAX_BYTES) {
-        setError(`${f.name} melebihi 5 MB.`)
+        newErrors.push(`${f.name} — melebihi 5 MB`)
 
         continue
       }
 
-      accepted.push({ file: f, preview: URL.createObjectURL(f) })
+      const previewUrl = URL.createObjectURL(f)
+
+      blobUrlsRef.current.add(previewUrl)
+      accepted.push({ file: f, preview: previewUrl })
     }
 
-    if (accepted.length === 0 && !error) return
-    setImages(prev => [...prev, ...accepted])
+    if (arr.length > remaining) {
+      newErrors.push(`Hanya ${remaining} foto bisa ditambahkan (maks ${MAX_IMAGES}).`)
+    }
+
+    if (accepted.length > 0) {
+      setFileErrors([])
+      setImages(prev => [...prev, ...accepted])
+    }
+
+    if (newErrors.length > 0) {
+      setFileErrors(prev => [...prev, ...newErrors])
+    }
   }
 
   const removeImage = (idx: number) => {
     const img = images[idx]
 
     if (img.id !== undefined) setRemovedIds(prev => [...prev, img.id!])
-    if (img.preview) URL.revokeObjectURL(img.preview)
+
+    if (img.preview) {
+      URL.revokeObjectURL(img.preview)
+      blobUrlsRef.current.delete(img.preview)
+    }
+
     setImages(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const dismissFileError = (idx: number) => {
+    setFileErrors(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (submitting) return
+
+    const files = Array.from(e.clipboardData?.files ?? []).filter(f => f.type.startsWith('image/'))
+
+    if (files.length) {
+      e.preventDefault()
+      acceptFiles(files)
+    }
   }
 
   const handleSubmit = async () => {
@@ -170,6 +217,8 @@ const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
     }
   }
 
+  const atCapacity = images.length >= MAX_IMAGES
+
   return (
     <Dialog
       open={open}
@@ -182,7 +231,10 @@ const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
         {existing ? 'Edit Review Kamu' : 'Tulis Review'}
       </DialogTitle>
 
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
+      <DialogContent
+        onPaste={handlePaste}
+        sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}
+      >
         {existing?.status === 'rejected' && existing?.admin_note && (
           <Alert severity='warning' sx={{ bgcolor: 'rgba(255,167,38,0.12)' }}>
             Review sebelumnya ditolak: <em>{existing.admin_note}</em>. Edit dan submit ulang untuk dipertimbangkan kembali.
@@ -239,6 +291,28 @@ const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
             Foto (opsional, max {MAX_IMAGES})
           </Typography>
 
+          {fileErrors.length > 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 1.5 }}>
+              {fileErrors.map((msg, idx) => (
+                <Chip
+                  key={`${idx}-${msg}`}
+                  label={msg}
+                  size='small'
+                  onDelete={() => dismissFileError(idx)}
+                  deleteIcon={<i className='tabler-x' style={{ fontSize: 14 }} />}
+                  sx={{
+                    bgcolor: 'rgba(244,67,54,0.12)',
+                    color: '#f08a82',
+                    border: '1px solid rgba(244,67,54,0.3)',
+                    justifyContent: 'space-between',
+                    '& .MuiChip-label': { px: 1 },
+                    '& .MuiChip-deleteIcon': { color: '#f08a82', mr: 0.5, '&:hover': { color: '#fff' } },
+                  }}
+                />
+              ))}
+            </Box>
+          )}
+
           <Box
             onDragOver={e => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
@@ -251,13 +325,18 @@ const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
               border: '2px dashed',
               borderColor: dragOver ? gold : 'rgba(154,160,166,0.3)',
               borderRadius: 2,
-              p: 3,
+              p: 4,
+              minHeight: 140,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
               textAlign: 'center',
               bgcolor: dragOver ? 'rgba(201,168,76,0.05)' : 'transparent',
               transition: 'all 0.15s ease',
               cursor: 'pointer',
-              opacity: images.length >= MAX_IMAGES || submitting ? 0.5 : 1,
-              pointerEvents: images.length >= MAX_IMAGES || submitting ? 'none' : 'auto',
+              opacity: atCapacity || submitting ? 0.5 : 1,
+              pointerEvents: atCapacity || submitting ? 'none' : 'auto',
             }}
             component='label'
           >
@@ -271,38 +350,70 @@ const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
                 e.target.value = ''
               }}
             />
-            <i className='tabler-cloud-upload' style={{ fontSize: 36, color: 'rgba(154,160,166,0.6)' }} />
-            <Typography variant='body2' sx={{ mt: 1, color: 'text.secondary' }}>
-              Drag &amp; drop atau klik untuk upload (JPG/PNG/WEBP, max 5 MB/foto)
-            </Typography>
+            <i
+              className='tabler-cloud-upload'
+              style={{
+                fontSize: 48,
+                color: dragOver ? gold : 'rgba(154,160,166,0.6)',
+                transition: 'color 0.15s ease',
+              }}
+            />
+            {atCapacity ? (
+              <Typography variant='body1' sx={{ mt: 1.5, fontWeight: 600, color: 'text.secondary' }}>
+                ✓ Maksimal foto sudah tercapai. Hapus salah satu untuk ganti.
+              </Typography>
+            ) : (
+              <>
+                <Typography variant='body1' sx={{ mt: 1.5, fontWeight: 600 }}>
+                  📸 Tarik foto ke sini atau klik untuk pilih
+                </Typography>
+                <Typography variant='caption' sx={{ mt: 0.5, color: 'text.secondary' }}>
+                  JPG / PNG / WEBP / GIF · Maks 5 MB per foto · {images.length}/{MAX_IMAGES} terisi
+                </Typography>
+              </>
+            )}
           </Box>
 
           {images.length > 0 && (
             <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
               {images.map((img, idx) => (
-                <Box
-                  key={img.id ?? `new-${idx}`}
-                  sx={{ position: 'relative', width: 96, height: 96 }}
-                >
-                  <Box
-                    component='img'
-                    src={img.url ?? img.preview}
-                    alt=''
-                    sx={{ width: 96, height: 96, borderRadius: 1.5, objectFit: 'cover', border: '1px solid rgba(154,160,166,0.25)' }}
-                  />
-                  <IconButton
-                    onClick={() => removeImage(idx)}
-                    size='small'
-                    disabled={submitting}
-                    sx={{
-                      position: 'absolute', top: -8, right: -8,
-                      bgcolor: 'rgba(0,0,0,0.85)', color: '#fff',
-                      width: 22, height: 22,
-                      '&:hover': { bgcolor: '#000' },
-                    }}
-                  >
-                    <i className='tabler-x' style={{ fontSize: 14 }} />
-                  </IconButton>
+                <Box key={img.id ?? `new-${idx}`} sx={{ width: 96 }}>
+                  <Box sx={{ position: 'relative', width: 96, height: 96 }}>
+                    <Box
+                      component='img'
+                      src={img.url ?? img.preview}
+                      alt=''
+                      sx={{ width: 96, height: 96, borderRadius: 1.5, objectFit: 'cover', border: '1px solid rgba(154,160,166,0.25)' }}
+                    />
+                    <IconButton
+                      onClick={() => removeImage(idx)}
+                      size='small'
+                      disabled={submitting}
+                      sx={{
+                        position: 'absolute', top: -8, right: -8,
+                        bgcolor: 'rgba(0,0,0,0.85)', color: '#fff',
+                        width: 22, height: 22,
+                        '&:hover': { bgcolor: '#000' },
+                      }}
+                    >
+                      <i className='tabler-x' style={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                  {img.file && (
+                    <Typography
+                      variant='caption'
+                      sx={{
+                        display: 'block',
+                        mt: 0.5,
+                        textAlign: 'center',
+                        color: 'text.secondary',
+                        fontSize: 11,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {formatSize(img.file.size)}
+                    </Typography>
+                  )}
                 </Box>
               ))}
             </Box>
@@ -326,8 +437,9 @@ const ReviewSubmitDialog = ({ open, onClose, existing, onSaved }: Props) => {
           onClick={handleSubmit}
           variant='contained'
           disabled={submitting}
-          sx={{ bgcolor: gold, color: '#000', fontWeight: 700, '&:hover': { bgcolor: '#dfc06a' } }}
+          sx={{ bgcolor: gold, color: '#000', fontWeight: 700, '&:hover': { bgcolor: '#dfc06a' }, display: 'flex', alignItems: 'center', gap: 1 }}
         >
+          {submitting && <CircularProgress size={16} sx={{ color: '#000' }} />}
           {submitting ? 'Menyimpan...' : existing ? 'Simpan Perubahan' : 'Kirim Review'}
         </Button>
       </DialogActions>
