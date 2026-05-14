@@ -59,6 +59,8 @@ const AdminRevenueSharingPage = () => {
 
   const [promoCodeId, setPromoCodeId] = useState<number | ''>('')
   const [status, setStatus] = useState<StatusFilter>('all')
+  const [dateStart, setDateStart] = useState<string>('')
+  const [dateEnd, setDateEnd] = useState<string>('')
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(25)
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -74,7 +76,7 @@ const AdminRevenueSharingPage = () => {
   const [snack, setSnack] = useState<{ msg: string; sev: 'success' | 'error' } | null>(null)
 
   // Reset page + selection on filter changes.
-  useEffect(() => { setPage(1); setSelected(new Set()) }, [promoCodeId, status, rowsPerPage])
+  useEffect(() => { setPage(1); setSelected(new Set()) }, [promoCodeId, status, dateStart, dateEnd, rowsPerPage])
 
   const { data: promoList, isLoading: loadingPromos } = useQuery({
     queryKey: ['admin-revenue-sharing-promos'],
@@ -90,12 +92,14 @@ const AdminRevenueSharingPage = () => {
   }, [promoList, promoCodeId])
 
   const { data, isFetching } = useQuery({
-    queryKey: ['admin-revenue-sharing', { promoCodeId, status, page, rowsPerPage }],
+    queryKey: ['admin-revenue-sharing', { promoCodeId, status, dateStart, dateEnd, page, rowsPerPage }],
     queryFn: () => adminApi.getRevenueSharing({
       promo_code_id: promoCodeId as number,
       status,
       page,
       per_page: rowsPerPage,
+      date_start: dateStart || undefined,
+      date_end: dateEnd || undefined,
     }),
     enabled: user?.role === 'admin' && promoCodeId !== '',
     placeholderData: keepPreviousData,
@@ -186,14 +190,18 @@ const AdminRevenueSharingPage = () => {
     doc.text(`Report Date: ${today}`, 14, 36)
     const rateLabel = mode === 'percentage' ? `${rate}% of revenue` : `Rp ${flatAmount.toLocaleString('id-ID')} per paying user`
     doc.text(`Commission Rate: ${rateLabel}`, 14, 41)
+    const periodLabel = dateStart || dateEnd
+      ? `${dateStart || 'all-time'} → ${dateEnd || 'today'}`
+      : 'All time (no date filter)'
+    doc.text(`Period: ${periodLabel}`, 14, 46)
 
     if (stats) {
       doc.setFont('helvetica', 'bold')
-      doc.text('Summary', 14, 51)
+      doc.text('Summary', 14, 56)
       doc.setFont('helvetica', 'normal')
-      doc.text(`Total Revenue: ${formatIDR(stats.total_revenue)}`, 14, 57)
-      doc.text(`Total Commission Owed (unpaid): ${formatIDR(commissionOwed)}`, 14, 62)
-      doc.text(`Paid Count: ${stats.paid_count}  |  Unpaid Count: ${stats.unpaid_count}`, 14, 67)
+      doc.text(`Total Revenue: ${formatIDR(stats.total_revenue)}`, 14, 62)
+      doc.text(`Total Commission Owed (unpaid): ${formatIDR(commissionOwed)}`, 14, 67)
+      doc.text(`Paid Count: ${stats.paid_count}  |  Unpaid Count: ${stats.unpaid_count}`, 14, 72)
     }
 
     const tableRows = items.map(it => [
@@ -209,7 +217,7 @@ const AdminRevenueSharingPage = () => {
     autoTable(doc, {
       head: [['Date', 'User', 'Transaction', 'Subtotal', 'Discount', 'Commission', 'Status']],
       body: tableRows,
-      startY: 75,
+      startY: 80,
       styles: { fontSize: 8 },
       headStyles: { fillColor: [201, 162, 39] },
     })
@@ -227,7 +235,10 @@ const AdminRevenueSharingPage = () => {
     }
 
     const datePart = new Date().toISOString().slice(0, 10)
-    doc.save(`revenue-sharing-${code}-${datePart}.pdf`)
+    const periodPart = dateStart || dateEnd
+      ? `-${dateStart || 'all'}_to_${dateEnd || 'today'}`
+      : ''
+    doc.save(`revenue-sharing-${code}${periodPart}-${datePart}.pdf`)
   }
 
   if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
@@ -245,26 +256,61 @@ const AdminRevenueSharingPage = () => {
 
       <Card>
         <CardContent>
-          <FormControl fullWidth size='small'>
-            <InputLabel id='promo-select-label'>Promo Code</InputLabel>
-            <Select
-              labelId='promo-select-label'
-              label='Promo Code'
-              value={promoCodeId === '' ? '' : String(promoCodeId)}
-              onChange={e => setPromoCodeId(Number(e.target.value))}
-              disabled={loadingPromos}
-            >
-              {(promoList?.items ?? []).map(p => (
-                <MenuItem key={p.id} value={String(p.id)}>
-                  {p.code} — {p.usage_count} usage{p.usage_count === 1 ? '' : 's'}
-                  {p.description ? ` · ${p.description}` : ''}
-                </MenuItem>
-              ))}
-              {(promoList?.items?.length ?? 0) === 0 && !loadingPromos && (
-                <MenuItem value='' disabled>No promo codes with paid usages yet</MenuItem>
-              )}
-            </Select>
-          </FormControl>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'flex-end' }}>
+            <FormControl fullWidth size='small' sx={{ flex: 2 }}>
+              <InputLabel id='promo-select-label'>Promo Code</InputLabel>
+              <Select
+                labelId='promo-select-label'
+                label='Promo Code'
+                value={promoCodeId === '' ? '' : String(promoCodeId)}
+                onChange={e => setPromoCodeId(Number(e.target.value))}
+                disabled={loadingPromos}
+              >
+                {(promoList?.items ?? []).map(p => (
+                  <MenuItem key={p.id} value={String(p.id)}>
+                    {p.code} — {p.usage_count} usage{p.usage_count === 1 ? '' : 's'}
+                    {p.description ? ` · ${p.description}` : ''}
+                  </MenuItem>
+                ))}
+                {(promoList?.items?.length ?? 0) === 0 && !loadingPromos && (
+                  <MenuItem value='' disabled>No promo codes with paid usages yet</MenuItem>
+                )}
+              </Select>
+            </FormControl>
+            <TextField
+              size='small'
+              type='date'
+              label='Start Date'
+              value={dateStart}
+              onChange={e => setDateStart(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ flex: 1, minWidth: 160 }}
+            />
+            <TextField
+              size='small'
+              type='date'
+              label='End Date'
+              value={dateEnd}
+              onChange={e => setDateEnd(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ flex: 1, minWidth: 160 }}
+            />
+            {(dateStart || dateEnd) && (
+              <Button
+                size='small'
+                variant='text'
+                onClick={() => { setDateStart(''); setDateEnd('') }}
+                sx={{ alignSelf: { xs: 'flex-end', md: 'center' } }}
+              >
+                Clear dates
+              </Button>
+            )}
+          </Stack>
+          {(dateStart || dateEnd) && (
+            <Typography variant='caption' color='text.secondary' sx={{ mt: 1.5, display: 'block' }}>
+              Filtering usages with used_at between {dateStart || '—'} and {dateEnd || '—'}. Cocok buat ngecek per cycle (mis. 18 Mei → 5 Juni) atau ngeluarin campaign lama dari kalkulasi.
+            </Typography>
+          )}
         </CardContent>
       </Card>
 

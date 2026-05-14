@@ -3305,7 +3305,32 @@ def list_revenue_sharing():
     per_page = min(max(per_page, 1), 200)
     page_arg = max(page_arg, 1)
 
+    # Date range filter: campaigns with different commission terms have
+    # different effective dates (e.g. DIKAMAIN affiliate deal starts
+    # 2026-05-18; pre-deal usages were under a flat-fee arrangement and
+    # should NOT be counted toward percentage commission).
+    date_start_raw = (request.args.get("date_start") or "").strip()
+    date_end_raw = (request.args.get("date_end") or "").strip()
+    date_start_dt = None
+    date_end_dt = None
+    if date_start_raw:
+        try:
+            date_start_dt = datetime.fromisoformat(date_start_raw).replace(tzinfo=timezone.utc)
+        except ValueError:
+            return jsonify({"error": "date_start must be YYYY-MM-DD"}), 400
+    if date_end_raw:
+        try:
+            # End of day for inclusive range: 23:59:59 on the chosen date.
+            end_date = datetime.fromisoformat(date_end_raw)
+            date_end_dt = end_date.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+        except ValueError:
+            return jsonify({"error": "date_end must be YYYY-MM-DD"}), 400
+
     base = _revenue_sharing_base_query(promo_code_id)
+    if date_start_dt is not None:
+        base = base.filter(PromoCodeUsage.used_at >= date_start_dt)
+    if date_end_dt is not None:
+        base = base.filter(PromoCodeUsage.used_at <= date_end_dt)
 
     # Stats span the entire eligible set (not the status filter) so the
     # paid/unpaid chips show consistent totals regardless of which one is

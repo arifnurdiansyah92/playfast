@@ -1532,6 +1532,8 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
     status?: 'all' | 'paid' | 'unpaid'
     page?: number
     per_page?: number
+    date_start?: string  // YYYY-MM-DD inclusive
+    date_end?: string    // YYYY-MM-DD inclusive (interpreted as end of day server-side)
   }) {
     const sp = new URLSearchParams()
 
@@ -1539,6 +1541,8 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
     if (params.status) sp.set('status', params.status)
     if (params.page) sp.set('page', String(params.page))
     if (params.per_page) sp.set('per_page', String(params.per_page))
+    if (params.date_start) sp.set('date_start', params.date_start)
+    if (params.date_end) sp.set('date_end', params.date_end)
 
     return request<RevenueSharingResponse>(`/api/admin/revenue-sharing?${sp.toString()}`)
   },
