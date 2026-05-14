@@ -3218,6 +3218,243 @@ def list_promo_code_usages(promo_id: int):
 
 
 # ---------------------------------------------------------------------------
+# Revenue sharing — creator commission tracking by promo code
+# ---------------------------------------------------------------------------
+
+
+def _revenue_sharing_base_query(promo_code_id: int):
+    """Query usages that are eligible for commission.
+
+    A usage is eligible only when the linked transaction (order OR
+    subscription) was actually paid (``paid_at IS NOT NULL``). Usages whose
+    transaction was abandoned, cancelled before payment, or refunded-before-
+    paid never contributed revenue, so we drop them.
+    """
+    return (
+        PromoCodeUsage.query
+        .outerjoin(Order, Order.id == PromoCodeUsage.order_id)
+        .outerjoin(Subscription, Subscription.id == PromoCodeUsage.subscription_id)
+        .filter(PromoCodeUsage.promo_code_id == promo_code_id)
+        .filter(
+            db.or_(
+                Order.paid_at.isnot(None),
+                Subscription.paid_at.isnot(None),
+            )
+        )
+    )
+
+
+@admin_bp.route("/revenue-sharing/promo-codes", methods=["GET"])
+@admin_required
+def list_revenue_sharing_promo_codes():
+    """Promo codes that have at least one eligible (paid) usage.
+
+    Used to populate the dropdown in the admin Revenue Sharing page so
+    unused codes don't clutter the picker.
+    """
+    rows = (
+        db.session.query(
+            PromoCode.id,
+            PromoCode.code,
+            PromoCode.description,
+            func.count(PromoCodeUsage.id).label("usage_count"),
+        )
+        .join(PromoCodeUsage, PromoCodeUsage.promo_code_id == PromoCode.id)
+        .outerjoin(Order, Order.id == PromoCodeUsage.order_id)
+        .outerjoin(Subscription, Subscription.id == PromoCodeUsage.subscription_id)
+        .filter(
+            db.or_(
+                Order.paid_at.isnot(None),
+                Subscription.paid_at.isnot(None),
+            )
+        )
+        .group_by(PromoCode.id, PromoCode.code, PromoCode.description)
+        .order_by(func.count(PromoCodeUsage.id).desc())
+        .all()
+    )
+    items = [
+        {
+            "id": r.id,
+            "code": r.code,
+            "description": r.description,
+            "usage_count": int(r.usage_count or 0),
+        }
+        for r in rows
+    ]
+    return jsonify({"items": items}), 200
+
+
+@admin_bp.route("/revenue-sharing", methods=["GET"])
+@admin_required
+def list_revenue_sharing():
+    """List paid promo-code usages for a given promo code, with payout state."""
+    promo_code_id = request.args.get("promo_code_id", type=int)
+    if not promo_code_id:
+        return jsonify({"error": "promo_code_id is required"}), 400
+
+    promo = db.session.get(PromoCode, promo_code_id)
+    if not promo:
+        return jsonify({"error": "Promo code not found"}), 404
+
+    status = (request.args.get("status") or "all").strip().lower()
+    if status not in ("all", "paid", "unpaid"):
+        return jsonify({"error": "status must be one of: all, paid, unpaid"}), 400
+
+    page_arg = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 25, type=int)
+    per_page = min(max(per_page, 1), 200)
+    page_arg = max(page_arg, 1)
+
+    base = _revenue_sharing_base_query(promo_code_id)
+
+    # Stats span the entire eligible set (not the status filter) so the
+    # paid/unpaid chips show consistent totals regardless of which one is
+    # active. Mirrors the AdminOrdersPage stats-vs-filter split.
+    all_eligible = base.order_by(PromoCodeUsage.used_at.desc()).all()
+
+    stats_total_count = len(all_eligible)
+    stats_paid_count = 0
+    stats_unpaid_count = 0
+    stats_total_revenue = 0
+    stats_paid_revenue = 0
+    stats_unpaid_revenue = 0
+
+    for u in all_eligible:
+        amount_paid = 0
+        if u.order_id and u.order:
+            amount_paid = u.order.amount or 0
+        elif u.subscription_id and u.subscription:
+            amount_paid = u.subscription.amount or 0
+        stats_total_revenue += amount_paid
+        if u.paid_to_creator_at is not None:
+            stats_paid_count += 1
+            stats_paid_revenue += amount_paid
+        else:
+            stats_unpaid_count += 1
+            stats_unpaid_revenue += amount_paid
+
+    # Apply status filter for the table window.
+    filtered = all_eligible
+    if status == "paid":
+        filtered = [u for u in all_eligible if u.paid_to_creator_at is not None]
+    elif status == "unpaid":
+        filtered = [u for u in all_eligible if u.paid_to_creator_at is None]
+
+    total = len(filtered)
+    pages = max(1, (total + per_page - 1) // per_page)
+    start = (page_arg - 1) * per_page
+    end = start + per_page
+    window = filtered[start:end]
+
+    items = []
+    for u in window:
+        kind = None
+        label = None
+        subtotal = 0
+        amount_paid = 0
+        tx_paid_at = None
+        if u.order_id and u.order:
+            kind = "order"
+            game_name = u.order.game.name if u.order.game else None
+            label = f"Order #{u.order.id} — {game_name}" if game_name else f"Order #{u.order.id}"
+            subtotal = u.order.amount_subtotal or u.order.amount or 0
+            amount_paid = u.order.amount or 0
+            tx_paid_at = u.order.paid_at.isoformat() if u.order.paid_at else None
+        elif u.subscription_id and u.subscription:
+            kind = "subscription"
+            plan_label = Subscription.PLAN_LABELS.get(u.subscription.plan, u.subscription.plan)
+            label = f"Subscription {plan_label}"
+            subtotal = u.subscription.amount_subtotal or u.subscription.amount or 0
+            amount_paid = u.subscription.amount or 0
+            tx_paid_at = u.subscription.paid_at.isoformat() if u.subscription.paid_at else None
+
+        items.append({
+            "id": u.id,
+            "promo_code_id": u.promo_code_id,
+            "user_id": u.user_id,
+            "user_email": u.user.email if u.user else None,
+            "order_id": u.order_id,
+            "subscription_id": u.subscription_id,
+            "type": kind,
+            "transaction_label": label,
+            "subtotal": int(subtotal or 0),
+            "amount_paid": int(amount_paid or 0),
+            "discount_amount": int(u.discount_amount or 0),
+            "used_at": u.used_at.isoformat(),
+            "transaction_paid_at": tx_paid_at,
+            "paid_to_creator_at": u.paid_to_creator_at.isoformat() if u.paid_to_creator_at else None,
+            "paid_to_creator_note": u.paid_to_creator_note,
+        })
+
+    return jsonify({
+        "items": items,
+        "total": total,
+        "page": page_arg,
+        "per_page": per_page,
+        "pages": pages,
+        "stats": {
+            "total_count": stats_total_count,
+            "paid_count": stats_paid_count,
+            "unpaid_count": stats_unpaid_count,
+            "total_revenue": stats_total_revenue,
+            "paid_revenue": stats_paid_revenue,
+            "unpaid_revenue": stats_unpaid_revenue,
+        },
+        "promo_code": {
+            "id": promo.id,
+            "code": promo.code,
+            "description": promo.description,
+            "assigned_user_email": promo.assigned_user.email if promo.assigned_user else None,
+        },
+    }), 200
+
+
+@admin_bp.route("/revenue-sharing/mark-paid", methods=["POST"])
+@admin_required
+def mark_revenue_sharing_paid():
+    """Mark usages as paid out to the creator. Idempotent — skips rows
+    that already have ``paid_to_creator_at`` set."""
+    data = request.get_json() or {}
+    usage_ids = data.get("usage_ids") or []
+    note = (data.get("note") or "").strip() or None
+    if not isinstance(usage_ids, list) or not usage_ids:
+        return jsonify({"error": "usage_ids must be a non-empty list"}), 400
+
+    now = datetime.now(timezone.utc)
+    updated = 0
+    rows = PromoCodeUsage.query.filter(PromoCodeUsage.id.in_(usage_ids)).all()
+    for u in rows:
+        if u.paid_to_creator_at is not None:
+            continue
+        u.paid_to_creator_at = now
+        u.paid_to_creator_note = note
+        updated += 1
+    db.session.commit()
+    return jsonify({"updated": updated}), 200
+
+
+@admin_bp.route("/revenue-sharing/mark-unpaid", methods=["POST"])
+@admin_required
+def mark_revenue_sharing_unpaid():
+    """Reverse a payout — clear both fields."""
+    data = request.get_json() or {}
+    usage_ids = data.get("usage_ids") or []
+    if not isinstance(usage_ids, list) or not usage_ids:
+        return jsonify({"error": "usage_ids must be a non-empty list"}), 400
+
+    updated = 0
+    rows = PromoCodeUsage.query.filter(PromoCodeUsage.id.in_(usage_ids)).all()
+    for u in rows:
+        if u.paid_to_creator_at is None and u.paid_to_creator_note is None:
+            continue
+        u.paid_to_creator_at = None
+        u.paid_to_creator_note = None
+        updated += 1
+    db.session.commit()
+    return jsonify({"updated": updated}), 200
+
+
+# ---------------------------------------------------------------------------
 # Referrals (admin view)
 # ---------------------------------------------------------------------------
 

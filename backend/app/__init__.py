@@ -215,6 +215,9 @@ def _run_schema_upgrades():
         "ALTER TABLE subscriptions ADD COLUMN tripay_reference VARCHAR(100)",
         "CREATE INDEX IF NOT EXISTS ix_orders_tripay_reference ON orders (tripay_reference)",
         "CREATE INDEX IF NOT EXISTS ix_subscriptions_tripay_reference ON subscriptions (tripay_reference)",
+        # Revenue sharing / creator commission tracking on promo code usages.
+        "ALTER TABLE promo_code_usages ADD COLUMN paid_to_creator_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE promo_code_usages ADD COLUMN paid_to_creator_note TEXT",
     ]
     for stmt in alter_statements:
         try:

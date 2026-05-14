@@ -151,6 +151,9 @@ const HorizontalMenu = () => {
               <MenuItem href='/admin/referrals' icon={<i className='tabler-share' />}>
                 Referrals
               </MenuItem>
+              <MenuItem href='/admin/revenue-sharing' icon={<i className='tabler-coins' />}>
+                Revenue Sharing
+              </MenuItem>
               <MenuItem href='/admin/email-blast' icon={<i className='tabler-mail-fast' />}>
                 Email Blast
               </MenuItem>

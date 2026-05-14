@@ -611,6 +611,8 @@ class PromoCodeUsage(db.Model):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    paid_to_creator_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    paid_to_creator_note = db.Column(db.Text, nullable=True)
 
     user = db.relationship("User")
     order = db.relationship("Order")
@@ -625,6 +627,8 @@ class PromoCodeUsage(db.Model):
             "subscription_id": self.subscription_id,
             "discount_amount": self.discount_amount,
             "used_at": self.used_at.isoformat(),
+            "paid_to_creator_at": self.paid_to_creator_at.isoformat() if self.paid_to_creator_at else None,
+            "paid_to_creator_note": self.paid_to_creator_note,
         }
 
 

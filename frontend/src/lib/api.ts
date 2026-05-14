@@ -526,6 +526,50 @@ export interface PromoCodeUsage {
   discount_amount: number
   used_at: string
   user_email?: string | null
+  paid_to_creator_at?: string | null
+  paid_to_creator_note?: string | null
+}
+
+export interface RevenueSharingItem {
+  id: number
+  promo_code_id: number
+  user_id: number
+  user_email: string | null
+  order_id: number | null
+  subscription_id: number | null
+  type: 'order' | 'subscription' | null
+  transaction_label: string | null
+  subtotal: number
+  amount_paid: number
+  discount_amount: number
+  used_at: string
+  transaction_paid_at: string | null
+  paid_to_creator_at: string | null
+  paid_to_creator_note: string | null
+}
+
+export interface RevenueSharingStats {
+  total_count: number
+  paid_count: number
+  unpaid_count: number
+  total_revenue: number
+  paid_revenue: number
+  unpaid_revenue: number
+}
+
+export interface RevenueSharingResponse {
+  items: RevenueSharingItem[]
+  total: number
+  page: number
+  per_page: number
+  pages: number
+  stats: RevenueSharingStats
+  promo_code: {
+    id: number
+    code: string
+    description: string | null
+    assigned_user_email: string | null
+  }
 }
 
 export interface MyReferralResponse {
@@ -1472,6 +1516,43 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
     if (params.to) qs.set('to', params.to)
 
     return `${API_BASE}/api/admin/reports/transactions?${qs.toString()}`
+  },
+  getRevenueSharingPromoCodes() {
+    return request<{
+      items: Array<{
+        id: number
+        code: string
+        description: string | null
+        usage_count: number
+      }>
+    }>(`/api/admin/revenue-sharing/promo-codes`)
+  },
+  getRevenueSharing(params: {
+    promo_code_id: number
+    status?: 'all' | 'paid' | 'unpaid'
+    page?: number
+    per_page?: number
+  }) {
+    const sp = new URLSearchParams()
+
+    sp.set('promo_code_id', String(params.promo_code_id))
+    if (params.status) sp.set('status', params.status)
+    if (params.page) sp.set('page', String(params.page))
+    if (params.per_page) sp.set('per_page', String(params.per_page))
+
+    return request<RevenueSharingResponse>(`/api/admin/revenue-sharing?${sp.toString()}`)
+  },
+  markRevenueSharingPaid(usage_ids: number[], note?: string) {
+    return request<{ updated: number }>(`/api/admin/revenue-sharing/mark-paid`, {
+      method: 'POST',
+      body: JSON.stringify({ usage_ids, note }),
+    })
+  },
+  markRevenueSharingUnpaid(usage_ids: number[]) {
+    return request<{ updated: number }>(`/api/admin/revenue-sharing/mark-unpaid`, {
+      method: 'POST',
+      body: JSON.stringify({ usage_ids }),
+    })
   },
   getReferrals(params?: { page?: number; per_page?: number; q?: string }) {
     const sp = new URLSearchParams()
