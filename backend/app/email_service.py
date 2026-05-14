@@ -489,3 +489,87 @@ def send_subscription_welcome_email(to: str, plan_label: str, store_url: str):
       </div>"""
 
     send_email(to, "Subscription aktif — cara main aman di Playfast", _base_template(content))
+
+
+# ---------------------------------------------------------------------------
+# Email: Account Flag Notification (to support)
+# ---------------------------------------------------------------------------
+
+SUPPORT_EMAIL = "support@playfast.id"
+
+_FLAG_REASON_LABELS = {
+    "locked": "Akun ke-lock / Steam Guard",
+    "banned": "Akun di-ban Steam (VAC, dll)",
+    "password_changed": "Password berubah, tidak bisa login",
+    "credentials_invalid": "Username/password salah",
+    "guard_code_failed": "Kode Steam Guard gagal",
+    "slow_response": "Akun lambat / lag",
+    "other": "Lainnya",
+}
+
+
+def send_account_flag_notification(
+    *,
+    flag_id: int,
+    user_email: str,
+    account_name: str,
+    game_name: str | None,
+    reason: str,
+    description: str | None,
+    order_id: int | None,
+):
+    """Notify support@ when a user files a new account flag.
+
+    Fires only on the create-new path in flag_account_from_order — the
+    same-user-same-account update path skips this so admin isn't spammed
+    while one issue is still 'new'.
+    """
+    reason_label = _FLAG_REASON_LABELS.get(reason, reason)
+    game_label = game_name or "(game tidak diketahui)"
+    order_label = f"#{order_id}" if order_id else "—"
+    description_block = (
+        f"""
+        <p style="color: #b0b8c4; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 14px; line-height: 1.6; margin: 0 0 24px; padding: 16px; background: #0f0f1a; border-left: 3px solid #c9a84c; border-radius: 4px; white-space: pre-wrap;">
+          {description}
+        </p>"""
+        if description
+        else """
+        <p style="color: #777; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 13px; font-style: italic; margin: 0 0 24px;">
+          User tidak menambahkan deskripsi.
+        </p>"""
+    )
+
+    admin_url = f"{SITE_URL}/admin/account-flags"
+    cta = _cta_button(admin_url, "Buka Panel Moderasi")
+
+    content = f"""\
+      <!-- Body -->
+      <div style="padding: 32px 32px 28px 32px;">
+        <div style="display: inline-block; padding: 4px 12px; background: rgba(255,80,80,0.15); border: 1px solid rgba(255,80,80,0.35); border-radius: 999px; font-size: 11px; color: #ff8080; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 16px;">
+          Flag Baru
+        </div>
+        <h2 style="color: #ffffff; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0 0 8px; font-size: 22px; font-weight: 800; line-height: 1.3;">
+          {reason_label}
+        </h2>
+        <p style="color: #b0b8c4; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+          User <strong style="color: #c9a84c;">{user_email}</strong> melaporkan masalah pada akun <strong>{account_name}</strong>.
+        </p>
+
+        <table cellpadding="0" cellspacing="0" border="0" style="width: 100%; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 13px; color: #b0b8c4; margin-bottom: 20px;">
+          <tr><td style="padding: 6px 0; color: #777; width: 110px;">Flag ID</td><td style="padding: 6px 0; color: #fff; font-family: monospace;">#{flag_id}</td></tr>
+          <tr><td style="padding: 6px 0; color: #777;">Order</td><td style="padding: 6px 0; color: #fff; font-family: monospace;">{order_label}</td></tr>
+          <tr><td style="padding: 6px 0; color: #777;">Game</td><td style="padding: 6px 0; color: #fff;">{game_label}</td></tr>
+          <tr><td style="padding: 6px 0; color: #777;">Akun</td><td style="padding: 6px 0; color: #fff; font-family: monospace;">{account_name}</td></tr>
+          <tr><td style="padding: 6px 0; color: #777;">Reporter</td><td style="padding: 6px 0; color: #fff;">{user_email}</td></tr>
+        </table>
+
+        <h3 style="color: #ffffff; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0 0 8px; font-size: 14px; font-weight: 700;">
+          Deskripsi
+        </h3>
+        {description_block}
+
+        {cta}
+      </div>"""
+
+    subject = f"[Account Flag] {reason_label} — {account_name}"
+    send_email(SUPPORT_EMAIL, subject, _base_template(content))

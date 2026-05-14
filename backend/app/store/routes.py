@@ -1784,6 +1784,20 @@ def flag_account_from_order(order_id: int):
     db.session.add(flag)
     db.session.commit()
 
+    try:
+        from app.email_service import send_account_flag_notification
+        send_account_flag_notification(
+            flag_id=flag.id,
+            user_email=order.user.email if order.user else f"user#{user_id}",
+            account_name=order.assignment.steam_account.account_name,
+            game_name=order.game.name if order.game else None,
+            reason=reason,
+            description=description,
+            order_id=order.id,
+        )
+    except Exception:
+        logger.exception("Failed to send account flag notification email")
+
     return jsonify({"message": "Flag submitted", "flag": flag.to_dict()}), 201
 
 
