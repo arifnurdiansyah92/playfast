@@ -426,6 +426,24 @@ export interface SubscriptionPlan {
   duration_days: number
 }
 
+export interface PromoBannerConfig {
+  enabled: boolean
+  now_in_range: boolean
+  start_date: string
+  end_date: string
+  target_plan: string
+  plan_label: string
+  promo_price: number
+  regular_price: number
+  eyebrow: string
+  headline: string
+  subhead: string
+  features: string[]
+  cta_text: string
+  wa_message_template: string
+  session_key_suffix: string
+}
+
 export interface Subscription {
   id: number
   user_id: number
@@ -570,6 +588,9 @@ return res.game
   },
   getSubscriptionPlans() {
     return request<{ plans: SubscriptionPlan[] }>('/api/store/subscription/plans')
+  },
+  getPromoBannerConfig() {
+    return request<PromoBannerConfig>('/api/store/promo-banner-config')
   },
   subscribe(plan: string, options?: { promo_code?: string; apply_credit?: boolean }) {
     return request<{

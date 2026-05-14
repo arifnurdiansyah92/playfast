@@ -414,8 +414,24 @@ class SiteSetting(db.Model):
         "manual_payment_instructions": "Scan QRIS di bawah ini, lalu kirim bukti transfer via WhatsApp.",
         "sub_price_monthly": "50000",
         "sub_price_3monthly": "120000",
+        "sub_price_6monthly": "0",
         "sub_price_yearly": "400000",
         "sub_price_lifetime": "0",  # 0 = disabled (hidden from subscribe page and landing promo)
+        # Promo banner (landing page). Single active banner controlled by these keys.
+        # Banner only renders when enabled=true AND now is within [start_date, end_date]
+        # AND the target_plan has a non-zero price in sub_price_{target_plan}.
+        "promo_banner_enabled": "true",
+        "promo_banner_start_date": "2026-04-24T00:00:00+07:00",
+        "promo_banner_end_date": "2026-05-16T00:00:00+07:00",
+        "promo_banner_target_plan": "lifetime",
+        "promo_banner_regular_price": "599000",
+        "promo_banner_eyebrow": "PROMO TERBATAS · LIFETIME DEAL",
+        "promo_banner_headline": "Subscribe\n*Sekali,* Main\nSelamanya.",
+        "promo_banner_subhead": "Akses semua 300+ game Steam di katalog kami — satu kali bayar, tanpa biaya bulanan, tanpa batas waktu.",
+        "promo_banner_features": "Akses 300+ game Steam|100% Original|OTP Otomatis 24/7|Garansi akun selamanya",
+        "promo_banner_cta_text": "Ambil Promo Sekarang",
+        "promo_banner_wa_message": "Halo admin Playfast! \U0001f3ae\n\nSaya tertarik dengan promo *Subscribe {plan_label}* ({price}) — akses semua 300+ game Steam.\n\nMohon info lebih lanjut untuk melanjutkan pembelian. Terima kasih!",
+        "promo_banner_session_key_suffix": "v2",
         "referral_referee_discount_pct": "10",
         "referral_referrer_credit": "10000",
         "referral_min_order": "50000",
@@ -645,6 +661,7 @@ class Subscription(db.Model):
     PLAN_DURATIONS = {
         "monthly": 30,
         "3monthly": 90,
+        "6monthly": 180,
         "yearly": 365,
         "lifetime": 36500,
     }
@@ -652,6 +669,7 @@ class Subscription(db.Model):
     PLAN_LABELS = {
         "monthly": "Monthly",
         "3monthly": "3 Months",
+        "6monthly": "6 Months",
         "yearly": "Yearly",
         "lifetime": "Lifetime",
     }

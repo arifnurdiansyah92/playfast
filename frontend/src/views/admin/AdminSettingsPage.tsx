@@ -17,6 +17,7 @@ import Snackbar from '@mui/material/Snackbar'
 import Radio from '@mui/material/Radio'
 import RadioGroup from '@mui/material/RadioGroup'
 import FormControlLabel from '@mui/material/FormControlLabel'
+import Switch from '@mui/material/Switch'
 import Chip from '@mui/material/Chip'
 
 import CustomTextField from '@core/components/mui/TextField'
@@ -368,6 +369,16 @@ const AdminSettingsPage = () => {
               <CustomTextField
                 fullWidth
                 type='number'
+                label='6-Month Price (IDR)'
+                value={form.sub_price_6monthly || ''}
+                onChange={e => handleChange('sub_price_6monthly', e.target.value)}
+                placeholder='220000'
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <CustomTextField
+                fullWidth
+                type='number'
                 label='Yearly Price (IDR)'
                 value={form.sub_price_yearly || ''}
                 onChange={e => handleChange('sub_price_yearly', e.target.value)}
@@ -383,6 +394,155 @@ const AdminSettingsPage = () => {
                 onChange={e => handleChange('sub_price_lifetime', e.target.value)}
                 placeholder='250000'
                 helperText='Set 0 to disable. Drives the landing-page promo banner.'
+              />
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
+      {/* Promo Banner */}
+      <Card>
+        <CardHeader
+          title='Promo Banner'
+          avatar={<i className='tabler-megaphone' style={{ fontSize: 24 }} />}
+        />
+        <Divider />
+        <CardContent>
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', pl: 1 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.promo_banner_enabled === 'true'}
+                      onChange={e => handleChange('promo_banner_enabled', e.target.checked ? 'true' : 'false')}
+                    />
+                  }
+                  label='Banner aktif'
+                />
+                <Typography variant='caption' color='text.secondary' sx={{ mt: 0.5 }}>
+                  Banner hanya tampil bila aktif & berada di rentang tanggal.
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <CustomTextField
+                select
+                fullWidth
+                label='Target Plan'
+                value={form.promo_banner_target_plan || 'lifetime'}
+                onChange={e => handleChange('promo_banner_target_plan', e.target.value)}
+                SelectProps={{ native: true }}
+                helperText='Plan yang harganya jadi promo_price (ambil dari sub_price_{plan}).'
+              >
+                <option value='monthly'>monthly</option>
+                <option value='3monthly'>3monthly</option>
+                <option value='6monthly'>6monthly</option>
+                <option value='yearly'>yearly</option>
+                <option value='lifetime'>lifetime</option>
+              </CustomTextField>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <CustomTextField
+                fullWidth
+                label='Start Date'
+                value={form.promo_banner_start_date || ''}
+                onChange={e => handleChange('promo_banner_start_date', e.target.value)}
+                placeholder='2026-04-24T00:00:00+07:00'
+                helperText='ISO format: 2026-05-16T00:00:00+07:00'
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <CustomTextField
+                fullWidth
+                label='End Date'
+                value={form.promo_banner_end_date || ''}
+                onChange={e => handleChange('promo_banner_end_date', e.target.value)}
+                placeholder='2026-05-16T00:00:00+07:00'
+                helperText='ISO format: 2026-05-16T00:00:00+07:00'
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <CustomTextField
+                fullWidth
+                type='number'
+                label='Regular Price (IDR)'
+                value={form.promo_banner_regular_price || ''}
+                onChange={e => handleChange('promo_banner_regular_price', e.target.value)}
+                placeholder='599000'
+                helperText='Harga coret yang ditampilkan di banner.'
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <CustomTextField
+                fullWidth
+                label='Session Key Suffix'
+                value={form.promo_banner_session_key_suffix || ''}
+                onChange={e => handleChange('promo_banner_session_key_suffix', e.target.value)}
+                placeholder='v2'
+                helperText='Ganti string ini saat launch promo baru supaya user yang sudah dismiss bisa lihat lagi.'
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <CustomTextField
+                fullWidth
+                label='Eyebrow'
+                value={form.promo_banner_eyebrow || ''}
+                onChange={e => handleChange('promo_banner_eyebrow', e.target.value)}
+                placeholder='PROMO TERBATAS · LIFETIME DEAL'
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <CustomTextField
+                fullWidth
+                multiline
+                minRows={3}
+                label='Headline'
+                value={form.promo_banner_headline || ''}
+                onChange={e => handleChange('promo_banner_headline', e.target.value)}
+                placeholder={'Subscribe\n*Sekali,* Main\nSelamanya.'}
+                helperText={'\\n = baris baru. *text* = teks dengan gradient emas.'}
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <CustomTextField
+                fullWidth
+                multiline
+                minRows={2}
+                label='Subhead'
+                value={form.promo_banner_subhead || ''}
+                onChange={e => handleChange('promo_banner_subhead', e.target.value)}
+                placeholder='Akses semua 300+ game Steam di katalog kami — satu kali bayar, tanpa biaya bulanan, tanpa batas waktu.'
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <CustomTextField
+                fullWidth
+                label='Features'
+                value={form.promo_banner_features || ''}
+                onChange={e => handleChange('promo_banner_features', e.target.value)}
+                placeholder='Akses 300+ game Steam|100% Original|OTP Otomatis 24/7|Garansi akun selamanya'
+                helperText='Pisahkan dengan | (pipe). Maks 4 item.'
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <CustomTextField
+                fullWidth
+                label='CTA Text'
+                value={form.promo_banner_cta_text || ''}
+                onChange={e => handleChange('promo_banner_cta_text', e.target.value)}
+                placeholder='Ambil Promo Sekarang'
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <CustomTextField
+                fullWidth
+                multiline
+                minRows={4}
+                label='WhatsApp Message Template'
+                value={form.promo_banner_wa_message || ''}
+                onChange={e => handleChange('promo_banner_wa_message', e.target.value)}
+                helperText='Placeholder: {price} dan {plan_label}.'
               />
             </Grid>
           </Grid>

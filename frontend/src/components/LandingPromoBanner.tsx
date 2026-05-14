@@ -1,20 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useReducer, useState } from 'react'
+import { Fragment, useEffect, useMemo, useReducer, useState } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { storeApi, formatIDR } from '@/lib/api'
+import { storeApi, formatIDR, type PromoBannerConfig } from '@/lib/api'
 
-const SESSION_KEY = 'playfast.landingPromoBanner.dismissed.v2'
 // Fallback only — runtime value comes from SiteSetting.manual_whatsapp_number
 // via storeApi.getPaymentConfig(). Kept here so the banner still works if the
 // settings call fails.
 const WA_NUMBER_FALLBACK = '6282240708329'
-const PROMO_END = new Date('2026-05-16T00:00:00+07:00').getTime()
-const PROMO_START_LABEL = '24 APR'
-const PROMO_END_LABEL = '15 MEI 2026'
-const REGULAR_PRICE = 599000
 
 const PF = {
   gold: '#d4a53a',
@@ -137,16 +132,60 @@ const BANNER_CSS = `
 }
 `
 
+const ID_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES']
+
+function formatIdDate(iso: string, withYear: boolean): string {
+  const d = new Date(iso)
+
+  if (isNaN(d.getTime())) return ''
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = ID_MONTHS[d.getMonth()]
+
+  return withYear ? `${day} ${month} ${d.getFullYear()}` : `${day} ${month}`
+}
+
+const goldGradientStyle = {
+  background: `linear-gradient(135deg, ${PF.goldLight} 0%, ${PF.gold} 50%, ${PF.goldDeep} 100%)`,
+  WebkitBackgroundClip: 'text',
+  WebkitTextFillColor: 'transparent',
+  backgroundClip: 'text',
+} as const
+
+function renderHeadline(headline: string): React.ReactNode {
+  const lines = headline.split('\n')
+
+  return lines.map((line, lineIdx) => {
+    const parts = line.split('*')
+
+    return (
+      <Fragment key={lineIdx}>
+        {parts.map((piece, i) =>
+          i % 2 === 1 ? (
+            <span key={i} style={goldGradientStyle}>
+              {piece}
+            </span>
+          ) : (
+            <span key={i} style={{ color: PF.cream }}>
+              {piece}
+            </span>
+          ),
+        )}
+        {lineIdx < lines.length - 1 && <br />}
+      </Fragment>
+    )
+  })
+}
+
 function useNow() {
   const [, tick] = useReducer((x: number) => x + 1, 0)
 
   useEffect(() => {
     const id = setInterval(tick, 500)
 
-    
+
 return () => clearInterval(id)
   }, [])
-  
+
 return Date.now()
 }
 
@@ -163,10 +202,10 @@ function useAnimTime() {
     }
 
     raf = requestAnimationFrame(tick)
-    
+
 return () => cancelAnimationFrame(raf)
   }, [])
-  
+
 return t
 }
 
@@ -193,9 +232,9 @@ function useBannerAssets() {
   }, [])
 }
 
-function Countdown() {
+function Countdown({ endMs }: { endMs: number }) {
   const now = useNow()
-  const diff = Math.max(0, PROMO_END - now)
+  const diff = Math.max(0, endMs - now)
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
   const hours = Math.floor((diff / (1000 * 60 * 60)) % 24)
   const mins = Math.floor((diff / (1000 * 60)) % 60)
@@ -209,7 +248,7 @@ function Countdown() {
     { v: pad(secs), l: 'DETIK' },
   ]
 
-  
+
 return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
       {units.map((u, i) => (
@@ -265,17 +304,21 @@ return (
 type Props = {
   open: boolean
   onClose: () => void
-  promoPrice: number
-  regularPrice: number
+  config: PromoBannerConfig
+  endMs: number
+  startLabel: string
+  endLabel: string
   onCtaClick: () => void
 }
 
-function BannerContent({ onClose, promoPrice, regularPrice, onCtaClick }: Omit<Props, 'open'>) {
+function BannerContent({ onClose, config, endMs, startLabel, endLabel, onCtaClick }: Omit<Props, 'open'>) {
   const t = useAnimTime()
   const shimmerX = ((t * 60) % 420) - 100
   const breathe = 1 + Math.sin(t * 1.3) * 0.015
   const tilt = Math.sin(t * 0.9) * 2
   const btnPulse = 1 + Math.sin(t * 2.2) * 0.015
+
+  const { promo_price: promoPrice, regular_price: regularPrice, plan_label: planLabel, features, eyebrow, subhead, headline, cta_text: ctaText } = config
 
   const bigPrice = useMemo(() => {
     // Show e.g. 250 for 250,000 → "250 RIBU"; 1,250,000 → "1,25 JUTA"
@@ -283,13 +326,13 @@ function BannerContent({ onClose, promoPrice, regularPrice, onCtaClick }: Omit<P
       const juta = promoPrice / 1_000_000
       const label = Number.isInteger(juta) ? String(juta) : juta.toFixed(2).replace('.', ',').replace(/,?0+$/, '')
 
-      
+
 return { digits: label, unit: 'JUTA' }
     }
 
     const ribu = Math.round(promoPrice / 1000)
 
-    
+
 return { digits: String(ribu), unit: 'RIBU' }
   }, [promoPrice])
 
@@ -297,7 +340,7 @@ return { digits: String(ribu), unit: 'RIBU' }
     <div
       role='dialog'
       aria-modal='true'
-      aria-label='Promo Playfast Lifetime'
+      aria-label='Promo Playfast'
       style={{
         position: 'relative',
         width: '100%',
@@ -377,7 +420,7 @@ return { digits: String(ribu), unit: 'RIBU' }
                   letterSpacing: '0.22em',
                 }}
               >
-                PROMO TERBATAS · LIFETIME DEAL
+                {eyebrow}
               </span>
             </div>
 
@@ -429,21 +472,7 @@ return { digits: String(ribu), unit: 'RIBU' }
                 letterSpacing: '-0.03em',
               }}
             >
-              Subscribe
-              <br />
-              <span
-                style={{
-                  background: `linear-gradient(135deg, ${PF.goldLight} 0%, ${PF.gold} 50%, ${PF.goldDeep} 100%)`,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}
-              >
-                Sekali,
-              </span>{' '}
-              <span style={{ color: PF.cream }}>Main</span>
-              <br />
-              <span style={{ color: PF.cream }}>Selamanya.</span>
+              {renderHeadline(headline)}
             </div>
             <div
               style={{
@@ -456,8 +485,7 @@ return { digits: String(ribu), unit: 'RIBU' }
                 maxWidth: 480,
               }}
             >
-              Akses <span style={{ color: PF.gold, fontWeight: 700 }}>semua 300+ game Steam</span> di katalog kami —
-              satu kali bayar, tanpa biaya bulanan, tanpa batas waktu.
+              {subhead}
             </div>
           </div>
 
@@ -481,7 +509,7 @@ return { digits: String(ribu), unit: 'RIBU' }
               <path d='M3 9h18M8 3v4M16 3v4' stroke={PF.gold} strokeWidth='2' strokeLinecap='round' />
             </svg>
             <span>
-              {PROMO_START_LABEL} → {PROMO_END_LABEL}
+              {startLabel} → {endLabel}
             </span>
             <span style={{ color: PF.red, fontWeight: 700 }}>· BERAKHIR DALAM:</span>
           </div>
@@ -501,7 +529,7 @@ return { digits: String(ribu), unit: 'RIBU' }
               overflow: 'hidden',
             }}
           >
-            {/* LIFETIME stamp */}
+            {/* Plan stamp */}
             <div
               style={{
                 position: 'absolute',
@@ -518,7 +546,7 @@ return { digits: String(ribu), unit: 'RIBU' }
                 boxShadow: '0 3px 10px rgba(0,0,0,0.3)',
               }}
             >
-              LIFETIME
+              {planLabel.toUpperCase()}
             </div>
 
             <div
@@ -636,7 +664,7 @@ return { digits: String(ribu), unit: 'RIBU' }
                 gap: 8,
               }}
             >
-              {['Akses 300+ game Steam', '100% Original', 'OTP Otomatis 24/7', 'Garansi akun selamanya'].map(f => (
+              {features.slice(0, 4).map(f => (
                 <div
                   key={f}
                   style={{
@@ -692,7 +720,7 @@ return { digits: String(ribu), unit: 'RIBU' }
                 letterSpacing: '-0.01em',
               }}
             >
-              Ambil Promo Sekarang
+              {ctaText}
             </span>
             <svg width='20' height='20' viewBox='0 0 24 24' fill='none' aria-hidden>
               <path
@@ -706,7 +734,7 @@ return { digits: String(ribu), unit: 'RIBU' }
           </button>
 
           <div style={{ marginTop: 14 }}>
-            <Countdown />
+            <Countdown endMs={endMs} />
           </div>
 
           {/* Secondary close — clearer dismiss path on mobile */}
@@ -727,34 +755,32 @@ return { digits: String(ribu), unit: 'RIBU' }
 export default function LandingPromoBanner() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [promoPrice, setPromoPrice] = useState<number | null>(null)
+  const [config, setConfig] = useState<PromoBannerConfig | null>(null)
   const [waNumber, setWaNumber] = useState<string>(WA_NUMBER_FALLBACK)
 
   useBannerAssets()
 
-  // Load plans and only open if lifetime is active and not dismissed this session.
+  // Load promo banner config and only open if enabled, in date range, and not dismissed this session.
   // Also load the payment config to pick up the admin-configured WA number.
   useEffect(() => {
     let cancelled = false
 
-    try {
-      if (sessionStorage.getItem(SESSION_KEY) === '1') return
-    } catch {
-      /* ignore */
-    }
-
-    if (Date.now() >= PROMO_END) return
-
     storeApi
-      .getSubscriptionPlans()
-      .then(data => {
+      .getPromoBannerConfig()
+      .then(cfg => {
         if (cancelled) return
-        const lifetime = data.plans.find(p => p.plan === 'lifetime')
+        if (!cfg.enabled || !cfg.now_in_range || cfg.promo_price <= 0) return
 
-        if (lifetime && lifetime.price > 0) {
-          setPromoPrice(lifetime.price)
-          setOpen(true)
+        const sessionKey = `playfast.landingPromoBanner.dismissed.${cfg.session_key_suffix || 'v1'}`
+
+        try {
+          if (sessionStorage.getItem(sessionKey) === '1') return
+        } catch {
+          /* ignore */
         }
+
+        setConfig(cfg)
+        setOpen(true)
       })
       .catch(() => {
         /* silent — just don't show */
@@ -778,6 +804,23 @@ return () => {
     }
   }, [])
 
+  const sessionKey = useMemo(
+    () => (config ? `playfast.landingPromoBanner.dismissed.${config.session_key_suffix || 'v1'}` : ''),
+    [config],
+  )
+
+  const close = () => {
+    if (sessionKey) {
+      try {
+        sessionStorage.setItem(sessionKey, '1')
+      } catch {
+        /* ignore */
+      }
+    }
+
+    setOpen(false)
+  }
+
   // Esc to close
   useEffect(() => {
     if (!open) return
@@ -787,7 +830,7 @@ return () => {
     }
 
     window.addEventListener('keydown', onKey)
-    
+
 return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -799,30 +842,28 @@ return () => window.removeEventListener('keydown', onKey)
 
     document.body.style.overflow = 'hidden'
 
-    
+
 return () => {
       document.body.style.overflow = prev
     }
   }, [open])
 
-  const close = () => {
-    try {
-      sessionStorage.setItem(SESSION_KEY, '1')
-    } catch {
-      /* ignore */
-    }
+  const endMs = useMemo(() => {
+    if (!config) return 0
+    const d = new Date(config.end_date)
 
-    setOpen(false)
-  }
+    return isNaN(d.getTime()) ? 0 : d.getTime()
+  }, [config])
+
+  const startLabel = useMemo(() => (config ? formatIdDate(config.start_date, false) : ''), [config])
+  const endLabel = useMemo(() => (config ? formatIdDate(config.end_date, true) : ''), [config])
 
   const handleCta = () => {
-    const amount = promoPrice ?? 0
-    const priceText = formatIDR(amount)
-
-    const message =
-      `Halo admin Playfast! 🎮\n\n` +
-      `Saya tertarik dengan promo *Subscribe Lifetime* (${priceText}) — akses semua 300+ game Steam.\n\n` +
-      `Mohon info lebih lanjut untuk melanjutkan pembelian. Terima kasih!`
+    if (!config) return
+    const priceText = formatIDR(config.promo_price)
+    const message = (config.wa_message_template || '')
+      .replace(/\{price\}/g, priceText)
+      .replace(/\{plan_label\}/g, config.plan_label)
 
     const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`
 
@@ -836,7 +877,7 @@ return () => {
     router.prefetch?.('/subscribe')
   }
 
-  if (!open || promoPrice == null) return null
+  if (!open || !config) return null
 
   return (
     <div onClick={close} className='pf-promo-overlay'>
@@ -846,8 +887,10 @@ return () => {
       >
         <BannerContent
           onClose={close}
-          promoPrice={promoPrice}
-          regularPrice={REGULAR_PRICE}
+          config={config}
+          endMs={endMs}
+          startLabel={startLabel}
+          endLabel={endLabel}
           onCtaClick={handleCta}
         />
       </div>

@@ -243,6 +243,54 @@ def subscription_plans():
     return jsonify({"plans": plans}), 200
 
 
+@store_bp.route("/promo-banner-config", methods=["GET"])
+def promo_banner_config():
+    """Public endpoint for landing promo banner config. Returns enabled state,
+    date-range check, and resolved promo price from target plan."""
+    enabled = (SiteSetting.get("promo_banner_enabled") or "false").lower() == "true"
+    start_str = SiteSetting.get("promo_banner_start_date") or ""
+    end_str = SiteSetting.get("promo_banner_end_date") or ""
+    target_plan = SiteSetting.get("promo_banner_target_plan") or "lifetime"
+
+    now = datetime.now(timezone.utc)
+
+    def _parse(s):
+        try:
+            return datetime.fromisoformat(s)
+        except Exception:
+            return None
+
+    start_dt = _parse(start_str)
+    end_dt = _parse(end_str)
+    now_in_range = bool(start_dt and end_dt and start_dt <= now <= end_dt)
+
+    price_str = SiteSetting.get(f"sub_price_{target_plan}")
+    promo_price = int(price_str) if price_str and price_str.isdigit() else 0
+    plan_label = Subscription.PLAN_LABELS.get(target_plan, target_plan)
+
+    regular_price_str = SiteSetting.get("promo_banner_regular_price") or "0"
+    features_str = SiteSetting.get("promo_banner_features") or ""
+    features = [f.strip() for f in features_str.split("|") if f.strip()]
+
+    return jsonify({
+        "enabled": enabled,
+        "now_in_range": now_in_range,
+        "start_date": start_str,
+        "end_date": end_str,
+        "target_plan": target_plan,
+        "plan_label": plan_label,
+        "promo_price": promo_price,
+        "regular_price": int(regular_price_str) if regular_price_str.isdigit() else 0,
+        "eyebrow": SiteSetting.get("promo_banner_eyebrow") or "",
+        "headline": SiteSetting.get("promo_banner_headline") or "",
+        "subhead": SiteSetting.get("promo_banner_subhead") or "",
+        "features": features,
+        "cta_text": SiteSetting.get("promo_banner_cta_text") or "",
+        "wa_message_template": SiteSetting.get("promo_banner_wa_message") or "",
+        "session_key_suffix": SiteSetting.get("promo_banner_session_key_suffix") or "v1",
+    }), 200
+
+
 @store_bp.route("/subscription/subscribe", methods=["POST"])
 @jwt_required()
 def subscribe():
@@ -252,7 +300,7 @@ def subscribe():
     plan = data.get("plan", "")
 
     if plan not in Subscription.PLAN_DURATIONS:
-        return jsonify({"error": "Invalid plan. Choose: monthly, 3monthly, yearly"}), 400
+        return jsonify({"error": "Invalid plan. Choose: monthly, 3monthly, 6monthly, yearly, lifetime"}), 400
 
     # Check for existing active subscription
     active_sub = _get_active_subscription(user_id)
