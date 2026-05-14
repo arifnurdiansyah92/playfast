@@ -59,6 +59,7 @@ const AdminAccountsPage = () => {
   const [addOpen, setAddOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [mafileUsername, setMafileUsername] = useState<string | null>(null)
   const [addError, setAddError] = useState('')
   const [snackMsg, setSnackMsg] = useState('')
   const [activeJob, setActiveJob] = useState<JobStatus | null>(null)
@@ -97,7 +98,7 @@ const AdminAccountsPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-accounts'] })
       queryClient.invalidateQueries({ queryKey: ['admin-games'] })
-      setAddOpen(false); setPassword(''); setFile(null); setAddError('')
+      setAddOpen(false); setPassword(''); setFile(null); setMafileUsername(null); setAddError('')
       setSnackMsg('Account added successfully')
     },
     onError: (err: any) => setAddError(err.message || 'Failed to add account')
@@ -228,11 +229,11 @@ return () => { if (pollRef.current) clearInterval(pollRef.current) }
   })
 
   const handleAdd = () => {
-    if (!file) { setAddError('Please select a maFile'); 
+    if (!file) { setAddError('Please select a maFile');
 
 return }
 
-    if (!password) { setAddError('Password is required'); 
+    if (!password) { setAddError('Password is required');
 
 return }
 
@@ -241,6 +242,38 @@ return }
     formData.append('mafile', file)
     formData.append('password', password)
     addMutation.mutate(formData)
+  }
+
+  const handleFilePick = async (f: File | null) => {
+    setFile(f)
+    setMafileUsername(null)
+    setAddError('')
+
+    if (!f) return
+
+    if (!/\.mafile$/i.test(f.name)) {
+      setAddError('File harus .mafile / .maFile')
+      setFile(null)
+
+      return
+    }
+
+    try {
+      const text = await f.text()
+      const data = JSON.parse(text)
+      const name = (data?.account_name || '').toString().trim()
+
+      if (!name) {
+        setAddError('maFile valid tapi tidak ada field account_name')
+
+        return
+      }
+
+      setMafileUsername(name)
+    } catch {
+      setAddError('Gagal parse maFile — pastikan JSON valid')
+      setFile(null)
+    }
   }
 
   if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
@@ -525,10 +558,27 @@ return }
               <Typography variant='body2' sx={{ mb: 1 }}>Steam Guard maFile</Typography>
               <Button variant='outlined' component='label' startIcon={<i className='tabler-upload' />}>
                 {file ? file.name : 'Choose maFile'}
-                <input type='file' hidden accept='.mafile,.json' onChange={e => setFile(e.target.files?.[0] || null)} />
+                <input
+                  type='file'
+                  hidden
+                  accept='.mafile,.maFile,.MAFILE,application/json'
+                  onChange={e => handleFilePick(e.target.files?.[0] || null)}
+                />
               </Button>
+              {mafileUsername && (
+                <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip
+                    icon={<i className='tabler-user' style={{ fontSize: 16 }} />}
+                    label={mafileUsername}
+                    color='success'
+                    variant='tonal'
+                    sx={{ fontFamily: 'monospace', fontWeight: 700 }}
+                  />
+                  <Typography variant='caption' color='text.secondary'>terdeteksi dari maFile</Typography>
+                </Box>
+              )}
             </Box>
-            <CustomTextField fullWidth label='Steam Password' type='password' value={password} onChange={e => setPassword(e.target.value)} placeholder='Enter the Steam account password' />
+            <CustomTextField fullWidth label='Steam Password' type='password' value={password} onChange={e => setPassword(e.target.value)} placeholder={mafileUsername ? `Password untuk ${mafileUsername}` : 'Enter the Steam account password'} />
           </Box>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>

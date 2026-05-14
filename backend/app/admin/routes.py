@@ -697,7 +697,7 @@ def add_account():
         return jsonify({"error": "No .mafile uploaded"}), 400
 
     file = request.files["mafile"]
-    if not file.filename or not file.filename.endswith(".mafile"):
+    if not file.filename or not file.filename.lower().endswith(".mafile"):
         return jsonify({"error": "File must be a .mafile"}), 400
 
     password = request.form.get("password", "").strip()
