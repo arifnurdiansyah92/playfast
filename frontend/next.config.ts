@@ -19,6 +19,12 @@ const nextConfig: NextConfig = {
         // signed POST body reaches backend untouched.
         source: '/callback/tripay',
         destination: `${apiUrl}/api/store/callback/tripay`
+      },
+      {
+        // User-uploaded files (review photos, etc.) live on the backend
+        // disk; without this rewrite images render as 404 in the browser.
+        source: '/uploads/:path*',
+        destination: `${apiUrl}/uploads/:path*`
       }
     ]
   }
