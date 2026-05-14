@@ -849,9 +849,11 @@ const LandingPage = () => {
                     ? plan.price
                     : plan.plan === '3monthly'
                       ? Math.round(plan.price / 3)
-                      : plan.plan === 'yearly'
-                        ? Math.round(plan.price / 12)
-                        : 0
+                      : plan.plan === '6monthly'
+                        ? Math.round(plan.price / 6)
+                        : plan.plan === 'yearly'
+                          ? Math.round(plan.price / 12)
+                          : 0
 
                   const monthlyBaseline = plans.find(p => p.plan === 'monthly')?.price
 
@@ -875,6 +877,15 @@ const LandingPage = () => {
                         savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat dari Monthly',
                         'Komitmen pendek tapi lebih murah',
                         'Cocok untuk coba beberapa AAA dulu',
+                      ]
+                    }
+
+                    if (plan.plan === '6monthly') {
+                      return [
+                        'Semua benefit Monthly',
+                        savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat dari Monthly',
+                        'Komitmen mid-term, lebih hemat dari 3 bulan',
+                        'Cocok buat yang main rutin tapi belum siap Yearly',
                       ]
                     }
 

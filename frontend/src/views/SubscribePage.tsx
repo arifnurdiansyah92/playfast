@@ -127,9 +127,11 @@ const SubscribePage = () => {
               ? plan.price
               : plan.plan === '3monthly'
                 ? Math.round(plan.price / 3)
-                : plan.plan === 'yearly'
-                  ? Math.round(plan.price / 12)
-                  : 0
+                : plan.plan === '6monthly'
+                  ? Math.round(plan.price / 6)
+                  : plan.plan === 'yearly'
+                    ? Math.round(plan.price / 12)
+                    : 0
 
             const monthlyBaseline = plans.find(p => p.plan === 'monthly')?.price
 
@@ -140,6 +142,7 @@ const SubscribePage = () => {
             const benefits = (() => {
               if (plan.plan === 'monthly') return ['Akses 300+ game di katalog', 'Cancel kapan aja', 'Kode Steam Guard otomatis 24/7', 'Game baru otomatis bisa dimainkan', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
               if (plan.plan === '3monthly') return ['Semua benefit Monthly', savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat dari Monthly', 'Komitmen pendek tapi lebih murah', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
+              if (plan.plan === '6monthly') return ['Semua benefit Monthly', savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat dari Monthly', 'Lebih murah dari 3 bulan, komitmen tetap fleksibel', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
               if (plan.plan === 'yearly') return [savingsPct > 0 ? `Hemat ~${savingsPct}% dari Monthly` : 'Hemat paling banyak', 'Akses penuh sepanjang tahun', 'Game baru otomatis tersedia', 'Priority WhatsApp support', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
               if (plan.plan === 'lifetime') return ['Bayar sekali, akses selamanya', 'Tidak ada renewal — pay-once', 'Semua game baru ke depannya gratis', 'Lifetime priority support', 'Bisa request game ke admin — yang paling banyak di-vote bakal ditambahin']
 
@@ -182,6 +185,7 @@ const SubscribePage = () => {
                     <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
                       {plan.plan === 'monthly' && `${plan.duration_days} hari`}
                       {plan.plan === '3monthly' && `${formatIDR(monthlyEquiv)}/bulan · ${plan.duration_days} hari`}
+                      {plan.plan === '6monthly' && `${formatIDR(monthlyEquiv)}/bulan · ${plan.duration_days} hari`}
                       {plan.plan === 'yearly' && `${formatIDR(monthlyEquiv)}/bulan · ${plan.duration_days} hari`}
                       {plan.plan === 'lifetime' && 'Sekali bayar, akses selamanya'}
                     </Typography>
