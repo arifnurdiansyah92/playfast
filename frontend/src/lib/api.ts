@@ -1081,6 +1081,21 @@ export const adminApi = {
 
     return res.accounts
   },
+  getAccountsPaginated(params: { page: number; per_page: number; q?: string }) {
+    const sp = new URLSearchParams()
+
+    sp.set('page', String(params.page))
+    sp.set('per_page', String(params.per_page))
+    if (params.q) sp.set('q', params.q)
+
+    return request<{
+      accounts: SteamAccount[]
+      total: number
+      page: number
+      per_page: number
+      pages: number
+    }>(`/api/admin/accounts?${sp.toString()}`)
+  },
   async getAccount(id: number) {
     const res = await request<{ account: SteamAccount & { password: string; games: SteamAccountGame[] } }>(
       `/api/admin/accounts/${id}`
@@ -1225,11 +1240,24 @@ return data.url
       body: JSON.stringify({ content: instructions })
     })
   },
-  async getOrders() {
-    const res = await request<{ orders: Order[] }>('/api/admin/orders')
+  getOrders(params?: { page?: number; per_page?: number; status?: string; q?: string }) {
+    const sp = new URLSearchParams()
 
-    
-return res.orders
+    if (params?.page) sp.set('page', String(params.page))
+    if (params?.per_page) sp.set('per_page', String(params.per_page))
+    if (params?.status) sp.set('status', params.status)
+    if (params?.q) sp.set('q', params.q)
+
+    const suffix = sp.toString() ? `?${sp.toString()}` : ''
+
+    return request<{
+      orders: Order[]
+      total: number
+      page: number
+      per_page: number
+      pages: number
+      stats: Record<string, number>
+    }>(`/api/admin/orders${suffix}`)
   },
   revokeAccess(orderId: number) {
     return request<{ message: string }>(`/api/admin/orders/${orderId}/revoke`, { method: 'POST' })
@@ -1394,8 +1422,22 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
       body: JSON.stringify({ user_id: userId })
     })
   },
-  getPromoCodes() {
-    return request<{ promo_codes: PromoCode[] }>('/api/admin/promo-codes')
+  getPromoCodes(params?: { page?: number; per_page?: number; q?: string }) {
+    const sp = new URLSearchParams()
+
+    if (params?.page) sp.set('page', String(params.page))
+    if (params?.per_page) sp.set('per_page', String(params.per_page))
+    if (params?.q) sp.set('q', params.q)
+
+    const suffix = sp.toString() ? `?${sp.toString()}` : ''
+
+    return request<{
+      promo_codes: PromoCode[]
+      total?: number
+      page?: number
+      per_page?: number
+      pages?: number
+    }>(`/api/admin/promo-codes${suffix}`)
   },
   createPromoCode(data: Partial<PromoCode>) {
     return request<{ promo_code: PromoCode }>('/api/admin/promo-codes', {
@@ -1431,14 +1473,46 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
 
     return `${API_BASE}/api/admin/reports/transactions?${qs.toString()}`
   },
-  getReferrals() {
-    return request<{ referrals: any[]; total_credit_awarded: number; total_count: number }>('/api/admin/referrals')
+  getReferrals(params?: { page?: number; per_page?: number; q?: string }) {
+    const sp = new URLSearchParams()
+
+    if (params?.page) sp.set('page', String(params.page))
+    if (params?.per_page) sp.set('per_page', String(params.per_page))
+    if (params?.q) sp.set('q', params.q)
+
+    const suffix = sp.toString() ? `?${sp.toString()}` : ''
+
+    return request<{
+      referrals: any[]
+      total_credit_awarded: number
+      total_count: number
+      total?: number
+      page?: number
+      per_page?: number
+      pages?: number
+    }>(`/api/admin/referrals${suffix}`)
   },
-  getGameRequests(status: 'pending' | 'added' | 'rejected' | 'all' = 'all') {
+  getGameRequests(params: {
+    status?: 'pending' | 'added' | 'rejected' | 'all'
+    page?: number
+    per_page?: number
+    q?: string
+  } = {}) {
+    const sp = new URLSearchParams()
+
+    sp.set('status', params.status ?? 'all')
+    if (params.page) sp.set('page', String(params.page))
+    if (params.per_page) sp.set('per_page', String(params.per_page))
+    if (params.q) sp.set('q', params.q)
+
     return request<{
       items: GameRequest[]
+      total: number
+      page: number
+      per_page: number
+      pages: number
       stats: { pending: number; added: number; rejected: number }
-    }>(`/api/admin/game-requests?status=${status}`)
+    }>(`/api/admin/game-requests?${sp.toString()}`)
   },
   updateGameRequest(
     id: number,

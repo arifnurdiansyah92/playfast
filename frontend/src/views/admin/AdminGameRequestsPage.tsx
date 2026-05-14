@@ -1,8 +1,8 @@
 'use client'
 
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
@@ -11,6 +11,7 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
+import InputAdornment from '@mui/material/InputAdornment'
 import Snackbar from '@mui/material/Snackbar'
 import Skeleton from '@mui/material/Skeleton'
 import Dialog from '@mui/material/Dialog'
@@ -26,6 +27,7 @@ import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
+import TablePagination from '@mui/material/TablePagination'
 
 import type { GameRequest } from '@/lib/api'
 import { adminApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
@@ -48,6 +50,18 @@ const STATUS_COLORS: Record<GameRequest['status'], 'warning' | 'success' | 'erro
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
+function useDebounced<T>(value: T, delayMs = 300): T {
+  const [debounced, setDebounced] = useState(value)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs)
+
+    return () => clearTimeout(t)
+  }, [value, delayMs])
+
+  return debounced
+}
+
 const AdminGameRequestsPage = () => {
   const { user } = useAuth()
   const queryClient = useQueryClient()
@@ -56,14 +70,29 @@ const AdminGameRequestsPage = () => {
   const [rejectTarget, setRejectTarget] = useState<GameRequest | null>(null)
   const [rejectNote, setRejectNote] = useState('')
   const [snackMsg, setSnackMsg] = useState('')
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search)
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(25)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin-game-requests', statusTab],
-    queryFn: () => adminApi.getGameRequests(statusTab),
+  useEffect(() => {
+    setPage(1)
+  }, [statusTab, debouncedSearch, rowsPerPage])
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['admin-game-requests', { statusTab, page, rowsPerPage, debouncedSearch }],
+    queryFn: () => adminApi.getGameRequests({
+      status: statusTab,
+      page,
+      per_page: rowsPerPage,
+      q: debouncedSearch.trim() || undefined,
+    }),
     enabled: user?.role === 'admin',
+    placeholderData: keepPreviousData,
   })
 
   const items = data?.items ?? []
+  const total = data?.total ?? 0
   const stats = data?.stats ?? { pending: 0, added: 0, rejected: 0 }
 
   const updateMutation = useMutation({
@@ -109,6 +138,25 @@ const AdminGameRequestsPage = () => {
         ))}
       </Box>
 
+      <TextField
+        fullWidth size='small'
+        placeholder='Cari berdasarkan nama game atau appid…'
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        slotProps={{
+          input: {
+            startAdornment: <InputAdornment position='start'><i className='tabler-search' /></InputAdornment>,
+            endAdornment: search ? (
+              <InputAdornment position='end'>
+                <IconButton size='small' onClick={() => setSearch('')}>
+                  <i className='tabler-x' />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
+          }
+        }}
+      />
+
       {isLoading ? (
         <Card><CardContent>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} height={56} sx={{ mb: 1 }} />)}</CardContent></Card>
       ) : items.length === 0 ? (
@@ -116,12 +164,17 @@ const AdminGameRequestsPage = () => {
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
             <i className='tabler-bulb-off' style={{ fontSize: 48, opacity: 0.5 }} />
             <Typography variant='h6' sx={{ mt: 2 }}>
-              Belum ada request {statusTab !== 'all' && `dengan status ${statusTab}`}
+              {debouncedSearch.trim()
+                ? 'Tidak ada request yang cocok dengan pencarian'
+                : `Belum ada request ${statusTab !== 'all' ? `dengan status ${statusTab}` : ''}`}
             </Typography>
+            {debouncedSearch.trim() && (
+              <Button variant='outlined' sx={{ mt: 2 }} onClick={() => setSearch('')}>Clear search</Button>
+            )}
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card sx={{ opacity: isFetching ? 0.7 : 1, transition: 'opacity 0.15s' }}>
           <TableContainer>
             <Table size='small'>
               <TableHead>
@@ -306,6 +359,15 @@ const AdminGameRequestsPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component='div'
+            count={total}
+            page={page - 1}
+            onPageChange={(_, p) => setPage(p + 1)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={e => setRowsPerPage(parseInt(e.target.value, 10))}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
         </Card>
       )}
 

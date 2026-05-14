@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 
 import { useRouter } from 'next/navigation'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
@@ -17,6 +17,7 @@ import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
+import TablePagination from '@mui/material/TablePagination'
 import Skeleton from '@mui/material/Skeleton'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
@@ -26,6 +27,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import IconButton from '@mui/material/IconButton'
+import InputAdornment from '@mui/material/InputAdornment'
 import Tooltip from '@mui/material/Tooltip'
 import Snackbar from '@mui/material/Snackbar'
 
@@ -36,6 +38,18 @@ import CustomTextField from '@core/components/mui/TextField'
 import { adminApi } from '@/lib/api'
 import type { JobStatus } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+
+function useDebounced<T>(value: T, delayMs = 300): T {
+  const [debounced, setDebounced] = useState(value)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs)
+
+    return () => clearTimeout(t)
+  }, [value, delayMs])
+
+  return debounced
+}
 
 const AdminAccountsPage = () => {
   const { user } = useAuth()
@@ -54,11 +68,29 @@ const AdminAccountsPage = () => {
   const [editPwValue, setEditPwValue] = useState('')
   const [logoutAllConfirmOpen, setLogoutAllConfirmOpen] = useState(false)
 
-  const { data: accounts, isLoading } = useQuery({
-    queryKey: ['admin-accounts'],
-    queryFn: () => adminApi.getAccounts(),
-    enabled: user?.role === 'admin'
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search)
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(25)
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, rowsPerPage])
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['admin-accounts', { page, rowsPerPage, debouncedSearch }],
+    queryFn: () => adminApi.getAccountsPaginated({
+      page,
+      per_page: rowsPerPage,
+      q: debouncedSearch.trim() || undefined,
+    }),
+    enabled: user?.role === 'admin',
+    placeholderData: keepPreviousData,
   })
+
+  const accounts = data?.accounts ?? []
+  const total = data?.total ?? 0
+  const hasSearch = !!debouncedSearch.trim()
 
   const addMutation = useMutation({
     mutationFn: (formData: FormData) => adminApi.addAccount(formData),
@@ -219,7 +251,9 @@ return }
         <Box>
           <Typography variant='h4' sx={{ mb: 1 }}>Steam Accounts</Typography>
           <Typography color='text.secondary'>
-            {accounts?.length ?? 0} accounts &middot; {accounts?.filter(a => a.is_active).length ?? 0} active
+            {data
+              ? `${total} account${total === 1 ? '' : 's'}${hasSearch ? ' matching search' : ''}`
+              : 'Manage Steam accounts'}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 2 }}>
@@ -332,18 +366,48 @@ return }
         )
       })()}
 
+      <Card>
+        <CardContent sx={{ pb: '16px !important' }}>
+          <CustomTextField
+            fullWidth
+            placeholder='Search by username or Steam ID'
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position='start'>
+                  <i className='tabler-search' />
+                </InputAdornment>
+              ),
+              endAdornment: search ? (
+                <InputAdornment position='end'>
+                  <IconButton size='small' onClick={() => setSearch('')}>
+                    <i className='tabler-x' />
+                  </IconButton>
+                </InputAdornment>
+              ) : undefined,
+            }}
+          />
+        </CardContent>
+      </Card>
+
       {isLoading ? (
         <Card><CardContent>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</CardContent></Card>
-      ) : !accounts || accounts.length === 0 ? (
+      ) : total === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
             <i className='tabler-server' style={{ fontSize: 48, opacity: 0.5 }} />
-            <Typography variant='h6' sx={{ mt: 2 }}>No accounts yet</Typography>
-            <Typography color='text.secondary'>Add a Steam account to get started</Typography>
+            <Typography variant='h6' sx={{ mt: 2 }}>{hasSearch ? 'No accounts match your search' : 'No accounts yet'}</Typography>
+            <Typography color='text.secondary'>
+              {hasSearch ? 'Try a different keyword or clear the search.' : 'Add a Steam account to get started'}
+            </Typography>
+            {hasSearch && (
+              <Button variant='outlined' sx={{ mt: 2 }} onClick={() => setSearch('')}>Clear search</Button>
+            )}
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card sx={{ opacity: isFetching ? 0.7 : 1, transition: 'opacity 0.15s' }}>
           <TableContainer>
             <Table size='small'>
               <TableHead>
@@ -439,6 +503,15 @@ return }
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component='div'
+            count={total}
+            page={page - 1}
+            onPageChange={(_, p) => setPage(p + 1)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={e => setRowsPerPage(parseInt(e.target.value, 10))}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
         </Card>
       )}
 
@@ -498,7 +571,7 @@ return }
         <DialogTitle>Logout All Devices on All Accounts?</DialogTitle>
         <DialogContent>
           <Typography>
-            Ini akan kick semua session di <strong>{accounts?.filter(a => a.is_active).length ?? 0} akun aktif</strong>.
+            Ini akan kick semua session di <strong>semua akun aktif</strong>.
             Proses berjalan di background. Pengguna Steam yang sedang main akan ke-logout.
           </Typography>
         </DialogContent>

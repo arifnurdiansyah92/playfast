@@ -14,6 +14,7 @@ from datetime import datetime, timezone, timedelta
 from functools import wraps
 
 from sqlalchemy import func, cast, Date
+from sqlalchemy.orm import aliased
 
 import requests as http_requests
 from flask import Blueprint, make_response, request, jsonify
@@ -612,10 +613,42 @@ def list_accounts():
     Password is intentionally NOT returned in the list response — bulk
     transmission of passwords creates needless XSS/log/cache exposure.
     Use GET /accounts/<id> for the detail view where the admin needs it.
+
+    When a ``page`` query param is provided, returns a paginated response
+    with optional ``q`` search by ``account_name`` / ``steam_id``. Without
+    ``page`` the legacy "return everything" shape is preserved so existing
+    callers (e.g. account-picker dropdowns) keep working.
     """
-    accounts = SteamAccount.query.order_by(SteamAccount.created_at.desc()).all()
+    page_arg = request.args.get("page", type=int)
+
+    query = SteamAccount.query
+    q = (request.args.get("q") or "").strip()
+    if q:
+        like = f"%{q}%"
+        query = query.filter(db.or_(
+            SteamAccount.account_name.ilike(like),
+            SteamAccount.steam_id.ilike(like),
+        ))
+
+    query = query.order_by(SteamAccount.created_at.desc())
+
+    if page_arg is None:
+        accounts = query.all()
+        return jsonify({
+            "accounts": [a.to_dict() for a in accounts],
+        }), 200
+
+    per_page = request.args.get("per_page", 25, type=int)
+    per_page = min(max(per_page, 1), 200)
+
+    pagination = query.paginate(page=page_arg, per_page=per_page, error_out=False)
+
     return jsonify({
-        "accounts": [a.to_dict() for a in accounts],
+        "accounts": [a.to_dict() for a in pagination.items],
+        "total": pagination.total,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+        "pages": pagination.pages,
     }), 200
 
 
@@ -2158,19 +2191,50 @@ def list_orders():
     per_page = request.args.get("per_page", 50, type=int)
     per_page = min(per_page, 200)
 
-    query = Order.query
-
     status = request.args.get("status", "").strip()
-    if status:
-        query = query.filter_by(status=status)
-
     user_id = request.args.get("user_id", type=int)
-    if user_id:
-        query = query.filter_by(user_id=user_id)
-
     game_id = request.args.get("game_id", type=int)
+    q_search = (request.args.get("q") or "").strip()
+
+    # Non-status filters applied to the base query; status filter applied on top.
+    # We keep them separate so the per-status `stats` counts ignore the active
+    # status filter (chips always show real totals).
+    base_query = Order.query
+
+    if user_id:
+        base_query = base_query.filter(Order.user_id == user_id)
+
     if game_id:
-        query = query.filter_by(game_id=game_id)
+        base_query = base_query.filter(Order.game_id == game_id)
+
+    if q_search:
+        pattern = f"%{q_search}%"
+        base_query = base_query.outerjoin(User, Order.user_id == User.id).outerjoin(
+            Game, Order.game_id == Game.id
+        ).filter(
+            db.or_(
+                db.cast(Order.id, db.String).ilike(pattern),
+                User.email.ilike(pattern),
+                Game.name.ilike(pattern),
+            )
+        )
+
+    # Unassigned pseudo-status: fulfilled order with no active assignment
+    # (either assignment_id is NULL, or the assignment was revoked).
+    unassigned_predicate = db.and_(
+        Order.status == "fulfilled",
+        db.or_(
+            Order.assignment_id.is_(None),
+            Order.assignment.has(Assignment.is_revoked.is_(True)),
+        ),
+    )
+
+    if status == "unassigned":
+        query = base_query.filter(unassigned_predicate)
+    elif status:
+        query = base_query.filter(Order.status == status)
+    else:
+        query = base_query
 
     pagination = query.order_by(Order.created_at.desc()).paginate(
         page=page, per_page=per_page, error_out=False
@@ -2182,12 +2246,23 @@ def list_orders():
         od["user_email"] = order.user.email if order.user else None
         orders.append(od)
 
+    stats = {
+        "all": base_query.count(),
+        "pending_payment": base_query.filter(Order.status == "pending_payment").count(),
+        "fulfilled": base_query.filter(Order.status == "fulfilled").count(),
+        "revoked": base_query.filter(Order.status == "revoked").count(),
+        "refunded": base_query.filter(Order.status == "refunded").count(),
+        "cancelled": base_query.filter(Order.status == "cancelled").count(),
+        "unassigned": base_query.filter(unassigned_predicate).count(),
+    }
+
     return jsonify({
         "orders": orders,
         "total": pagination.total,
         "page": pagination.page,
         "per_page": pagination.per_page,
         "pages": pagination.pages,
+        "stats": stats,
     }), 200
 
 
@@ -2982,9 +3057,37 @@ def reopen_account_flag(flag_id: int):
 @admin_bp.route("/promo-codes", methods=["GET"])
 @admin_required
 def list_promo_codes():
-    """List all promo codes with usage counts."""
-    codes = PromoCode.query.order_by(PromoCode.created_at.desc()).all()
-    return jsonify({"promo_codes": [c.to_dict(include_usage_count=True) for c in codes]}), 200
+    """List all promo codes with usage counts.
+
+    Paginated when ``page`` is provided; optional ``q`` filters by ``code``
+    (case-insensitive). Returns the legacy unbounded shape when no ``page``
+    arg is supplied to keep older callers working.
+    """
+    page_arg = request.args.get("page", type=int)
+
+    query = PromoCode.query
+    q = (request.args.get("q") or "").strip()
+    if q:
+        query = query.filter(PromoCode.code.ilike(f"%{q}%"))
+
+    query = query.order_by(PromoCode.created_at.desc())
+
+    if page_arg is None:
+        codes = query.all()
+        return jsonify({"promo_codes": [c.to_dict(include_usage_count=True) for c in codes]}), 200
+
+    per_page = request.args.get("per_page", 25, type=int)
+    per_page = min(max(per_page, 1), 200)
+
+    pagination = query.paginate(page=page_arg, per_page=per_page, error_out=False)
+
+    return jsonify({
+        "promo_codes": [c.to_dict(include_usage_count=True) for c in pagination.items],
+        "total": pagination.total,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+        "pages": pagination.pages,
+    }), 200
 
 
 @admin_bp.route("/promo-codes", methods=["POST"])
@@ -3122,23 +3225,76 @@ def list_promo_code_usages(promo_id: int):
 @admin_bp.route("/referrals", methods=["GET"])
 @admin_required
 def list_referrals():
-    """List all referral rewards with user info."""
-    rewards = ReferralReward.query.order_by(ReferralReward.awarded_at.desc()).all()
+    """List all referral rewards with user info.
+
+    Paginated when ``page`` is provided. Optional ``q`` searches referrer
+    OR referee email. ``total_credit_awarded`` and ``total_count`` always
+    cover the FULL dataset (matching the search filter, but not the page
+    window) so the page-level summary cards stay accurate while paging.
+    """
+    page_arg = request.args.get("page", type=int)
+
+    q = (request.args.get("q") or "").strip()
+
+    base_query = ReferralReward.query
+    if q:
+        like = f"%{q}%"
+        referrer_user = aliased(User)
+        referee_user = aliased(User)
+        base_query = (
+            base_query
+            .outerjoin(referrer_user, ReferralReward.referrer_user_id == referrer_user.id)
+            .outerjoin(referee_user, ReferralReward.referee_user_id == referee_user.id)
+            .filter(db.or_(
+                referrer_user.email.ilike(like),
+                referee_user.email.ilike(like),
+            ))
+        )
+
+    # Aggregate totals across the entire (filtered) dataset, computed in SQL
+    # so we don't have to materialise every row just to sum.
+    agg = base_query.with_entities(
+        func.coalesce(func.sum(ReferralReward.credit_awarded), 0),
+        func.count(ReferralReward.id),
+    ).one()
+    total_credit = int(agg[0] or 0)
+    total_count = int(agg[1] or 0)
+
+    ordered = base_query.order_by(ReferralReward.awarded_at.desc())
+
+    if page_arg is None:
+        rewards = ordered.all()
+    else:
+        per_page = request.args.get("per_page", 25, type=int)
+        per_page = min(max(per_page, 1), 200)
+        pagination = ordered.paginate(page=page_arg, per_page=per_page, error_out=False)
+        rewards = pagination.items
+
     result = []
-    total_credit = 0
     for r in rewards:
         referrer = db.session.get(User, r.referrer_user_id)
         referee = db.session.get(User, r.referee_user_id)
-        total_credit += r.credit_awarded
         result.append({
             **r.to_dict(),
             "referrer_email": referrer.email if referrer else None,
             "referee_email": referee.email if referee else None,
         })
+
+    if page_arg is None:
+        return jsonify({
+            "referrals": result,
+            "total_credit_awarded": total_credit,
+            "total_count": total_count,
+        }), 200
+
     return jsonify({
         "referrals": result,
+        "total": pagination.total,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+        "pages": pagination.pages,
         "total_credit_awarded": total_credit,
-        "total_count": len(result),
+        "total_count": total_count,
     }), 200
 
 

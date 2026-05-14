@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
@@ -14,6 +14,7 @@ import TableCell from '@mui/material/TableCell'
 import TableContainer from '@mui/material/TableContainer'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
+import TablePagination from '@mui/material/TablePagination'
 import Skeleton from '@mui/material/Skeleton'
 import Chip from '@mui/material/Chip'
 import Alert from '@mui/material/Alert'
@@ -33,21 +34,50 @@ import type { Order } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import RotateAccountDialog from '@/views/admin/RotateAccountDialog'
 
+function useDebounced<T>(value: T, delayMs = 300): T {
+  const [debounced, setDebounced] = useState(value)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs)
+
+    return () => clearTimeout(t)
+  }, [value, delayMs])
+
+  return debounced
+}
+
 const AdminOrdersPage = () => {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search)
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(25)
   const [snackMsg, setSnackMsg] = useState('')
   const [rotateOrder, setRotateOrder] = useState<Order | null>(null)
   const [refundOrder, setRefundOrder] = useState<Order | null>(null)
   const [refundNote, setRefundNote] = useState('')
 
-  const { data: orders, isLoading } = useQuery({
-    queryKey: ['admin-orders'],
-    queryFn: () => adminApi.getOrders(),
-    enabled: user?.role === 'admin'
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, statusFilter, rowsPerPage])
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-orders', { page, rowsPerPage, statusFilter, debouncedSearch }],
+    queryFn: () => adminApi.getOrders({
+      page,
+      per_page: rowsPerPage,
+      status: statusFilter || undefined,
+      q: debouncedSearch.trim() || undefined,
+    }),
+    enabled: user?.role === 'admin',
+    placeholderData: keepPreviousData,
   })
+
+  const orders = data?.orders
+  const total = data?.total ?? 0
+  const stats = data?.stats ?? {}
 
   const revokeMutation = useMutation({
     mutationFn: (orderId: number) => adminApi.revokeAccess(orderId),
@@ -96,36 +126,6 @@ const AdminOrdersPage = () => {
   })
 
 
-  const unassignedCount = orders?.filter(o => o.status === 'fulfilled' && !o.credentials && !o.is_revoked).length ?? 0
-
-  const filtered = useMemo(() => {
-    if (!orders) return []
-    let result = orders
-
-    if (search) {
-      const q = search.toLowerCase()
-
-      result = result.filter(o =>
-        (o.user_email || '').toLowerCase().includes(q) ||
-        (o.game?.name || '').toLowerCase().includes(q) ||
-        (o.credentials?.account_name || '').toLowerCase().includes(q) ||
-        String(o.id).includes(q)
-      )
-    }
-
-    if (statusFilter === 'unassigned') {
-      // "unassigned" is a pseudo-status: fulfilled order whose Steam account
-      // assignment was lost (initial fulfillment failed, account disabled,
-      // or family-share pruned). Bookkeeping-wise these orders are still
-      // status='fulfilled' so we filter on the derived condition instead.
-      result = result.filter(o => o.status === 'fulfilled' && !o.credentials && !o.is_revoked)
-    } else if (statusFilter) {
-      result = result.filter(o => o.status === statusFilter)
-    }
-
-    return result
-  }, [orders, search, statusFilter])
-
   if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
 
   const statusColor = (status: string) => {
@@ -137,18 +137,15 @@ const AdminOrdersPage = () => {
     return 'default' as const
   }
 
-  const pendingCount = orders?.filter(o => o.status === 'pending_payment').length ?? 0
-  const fulfilledCount = orders?.filter(o => o.status === 'fulfilled').length ?? 0
-  const revokedCount = orders?.filter(o => o.status === 'revoked').length ?? 0
-  const refundedCount = orders?.filter(o => o.status === 'refunded').length ?? 0
+  const unassignedCount = stats.unassigned ?? 0
 
   const statuses: { label: string; value: string; count: number; color?: 'primary' | 'warning' | 'success' | 'error' | 'info' }[] = [
-    { label: 'All', value: '', count: orders?.length ?? 0 },
-    { label: 'Pending', value: 'pending_payment', count: pendingCount },
-    { label: 'Fulfilled', value: 'fulfilled', count: fulfilledCount },
+    { label: 'All', value: '', count: stats.all ?? 0 },
+    { label: 'Pending', value: 'pending_payment', count: stats.pending_payment ?? 0 },
+    { label: 'Fulfilled', value: 'fulfilled', count: stats.fulfilled ?? 0 },
     { label: 'Unassigned', value: 'unassigned', count: unassignedCount, color: 'warning' },
-    { label: 'Revoked', value: 'revoked', count: revokedCount, color: 'error' },
-    { label: 'Refunded', value: 'refunded', count: refundedCount, color: 'info' },
+    { label: 'Revoked', value: 'revoked', count: stats.revoked ?? 0, color: 'error' },
+    { label: 'Refunded', value: 'refunded', count: stats.refunded ?? 0, color: 'info' },
   ]
 
   return (
@@ -156,7 +153,7 @@ const AdminOrdersPage = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography variant='h4' sx={{ mb: 1 }}>Orders</Typography>
-          <Typography color='text.secondary'>{orders?.length ?? 0} total orders</Typography>
+          <Typography color='text.secondary'>{total} total orders</Typography>
         </Box>
         {unassignedCount > 0 && (
           <Button
@@ -202,11 +199,11 @@ const AdminOrdersPage = () => {
 
       {isLoading ? (
         <Card><CardContent>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} height={60} sx={{ mb: 1 }} />)}</CardContent></Card>
-      ) : filtered.length === 0 ? (
+      ) : !orders || orders.length === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
             <i className='tabler-receipt' style={{ fontSize: 48, opacity: 0.5 }} />
-            <Typography variant='h6' sx={{ mt: 2 }}>{orders?.length === 0 ? 'No orders yet' : 'No matching orders'}</Typography>
+            <Typography variant='h6' sx={{ mt: 2 }}>{total === 0 && !debouncedSearch && !statusFilter ? 'No orders yet' : 'No matching orders'}</Typography>
           </CardContent>
         </Card>
       ) : (
@@ -225,7 +222,7 @@ const AdminOrdersPage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filtered.map(order => (
+                {orders.map(order => (
                   <TableRow key={order.id} hover>
                     <TableCell><Typography variant='body2' sx={{ fontWeight: 600 }}>#{order.id}</Typography></TableCell>
                     <TableCell><Typography variant='body2'>{order.user_email || `User #${order.user_id}`}</Typography></TableCell>
@@ -282,6 +279,15 @@ const AdminOrdersPage = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          <TablePagination
+            component='div'
+            count={total}
+            page={page - 1}
+            onPageChange={(_, newPage) => setPage(newPage + 1)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(1) }}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
         </Card>
       )}
 

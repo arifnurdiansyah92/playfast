@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
 import Typography from '@mui/material/Typography'
 import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
@@ -12,7 +13,9 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import TableContainer from '@mui/material/TableContainer'
+import TablePagination from '@mui/material/TablePagination'
 import IconButton from '@mui/material/IconButton'
+import InputAdornment from '@mui/material/InputAdornment'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -56,6 +59,18 @@ return `${origin}/subscribe?code=${encodedCode}&plan=${encodeURIComponent(plan)}
 return `${origin}/store?code=${encodedCode}`
 }
 
+function useDebounced<T>(value: T, delayMs = 300): T {
+  const [debounced, setDebounced] = useState(value)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delayMs)
+
+    return () => clearTimeout(t)
+  }, [value, delayMs])
+
+  return debounced
+}
+
 const AdminPromoCodesPage = () => {
   const { user } = useAuth()
   const qc = useQueryClient()
@@ -63,6 +78,15 @@ const AdminPromoCodesPage = () => {
   const [usagesOpen, setUsagesOpen] = useState<number | null>(null)
   const [editingOwnerId, setEditingOwnerId] = useState<number | null>(null)
   const [snack, setSnack] = useState('')
+
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounced(search)
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(25)
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, rowsPerPage])
 
   const [newCode, setNewCode] = useState<{
     code: string
@@ -94,10 +118,15 @@ const AdminPromoCodesPage = () => {
     enabled: user?.role === 'admin',
   })
 
-  const { data } = useQuery({
-    queryKey: ['admin-promo-codes'],
-    queryFn: () => adminApi.getPromoCodes(),
+  const { data, isFetching } = useQuery({
+    queryKey: ['admin-promo-codes', { page, rowsPerPage, debouncedSearch }],
+    queryFn: () => adminApi.getPromoCodes({
+      page,
+      per_page: rowsPerPage,
+      q: debouncedSearch.trim() || undefined,
+    }),
     enabled: user?.role === 'admin',
+    placeholderData: keepPreviousData,
   })
 
   const createMut = useMutation({
@@ -146,6 +175,7 @@ const AdminPromoCodesPage = () => {
   if (user?.role !== 'admin') return <Alert severity='error'>Access denied</Alert>
 
   const codes = data?.promo_codes ?? []
+  const total = data?.total ?? 0
 
   const formatValue = (c: PromoCode) =>
     c.discount_type === 'percentage' ? `${c.discount_value}%` : formatIDR(c.discount_value)
@@ -158,6 +188,29 @@ const AdminPromoCodesPage = () => {
       </Box>
 
       <Card>
+        <CardContent sx={{ pb: '16px !important' }}>
+          <TextField
+            fullWidth size='small'
+            placeholder='Search by code…'
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: <InputAdornment position='start'><i className='tabler-search' /></InputAdornment>,
+                endAdornment: search ? (
+                  <InputAdornment position='end'>
+                    <IconButton size='small' onClick={() => setSearch('')}>
+                      <i className='tabler-x' />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              }
+            }}
+          />
+        </CardContent>
+      </Card>
+
+      <Card sx={{ opacity: isFetching ? 0.7 : 1, transition: 'opacity 0.15s' }}>
         <TableContainer>
           <Table size='small'>
             <TableHead>
@@ -256,6 +309,15 @@ const AdminPromoCodesPage = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination
+          component='div'
+          count={total}
+          page={page - 1}
+          onPageChange={(_, p) => setPage(p + 1)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={e => setRowsPerPage(parseInt(e.target.value, 10))}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+        />
       </Card>
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth='sm' fullWidth>

@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 import requests as http_requests
 from flask import Blueprint, current_app, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from app.email_service import send_game_request_fulfilled_email
@@ -399,23 +400,60 @@ def admin_list_requests():
 
     Query params:
       - status: pending | added | rejected | all (default: all)
-    Sorted by request_count desc, then created_at desc.
+      - page, per_page: standard pagination (default 25, max 200)
+      - q: optional case-insensitive search over game name + appid
+    Sorted by request_count desc, then created_at desc — computed in SQL so
+    pagination operates on the correctly-ordered window.
+    Stats are computed against the unfiltered table so the chip counts
+    stay stable as the user changes the active status filter.
     """
     status = (request.args.get("status") or "all").lower()
-    q = GameRequest.query
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 25, type=int)
+    per_page = min(max(per_page, 1), 200)
+    q_search = (request.args.get("q") or "").strip()
+
+    vote_count = (
+        db.session.query(
+            GameRequestVote.game_request_id.label("rid"),
+            func.count(GameRequestVote.id).label("cnt"),
+        )
+        .group_by(GameRequestVote.game_request_id)
+        .subquery()
+    )
+
+    query = (
+        db.session.query(GameRequest)
+        .outerjoin(vote_count, vote_count.c.rid == GameRequest.id)
+    )
+
     if status in ("pending", "added", "rejected"):
-        q = q.filter_by(status=status)
+        query = query.filter(GameRequest.status == status)
 
-    items = q.all()
-    items.sort(key=lambda r: (r.request_count(), r.created_at), reverse=True)
+    if q_search:
+        pattern = f"%{q_search}%"
+        conditions = [GameRequest.name.ilike(pattern)]
+        if q_search.isdigit():
+            conditions.append(GameRequest.appid == int(q_search))
+        query = query.filter(db.or_(*conditions))
 
-    # Stats: counts per status
+    query = query.order_by(
+        func.coalesce(vote_count.c.cnt, 0).desc(),
+        GameRequest.created_at.desc(),
+    )
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
     pending_count = GameRequest.query.filter_by(status="pending").count()
     added_count = GameRequest.query.filter_by(status="added").count()
     rejected_count = GameRequest.query.filter_by(status="rejected").count()
 
     return jsonify({
-        "items": [r.to_dict(include_voters=True) for r in items],
+        "items": [r.to_dict(include_voters=True) for r in pagination.items],
+        "total": pagination.total,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+        "pages": pagination.pages,
         "stats": {
             "pending": pending_count,
             "added": added_count,
