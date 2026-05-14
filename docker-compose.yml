@@ -41,8 +41,8 @@ services:
       - uploads:/app/app/uploads
     networks:
       - playfast
-    expose:
-      - "5000"
+    ports:
+      - "127.0.0.1:5001:5000"
 
   frontend:
     build:
