@@ -143,6 +143,9 @@ const HorizontalMenu = () => {
               <MenuItem href='/admin/account-flags' icon={<i className='tabler-flag' />}>
                 Account Flags
               </MenuItem>
+              <MenuItem href='/admin/refill-priority' icon={<i className='tabler-trending-up' />}>
+                Refill Priority
+              </MenuItem>
             </SubMenu>
             <SubMenu label='Marketing' icon={<i className='tabler-rocket' />}>
               <MenuItem href='/admin/promo-codes' icon={<i className='tabler-discount' />}>

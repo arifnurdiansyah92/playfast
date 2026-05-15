@@ -308,6 +308,41 @@ export interface GameRequest {
   notified_count?: number
 }
 
+export type RefillReason = 'no_assignment' | 'revoked' | 'account_disabled'
+
+export interface RefillPriorityAffectedUser {
+  user_id: number
+  email: string | null
+  order_id: number
+  order_created_at: string | null
+  reason: RefillReason
+}
+
+export interface RefillPriorityItem {
+  game_id: number
+  appid: number
+  name: string
+  header_image: string | null
+  affected_user_count: number
+  affected_order_count: number
+  oldest_affected_at: string | null
+  breakdown: {
+    no_assignment: number
+    revoked: number
+    account_disabled: number
+  }
+  available_account_count: number
+  total_account_count: number
+  affected_users: RefillPriorityAffectedUser[]
+}
+
+export interface RefillPriorityResponse {
+  items: RefillPriorityItem[]
+  total_games: number
+  total_affected_users: number
+  total_affected_orders: number
+}
+
 export interface ReportTransaction {
   id: string
   raw_id: number
@@ -1283,6 +1318,14 @@ return data.url
       method: 'PUT',
       body: JSON.stringify({ content: instructions })
     })
+  },
+  getRefillPriority(params?: { q?: string }) {
+    const sp = new URLSearchParams()
+
+    if (params?.q) sp.set('q', params.q)
+    const suffix = sp.toString() ? `?${sp.toString()}` : ''
+
+    return request<RefillPriorityResponse>(`/api/admin/refill-priority${suffix}`)
   },
   getOrders(params?: { page?: number; per_page?: number; status?: string; q?: string }) {
     const sp = new URLSearchParams()

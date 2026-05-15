@@ -2008,6 +2008,163 @@ def list_games():
     }), 200
 
 
+@admin_bp.route("/refill-priority", methods=["GET"])
+@admin_required
+def refill_priority():
+    """Games whose fulfilled orders can't be played anymore — ranked so the
+    admin knows where buying more Steam accounts pays off most.
+
+    A fulfilled order is 'affected' when:
+      1. assignment_id IS NULL — never assigned (or row deleted)
+      2. Assignment.is_revoked = TRUE — admin pulled access back
+      3. SteamAccount.is_active = FALSE — the underlying account died
+
+    Single LEFT JOIN query pulls every affected order with its game + user +
+    assignment + steam_account; aggregation happens in Python keyed by game_id.
+    """
+    q = request.args.get("q", "").strip()
+
+    base_query = (
+        db.session.query(
+            Order.id.label("order_id"),
+            Order.user_id.label("user_id"),
+            Order.game_id.label("game_id"),
+            Order.created_at.label("order_created_at"),
+            Order.assignment_id.label("assignment_id"),
+            User.email.label("user_email"),
+            Game.appid.label("game_appid"),
+            Game.name.label("game_name"),
+            Game.custom_name.label("game_custom_name"),
+            Game.header_image.label("game_header_image"),
+            Game.custom_header_image.label("game_custom_header_image"),
+            Assignment.is_revoked.label("assignment_is_revoked"),
+            SteamAccount.is_active.label("steam_account_is_active"),
+        )
+        .join(User, Order.user_id == User.id)
+        .join(Game, Order.game_id == Game.id)
+        .outerjoin(Assignment, Order.assignment_id == Assignment.id)
+        .outerjoin(SteamAccount, Assignment.steam_account_id == SteamAccount.id)
+        .filter(Order.status == "fulfilled")
+        .filter(
+            db.or_(
+                Order.assignment_id.is_(None),
+                Assignment.is_revoked.is_(True),
+                SteamAccount.is_active.is_(False),
+            )
+        )
+    )
+
+    if q:
+        base_query = base_query.filter(Game.name.ilike(f"%{q}%"))
+
+    rows = base_query.all()
+
+    by_game: dict[int, dict] = {}
+    for r in rows:
+        if r.assignment_id is None:
+            reason = "no_assignment"
+        elif r.assignment_is_revoked:
+            reason = "revoked"
+        else:
+            reason = "account_disabled"
+
+        bucket = by_game.setdefault(
+            r.game_id,
+            {
+                "game_id": r.game_id,
+                "appid": r.game_appid,
+                "name": r.game_custom_name or r.game_name,
+                "header_image": r.game_custom_header_image or r.game_header_image,
+                "affected_user_ids": set(),
+                "affected_order_count": 0,
+                "oldest_affected_at": r.order_created_at,
+                "breakdown": {"no_assignment": 0, "revoked": 0, "account_disabled": 0},
+                "affected_users": [],
+            },
+        )
+        bucket["affected_user_ids"].add(r.user_id)
+        bucket["affected_order_count"] += 1
+        bucket["breakdown"][reason] += 1
+        if r.order_created_at < bucket["oldest_affected_at"]:
+            bucket["oldest_affected_at"] = r.order_created_at
+        bucket["affected_users"].append(
+            {
+                "user_id": r.user_id,
+                "email": r.user_email,
+                "order_id": r.order_id,
+                "order_created_at": r.order_created_at.isoformat()
+                if r.order_created_at
+                else None,
+                "reason": reason,
+            }
+        )
+
+    # Inventory counts (active vs total per game) — one grouped query each
+    # so we don't re-issue per game.
+    game_ids = list(by_game.keys())
+    active_counts: dict[int, int] = {}
+    total_counts: dict[int, int] = {}
+    if game_ids:
+        active_rows = (
+            db.session.query(GameAccount.game_id, func.count(GameAccount.id))
+            .join(SteamAccount, GameAccount.steam_account_id == SteamAccount.id)
+            .filter(GameAccount.game_id.in_(game_ids))
+            .filter(SteamAccount.is_active.is_(True))
+            .group_by(GameAccount.game_id)
+            .all()
+        )
+        active_counts = {gid: cnt for gid, cnt in active_rows}
+
+        total_rows = (
+            db.session.query(GameAccount.game_id, func.count(GameAccount.id))
+            .filter(GameAccount.game_id.in_(game_ids))
+            .group_by(GameAccount.game_id)
+            .all()
+        )
+        total_counts = {gid: cnt for gid, cnt in total_rows}
+
+    items = []
+    distinct_user_ids: set[int] = set()
+    total_affected_orders = 0
+    for bucket in by_game.values():
+        distinct_user_ids.update(bucket["affected_user_ids"])
+        total_affected_orders += bucket["affected_order_count"]
+        bucket["affected_users"].sort(
+            key=lambda u: u["order_created_at"] or "", reverse=False
+        )
+        items.append(
+            {
+                "game_id": bucket["game_id"],
+                "appid": bucket["appid"],
+                "name": bucket["name"],
+                "header_image": bucket["header_image"],
+                "affected_user_count": len(bucket["affected_user_ids"]),
+                "affected_order_count": bucket["affected_order_count"],
+                "oldest_affected_at": bucket["oldest_affected_at"].isoformat()
+                if bucket["oldest_affected_at"]
+                else None,
+                "breakdown": bucket["breakdown"],
+                "available_account_count": active_counts.get(bucket["game_id"], 0),
+                "total_account_count": total_counts.get(bucket["game_id"], 0),
+                "affected_users": bucket["affected_users"],
+            }
+        )
+
+    items.sort(
+        key=lambda it: (
+            -it["affected_user_count"],
+            it["oldest_affected_at"] or "",
+        )
+    )
+
+    return jsonify({
+        "items": items,
+        "total_games": len(items),
+        "total_affected_users": len(distinct_user_ids),
+        "total_affected_orders": total_affected_orders,
+    }), 200
+
+
 @admin_bp.route("/games/bulk-update", methods=["PUT"])
 @admin_required
 def bulk_update_games():
