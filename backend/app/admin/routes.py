@@ -4431,3 +4431,29 @@ def resend_email_log(log_id: int):
         return jsonify({"error": f"Resend not supported for type '{log.type}'"}), 400
 
     return jsonify({"message": "Email queued for resend"})
+
+
+@admin_bp.route("/users/<int:user_id>/mark-email-verified", methods=["POST"])
+@admin_required
+def admin_mark_email_verified(user_id: int):
+    """Manually override email_verified=True for a user.
+
+    Useful when delivery is broken on the recipient side (typo'd domain, mail
+    server blocking us) but the user is provably legit (e.g. already paid).
+    Logs the action with the admin's id for auditability.
+    """
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+    if target.email_verified:
+        return jsonify({"message": "Already verified"}), 200
+
+    target.email_verified = True
+    db.session.commit()
+
+    admin_id = int(get_jwt_identity())
+    logger.warning(
+        "admin %d manually marked user %d (%s) as email_verified",
+        admin_id, target.id, target.email,
+    )
+    return jsonify({"message": "Email marked as verified", "user": target.to_dict()})
