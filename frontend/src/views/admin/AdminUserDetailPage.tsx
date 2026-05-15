@@ -32,6 +32,7 @@ import { adminApi, formatIDR } from '@/lib/api'
 import type { UserProfile, UserProfileAssignment } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import RotateAccountDialog from '@/views/admin/RotateAccountDialog'
+import EmailLogDetailDialog from './EmailLogDetailDialog'
 
 const PER_PAGE_OTP = 25
 
@@ -101,6 +102,8 @@ const AdminUserDetailPage = ({ userId }: Props) => {
   const [otpPage, setOtpPage] = useState(1)
   const [rotateAssignment, setRotateAssignment] = useState<UserProfileAssignment | null>(null)
   const [snackMsg, setSnackMsg] = useState('')
+  const [emailLogPage, setEmailLogPage] = useState(1)
+  const [emailLogOpenId, setEmailLogOpenId] = useState<number | null>(null)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin-user-profile', userId],
@@ -112,6 +115,13 @@ const AdminUserDetailPage = ({ userId }: Props) => {
     queryKey: ['admin-user-otp', userId, otpPage],
     queryFn: () => adminApi.getAuditCodes({ user_id: userId, page: otpPage, per_page: PER_PAGE_OTP }),
     enabled: currentUser?.role === 'admin' && Number.isFinite(userId) && tab === 3,
+    placeholderData: keepPreviousData,
+  })
+
+  const { data: emailLogData, isFetching: emailLogFetching } = useQuery({
+    queryKey: ['admin-user-email-logs', userId, emailLogPage],
+    queryFn: () => adminApi.listEmailLogs({ user_id: userId, page: emailLogPage, per_page: 50 }),
+    enabled: currentUser?.role === 'admin' && Number.isFinite(userId) && tab === 6,
     placeholderData: keepPreviousData,
   })
 
@@ -153,6 +163,7 @@ const AdminUserDetailPage = ({ userId }: Props) => {
     `OTP History (${stats.code_request_count})`,
     `Assignments (${assignments.length})`,
     `Misc`,
+    `Email History`,
   ]
 
   return (
@@ -625,6 +636,96 @@ const AdminUserDetailPage = ({ userId }: Props) => {
             </Grid>
           </CardContent>
         )}
+
+        {/* Email History */}
+        {tab === 6 && (
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant='h6'>Email yang dikirim ke user ini</Typography>
+              {!user.email_verified && (
+                <Button
+                  size='small'
+                  color='warning'
+                  startIcon={<i className='tabler-mail-fast' />}
+                  onClick={async () => {
+                    const logs = emailLogData?.logs || []
+                    const lastVerification = logs.find(l => l.type === 'verification')
+
+                    if (lastVerification) {
+                      try {
+                        await adminApi.resendEmailLog(lastVerification.id)
+                        setSnackMsg('Email verifikasi dikirim ulang')
+                      } catch (e: any) {
+                        setSnackMsg(e?.message || 'Gagal kirim ulang')
+                      }
+                    } else {
+                      setSnackMsg('Belum ada log verifikasi — minta user register ulang atau pakai resend dari sisi user')
+                    }
+                  }}
+                >
+                  Kirim ulang verifikasi
+                </Button>
+              )}
+            </Box>
+            <TableContainer>
+              <Table size='small'>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Time</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Error</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {emailLogFetching && (
+                    <TableRow><TableCell colSpan={4}><Skeleton variant='text' /></TableCell></TableRow>
+                  )}
+                  {emailLogData?.logs.map(log => (
+                    <TableRow
+                      key={log.id}
+                      hover
+                      sx={{ cursor: 'pointer' }}
+                      onClick={() => setEmailLogOpenId(log.id)}
+                    >
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(log.created_at).toLocaleString('id-ID')}</TableCell>
+                      <TableCell>{log.type}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size='small'
+                          label={log.status}
+                          color={
+                            log.status === 'delivered' || log.status === 'sent' ? 'success' :
+                            log.status === 'queued' ? 'default' :
+                            log.status === 'soft_bounced' || log.status === 'deferred' ? 'warning' :
+                            'error'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {log.error_message || ''}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {emailLogData && emailLogData.logs.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} align='center' sx={{ py: 4, color: 'text.secondary' }}>
+                        Belum ada email yang ter-track untuk user ini.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {emailLogData && emailLogData.pages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1 }}>
+                <Button size='small' disabled={emailLogPage <= 1} onClick={() => setEmailLogPage(p => p - 1)}>Prev</Button>
+                <Typography variant='body2' sx={{ alignSelf: 'center' }}>{emailLogPage} / {emailLogData.pages}</Typography>
+                <Button size='small' disabled={emailLogPage >= emailLogData.pages} onClick={() => setEmailLogPage(p => p + 1)}>Next</Button>
+              </Box>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       <RotateAccountDialog
@@ -634,6 +735,12 @@ const AdminUserDetailPage = ({ userId }: Props) => {
         onClose={() => setRotateAssignment(null)}
         onSuccess={(msg) => setSnackMsg(msg)}
         invalidateKeys={[['admin-user-profile', userId]]}
+      />
+
+      <EmailLogDetailDialog
+        logId={emailLogOpenId}
+        open={emailLogOpenId != null}
+        onClose={() => setEmailLogOpenId(null)}
       />
 
       <Snackbar
