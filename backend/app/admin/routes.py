@@ -4370,7 +4370,7 @@ def resend_email_log(log_id: int):
     from app.models import EmailVerificationToken, PasswordResetToken, Game
 
     metadata = log.log_metadata or {}
-    frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = (current_app.config.get("FRONTEND_URL") or "http://localhost:3000").rstrip("/")
 
     if log.type == EmailLog.TYPE_VERIFICATION:
         if not log.user_id:
@@ -4399,7 +4399,7 @@ def resend_email_log(log_id: int):
     elif log.type == EmailLog.TYPE_ORDER_WELCOME:
         game_name = metadata.get("game_name") or "(game)"
         order_id = metadata.get("order_id")
-        play_url = f"{frontend_url}/orders/{order_id}" if order_id else frontend_url
+        play_url = f"{frontend_url}/play/{order_id}" if order_id else frontend_url
         send_order_welcome_email(
             log.recipient_email, game_name, play_url,
             user_id=log.user_id, order_id=order_id,
@@ -4418,11 +4418,10 @@ def resend_email_log(log_id: int):
         game_name = metadata.get("game_name") or "(game)"
         game_id = metadata.get("game_id")
         header_image = None
-        if game_id:
-            game = db.session.get(Game, game_id)
-            if game:
-                header_image = game.custom_header_image or game.header_image
-        game_url = f"{frontend_url}/games/{game_id}" if game_id else frontend_url
+        game = db.session.get(Game, game_id) if game_id else None
+        if game:
+            header_image = game.custom_header_image or game.header_image
+        game_url = f"{frontend_url}/game/{game.appid}" if game else frontend_url
         send_game_request_fulfilled_email(
             log.recipient_email, game_name, game_url, header_image,
             user_id=log.user_id, game_id=game_id,
