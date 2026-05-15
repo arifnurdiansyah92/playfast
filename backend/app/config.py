@@ -30,6 +30,7 @@ class Config:
     SMTP_USER = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
     MAIL_SENDER = os.getenv("MAIL_SENDER", "Playfast <noreply@playfast.id>")
+    BREVO_WEBHOOK_SECRET = os.getenv("BREVO_WEBHOOK_SECRET", "")
 
 
 class DevelopmentConfig(Config):

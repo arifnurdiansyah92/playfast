@@ -82,6 +82,7 @@ def create_app(config_name: str | None = None) -> Flask:
         creator_applications_bp,
         admin_creator_applications_bp,
     )
+    from app.webhooks.routes import webhooks_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(store_bp)
@@ -93,6 +94,7 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(reviews_bp)
     app.register_blueprint(creator_applications_bp)
     app.register_blueprint(admin_creator_applications_bp)
+    app.register_blueprint(webhooks_bp)
 
     # ---------- Serve uploaded files ----------
     from flask import send_from_directory
