@@ -71,7 +71,7 @@ def register():
 
     frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
     verify_url = f"{frontend_url}/verify-email?token={token.token}"
-    send_verification_email(email, verify_url)
+    send_verification_email(email, verify_url, user_id=user.id, token_id=token.id)
 
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
@@ -216,7 +216,7 @@ def forgot_password():
 
     frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
     reset_url = f"{frontend_url}/reset-password?token={token.token}"
-    send_password_reset_email(email, reset_url)
+    send_password_reset_email(email, reset_url, user_id=user.id)
 
     return jsonify({
         "message": "Jika email terdaftar, instruksi reset password akan dikirim.",
@@ -315,7 +315,7 @@ def resend_verification():
 
     frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
     verify_url = f"{frontend_url}/verify-email?token={token.token}"
-    send_verification_email(user.email, verify_url)
+    send_verification_email(user.email, verify_url, user_id=user.id, token_id=token.id)
 
     return jsonify({
         "message": "Email verifikasi telah dikirim ulang.",

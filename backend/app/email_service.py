@@ -1,6 +1,7 @@
 """Email service using SMTP (Brevo / any provider)."""
 
 import logging
+import re
 import smtplib
 import threading
 from email.mime.multipart import MIMEMultipart
@@ -13,6 +14,44 @@ logger = logging.getLogger(__name__)
 LOGO_URL = "https://playfast.id/images/brand/logo-horizontal.png"
 ICON_URL = "https://playfast.id/images/brand/icon.png"
 SITE_URL = "https://playfast.id"
+
+
+# Brevo balikin "250 2.0.0 OK: queued as <abcd1234>" sebagai last reply.
+# Sebagian gateway juga balikin angle-bracket "<id>" — terima keduanya.
+_BREVO_ID_RE = re.compile(r"queued as[\s:]+<?([^\s>]+)>?", re.IGNORECASE)
+
+
+def _extract_brevo_message_id(response_text: str | None) -> str | None:
+    if not response_text:
+        return None
+    m = _BREVO_ID_RE.search(response_text)
+    return m.group(1) if m else None
+
+
+class _CapturingSMTP(smtplib.SMTP):
+    """SMTP client that records the (code, msg) of every reply.
+
+    The Brevo `queued as <id>` token appears on the final 250 reply after the
+    DATA command. We expose `last_response` so the caller can inspect it.
+    """
+
+    last_response_code: int | None = None
+    last_response_msg: bytes | None = None
+
+    def getreply(self):
+        code, msg = super().getreply()
+        self.last_response_code = code
+        self.last_response_msg = msg
+        return code, msg
+
+    @property
+    def last_response_text(self) -> str | None:
+        if self.last_response_msg is None:
+            return None
+        try:
+            return self.last_response_msg.decode("utf-8", errors="replace")
+        except Exception:
+            return str(self.last_response_msg)
 
 
 def _base_template(content: str) -> str:
@@ -51,8 +90,14 @@ def _base_template(content: str) -> str:
 </html>"""
 
 
-def _send_async(app_config: dict, to: str, subject: str, html: str):
-    """Send email in a background thread to avoid blocking the request."""
+def _send_async(app, app_config: dict, to: str, subject: str, html: str, log_id: int):
+    """Send email in a background thread and update the log row.
+
+    Receives the Flask app object so it can establish an app context for the
+    db.session updates — threading.Thread loses the request context.
+    """
+    from app.models import EmailLog  # local import to avoid circular
+
     try:
         msg = MIMEMultipart("alternative")
         msg["From"] = app_config["MAIL_SENDER"]
@@ -60,18 +105,54 @@ def _send_async(app_config: dict, to: str, subject: str, html: str):
         msg["Subject"] = subject
         msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP(app_config["SMTP_HOST"], app_config["SMTP_PORT"]) as server:
+        with _CapturingSMTP(app_config["SMTP_HOST"], app_config["SMTP_PORT"]) as server:
             server.starttls()
             server.login(app_config["SMTP_USER"], app_config["SMTP_PASSWORD"])
             server.sendmail(app_config["MAIL_SENDER"], to, msg.as_string())
+            smtp_response = (
+                f"{server.last_response_code} {server.last_response_text}"
+                if server.last_response_code
+                else None
+            )
 
-        logger.info("Email sent to %s: %s", to, subject)
-    except Exception:
+        brevo_id = _extract_brevo_message_id(smtp_response)
+        logger.info("Email sent to %s: %s (brevo_id=%s)", to, subject, brevo_id)
+
+        with app.app_context():
+            EmailLog.mark_sent(log_id, smtp_response or "", brevo_id)
+
+    except Exception as e:
         logger.exception("Failed to send email to %s", to)
+        try:
+            with app.app_context():
+                EmailLog.mark_failed(log_id, repr(e))
+        except Exception:
+            logger.exception("Also failed to mark email_log %d as failed", log_id)
 
 
-def send_email(to: str, subject: str, html: str):
-    """Queue an email to be sent asynchronously."""
+def send_email(
+    to: str,
+    subject: str,
+    html: str,
+    *,
+    email_type: str,
+    user_id: int | None = None,
+    metadata: dict | None = None,
+) -> int:
+    """Queue an email send and create an EmailLog row.
+
+    Returns the log_id so callers can correlate.
+    """
+    from app.models import EmailLog  # local import
+
+    log = EmailLog.create_queued(
+        recipient_email=to,
+        type=email_type,
+        subject=subject,
+        user_id=user_id,
+        metadata=metadata,
+    )
+
     config = {
         "SMTP_HOST": current_app.config["SMTP_HOST"],
         "SMTP_PORT": current_app.config["SMTP_PORT"],
@@ -79,16 +160,21 @@ def send_email(to: str, subject: str, html: str):
         "SMTP_PASSWORD": current_app.config["SMTP_PASSWORD"],
         "MAIL_SENDER": current_app.config["MAIL_SENDER"],
     }
-    thread = threading.Thread(target=_send_async, args=(config, to, subject, html))
+    app = current_app._get_current_object()
+    thread = threading.Thread(
+        target=_send_async,
+        args=(app, config, to, subject, html, log.id),
+    )
     thread.daemon = True
     thread.start()
+    return log.id
 
 
 # ---------------------------------------------------------------------------
 # Email: Password Reset
 # ---------------------------------------------------------------------------
 
-def send_password_reset_email(to: str, reset_url: str):
+def send_password_reset_email(to: str, reset_url: str, *, user_id: int | None = None):
     """Send a password reset email."""
     content = f"""\
       <!-- Icon bar -->
@@ -131,14 +217,26 @@ def send_password_reset_email(to: str, reset_url: str):
         </p>
       </div>"""
 
-    send_email(to, "Reset Password - Playfast", _base_template(content))
+    send_email(
+        to,
+        "Reset Password - Playfast",
+        _base_template(content),
+        email_type="password_reset",
+        user_id=user_id,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Email: Email Verification
 # ---------------------------------------------------------------------------
 
-def send_verification_email(to: str, verify_url: str):
+def send_verification_email(
+    to: str,
+    verify_url: str,
+    *,
+    user_id: int | None = None,
+    token_id: int | None = None,
+):
     """Send an email verification email after registration."""
     content = f"""\
       <!-- Icon bar -->
@@ -197,7 +295,14 @@ def send_verification_email(to: str, verify_url: str):
         </p>
       </div>"""
 
-    send_email(to, "Verifikasi Email - Playfast", _base_template(content))
+    send_email(
+        to,
+        "Verifikasi Email - Playfast",
+        _base_template(content),
+        email_type="verification",
+        user_id=user_id,
+        metadata={"token_id": token_id} if token_id else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +310,13 @@ def send_verification_email(to: str, verify_url: str):
 # ---------------------------------------------------------------------------
 
 def send_game_request_fulfilled_email(
-    to: str, game_name: str, game_url: str, header_image: str | None = None
+    to: str,
+    game_name: str,
+    game_url: str,
+    header_image: str | None = None,
+    *,
+    user_id: int | None = None,
+    game_id: int | None = None,
 ):
     """Notify a voter that the game they requested is now in the catalog."""
     image_html = (
@@ -252,7 +363,14 @@ def send_game_request_fulfilled_email(
         </p>
       </div>"""
 
-    send_email(to, f"Game request kamu sudah ada — {game_name}", _base_template(content))
+    send_email(
+        to,
+        f"Game request kamu sudah ada — {game_name}",
+        _base_template(content),
+        email_type="game_request_fulfilled",
+        user_id=user_id,
+        metadata={"game_name": game_name, "game_id": game_id},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -426,7 +544,14 @@ def _cta_button(href: str, label: str) -> str:
       </table>"""
 
 
-def send_order_welcome_email(to: str, game_name: str, play_url: str):
+def send_order_welcome_email(
+    to: str,
+    game_name: str,
+    play_url: str,
+    *,
+    user_id: int | None = None,
+    order_id: int | None = None,
+):
     """Sent on the user's FIRST fulfilled purchase order.
 
     The trigger logic in store.routes._fulfill_order ensures this fires only
@@ -460,10 +585,24 @@ def send_order_welcome_email(to: str, game_name: str, play_url: str):
         {safety}
       </div>"""
 
-    send_email(to, f"Pesanan aktif: {game_name} — cara main yang benar", _base_template(content))
+    send_email(
+        to,
+        f"Pesanan aktif: {game_name} — cara main yang benar",
+        _base_template(content),
+        email_type="order_welcome",
+        user_id=user_id,
+        metadata={"game_name": game_name, "order_id": order_id},
+    )
 
 
-def send_subscription_welcome_email(to: str, plan_label: str, store_url: str):
+def send_subscription_welcome_email(
+    to: str,
+    plan_label: str,
+    store_url: str,
+    *,
+    user_id: int | None = None,
+    subscription_id: int | None = None,
+):
     """Sent when a subscription is activated. Always sends (transactional)."""
     safety = _play_safety_fragment()
     hero = _hero_block(
@@ -488,7 +627,14 @@ def send_subscription_welcome_email(to: str, plan_label: str, store_url: str):
         {safety}
       </div>"""
 
-    send_email(to, "Subscription aktif — cara main aman di Playfast", _base_template(content))
+    send_email(
+        to,
+        "Subscription aktif — cara main aman di Playfast",
+        _base_template(content),
+        email_type="subscription_welcome",
+        user_id=user_id,
+        metadata={"plan_label": plan_label, "subscription_id": subscription_id},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -517,6 +663,7 @@ def send_account_flag_notification(
     reason: str,
     description: str | None,
     order_id: int | None,
+    reporter_user_id: int | None = None,
 ):
     """Notify support@ when a user files a new account flag.
 
@@ -572,4 +719,19 @@ def send_account_flag_notification(
       </div>"""
 
     subject = f"[Account Flag] {reason_label} — {account_name}"
-    send_email(SUPPORT_EMAIL, subject, _base_template(content))
+    send_email(
+        SUPPORT_EMAIL,
+        subject,
+        _base_template(content),
+        email_type="account_flag",
+        user_id=None,
+        metadata={
+            "flag_id": flag_id,
+            "reporter_email": user_email,
+            "reporter_user_id": reporter_user_id,
+            "account_name": account_name,
+            "game_name": game_name,
+            "order_id": order_id,
+            "reason": reason,
+        },
+    )

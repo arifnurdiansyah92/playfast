@@ -529,12 +529,17 @@ def admin_update_request(request_id: int):
         )
         header = matched_game.custom_header_image or matched_game.header_image or req.header_image
 
-        # Collect recipient emails now (need an active session), then hand
-        # the list off to a background thread. Sending inline would block
-        # the admin for ~N * 0.4 s and risks gunicorn worker timeout on
-        # large vote counts.
-        recipients = [v.user.email for v in req.votes.all() if v.user and v.user.email]
+        # Collect recipient (user_id, email) pairs now (need an active
+        # session), then hand the list off to a background thread. Sending
+        # inline would block the admin for ~N * 0.4 s and risks gunicorn
+        # worker timeout on large vote counts.
+        recipients = [
+            (v.user.id, v.user.email)
+            for v in req.votes.all()
+            if v.user and v.user.email
+        ]
         recipient_count = len(recipients)
+        matched_game_id = matched_game.id
 
         # Mark as notified immediately so a duplicate click can't re-fire
         # the notification. The actual sent_count is fixed up by the worker
@@ -548,13 +553,15 @@ def admin_update_request(request_id: int):
         def _notify_voters_async():
             with app.app_context():
                 sent = 0
-                for email in recipients:
+                for voter_user_id, email in recipients:
                     try:
                         send_game_request_fulfilled_email(
                             to=email,
                             game_name=display_name,
                             game_url=game_url,
                             header_image=header,
+                            user_id=voter_user_id,
+                            game_id=matched_game_id,
                         )
                         sent += 1
                     except Exception:

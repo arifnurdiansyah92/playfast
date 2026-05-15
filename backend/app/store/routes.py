@@ -837,6 +837,8 @@ def _send_subscription_welcome(sub):
             to=sub.user.email,
             plan_label=plan_label,
             store_url=store_url,
+            user_id=sub.user.id,
+            subscription_id=sub.id,
         )
     except Exception:
         logger.exception(
@@ -965,6 +967,8 @@ def _fulfill_order(order):
                     to=order.user.email,
                     game_name=display_name,
                     play_url=play_url,
+                    user_id=order.user_id,
+                    order_id=order.id,
                 )
     except Exception:
         logger.exception("Failed to send order welcome email for order %s", order.id)
@@ -1794,6 +1798,7 @@ def flag_account_from_order(order_id: int):
             reason=reason,
             description=description,
             order_id=order.id,
+            reporter_user_id=user_id,
         )
     except Exception:
         logger.exception("Failed to send account flag notification email")
