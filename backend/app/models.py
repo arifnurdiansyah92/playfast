@@ -1258,3 +1258,70 @@ class CreatorApplication(db.Model):
                 self.reviewed_at.isoformat() if self.reviewed_at else None
             )
         return data
+
+
+class EmailLog(db.Model):
+    __tablename__ = "email_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+    recipient_email = db.Column(db.String(255), nullable=False, index=True)
+    type = db.Column(db.String(50), nullable=False, index=True)
+    subject = db.Column(db.String(500), nullable=False)
+    status = db.Column(db.String(30), nullable=False, default="queued", index=True)
+    smtp_response = db.Column(db.Text, nullable=True)
+    brevo_message_id = db.Column(db.String(255), nullable=True, index=True)
+    error_message = db.Column(db.Text, nullable=True)
+    log_metadata = db.Column("metadata", db.JSON, nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    brevo_event_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    user = db.relationship("User", backref="email_logs")
+
+    # Status constants — keep in sync with spec
+    STATUS_QUEUED = "queued"
+    STATUS_SENT = "sent"
+    STATUS_FAILED = "failed"
+    STATUS_DELIVERED = "delivered"
+    STATUS_BOUNCED = "bounced"
+    STATUS_SOFT_BOUNCED = "soft_bounced"
+    STATUS_SPAM = "spam"
+    STATUS_BLOCKED = "blocked"
+    STATUS_INVALID_EMAIL = "invalid_email"
+    STATUS_DEFERRED = "deferred"
+
+    # Event types — keep in sync with email_service senders
+    TYPE_VERIFICATION = "verification"
+    TYPE_PASSWORD_RESET = "password_reset"
+    TYPE_ORDER_WELCOME = "order_welcome"
+    TYPE_SUBSCRIPTION_WELCOME = "subscription_welcome"
+    TYPE_GAME_REQUEST_FULFILLED = "game_request_fulfilled"
+    TYPE_ACCOUNT_FLAG = "account_flag"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "recipient_email": self.recipient_email,
+            "type": self.type,
+            "subject": self.subject,
+            "status": self.status,
+            "smtp_response": self.smtp_response,
+            "brevo_message_id": self.brevo_message_id,
+            "error_message": self.error_message,
+            "metadata": self.log_metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
+            "brevo_event_at": self.brevo_event_at.isoformat() if self.brevo_event_at else None,
+        }
