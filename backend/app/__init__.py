@@ -218,9 +218,6 @@ def _run_schema_upgrades():
         # Revenue sharing / creator commission tracking on promo code usages.
         "ALTER TABLE promo_code_usages ADD COLUMN paid_to_creator_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE promo_code_usages ADD COLUMN paid_to_creator_note TEXT",
-        # Email delivery tracking
-        "CREATE INDEX IF NOT EXISTS ix_email_logs_user_created ON email_logs (user_id, created_at DESC)",
-        "CREATE INDEX IF NOT EXISTS ix_email_logs_type_status_created ON email_logs (type, status, created_at DESC)",
     ]
     for stmt in alter_statements:
         try:
@@ -265,6 +262,15 @@ def _run_schema_upgrades():
 
     from app.models import EmailLog
     EmailLog.__table__.create(db.engine, checkfirst=True)
+    for stmt in [
+        "CREATE INDEX IF NOT EXISTS ix_email_logs_user_created ON email_logs (user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS ix_email_logs_type_status_created ON email_logs (type, status, created_at DESC)",
+    ]:
+        try:
+            db.session.execute(text(stmt))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 def _seed_initial_reviews():

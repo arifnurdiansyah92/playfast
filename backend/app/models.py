@@ -1287,7 +1287,7 @@ class EmailLog(db.Model):
     sent_at = db.Column(db.DateTime(timezone=True), nullable=True)
     brevo_event_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    user = db.relationship("User", backref="email_logs")
+    user = db.relationship("User", backref=db.backref("email_logs", lazy="dynamic"))
 
     # Status constants — keep in sync with spec
     STATUS_QUEUED = "queued"
