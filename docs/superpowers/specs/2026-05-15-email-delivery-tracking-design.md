@@ -279,3 +279,27 @@ Webhook (blueprint terpisah):
 - Cara persis mendapatkan `smtp_response` + `brevo_message_id` dari `smtplib` — eksplorasi di plan (kemungkinan subclass `SMTP` untuk intercept reply, atau parse di error path saja)
 - Apakah perlu admin_logs / audit table baru, atau cukup tulis ke standard logger untuk action manual mark-verified — tentukan di plan
 - Mekanisme stuck-queued cleanup: startup hook vs. cron vs. on-read repair — tentukan di plan
+
+## Deployment runbook (post-merge)
+
+1. **Set webhook secret env var** di VPS. Generate secret yang kuat:
+
+   ```bash
+   openssl rand -hex 24
+   ```
+
+   Update `.env.production` di server, isi `BREVO_WEBHOOK_SECRET=<value>`, lalu restart backend (`systemctl restart playfast-backend` atau setara). Sebelum nilai ini terisi, endpoint `/api/webhooks/brevo` akan menolak semua request dengan 503 — aman by default.
+
+2. **Konfigurasi Brevo dashboard:**
+   - Login ke Brevo → Transactional → Settings → Webhook → Add new webhook
+   - URL: `https://playfast.id/api/webhooks/brevo`
+   - Events: centang `Delivered`, `Hard bounce`, `Soft bounce`, `Spam`, `Blocked`, `Invalid email`, `Deferred`
+   - Custom HTTP headers: tambah header `X-Brevo-Secret` dengan nilai yang sama persis dengan env var di atas
+   - Save
+
+3. **Smoke test post-deploy:**
+   - Buka `/admin/email-logs` di production — pastikan halaman render dan list kosong (atau berisi log baru kalau ada email yang dikirim sejak deploy)
+   - Register akun test dengan email valid yang kamu punya → cek log baru muncul dengan status `sent`, lalu beberapa detik kemudian update jadi `delivered`
+   - Register akun test dengan email salah (misal `nonexistent-zzz-xyz123@gmail.com`) → cek log update jadi `bounced` dalam ~1 menit
+   - Test resend dari admin → verify log baru dibuat dan email sampai inbox
+   - Test mark-verified dari admin → verify `email_verified` flip di DB
