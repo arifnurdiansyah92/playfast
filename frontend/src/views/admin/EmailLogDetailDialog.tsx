@@ -55,6 +55,7 @@ export default function EmailLogDetailDialog({ logId, open, onClose }: Props) {
   const [resendMsg, setResendMsg] = useState<string | null>(null)
   const [resendError, setResendError] = useState<string | null>(null)
   const [verifyMsg, setVerifyMsg] = useState<string | null>(null)
+  const [verifyError, setVerifyError] = useState<string | null>(null)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin-email-log', logId],
@@ -79,8 +80,13 @@ export default function EmailLogDetailDialog({ logId, open, onClose }: Props) {
     mutationFn: () => adminApi.markEmailVerified(data!.user!.id),
     onSuccess: res => {
       setVerifyMsg(res.message)
+      setVerifyError(null)
       queryClient.invalidateQueries({ queryKey: ['admin-email-log', logId] })
       queryClient.invalidateQueries({ queryKey: ['admin-user-profile'] })
+    },
+    onError: (err: any) => {
+      setVerifyError(err?.message || 'Gagal mark verified')
+      setVerifyMsg(null)
     },
   })
 
@@ -165,6 +171,7 @@ export default function EmailLogDetailDialog({ logId, open, onClose }: Props) {
             {resendMsg && <Alert severity='success'>{resendMsg}</Alert>}
             {resendError && <Alert severity='error'>{resendError}</Alert>}
             {verifyMsg && <Alert severity='success'>{verifyMsg}</Alert>}
+            {verifyError && <Alert severity='error'>{verifyError}</Alert>}
           </Stack>
         )}
       </DialogContent>
