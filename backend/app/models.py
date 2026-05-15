@@ -1325,3 +1325,70 @@ class EmailLog(db.Model):
             "sent_at": self.sent_at.isoformat() if self.sent_at else None,
             "brevo_event_at": self.brevo_event_at.isoformat() if self.brevo_event_at else None,
         }
+
+    @classmethod
+    def create_queued(
+        cls,
+        *,
+        recipient_email: str,
+        type: str,
+        subject: str,
+        user_id: int | None = None,
+        metadata: dict | None = None,
+    ) -> "EmailLog":
+        log = cls(
+            user_id=user_id,
+            recipient_email=recipient_email,
+            type=type,
+            subject=subject,
+            status=cls.STATUS_QUEUED,
+            log_metadata=metadata,
+        )
+        db.session.add(log)
+        db.session.commit()
+        return log
+
+    @classmethod
+    def mark_sent(cls, log_id: int, smtp_response: str, brevo_message_id: str | None):
+        log = db.session.get(cls, log_id)
+        if not log:
+            return
+        log.status = cls.STATUS_SENT
+        log.smtp_response = smtp_response
+        log.brevo_message_id = brevo_message_id
+        log.sent_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+    @classmethod
+    def mark_failed(cls, log_id: int, error_message: str):
+        log = db.session.get(cls, log_id)
+        if not log:
+            return
+        log.status = cls.STATUS_FAILED
+        log.error_message = error_message
+        db.session.commit()
+
+    # Brevo event -> status mapping
+    BREVO_EVENT_MAP = {
+        "delivered": STATUS_DELIVERED,
+        "hard_bounce": STATUS_BOUNCED,
+        "soft_bounce": STATUS_SOFT_BOUNCED,
+        "spam": STATUS_SPAM,
+        "blocked": STATUS_BLOCKED,
+        "invalid_email": STATUS_INVALID_EMAIL,
+        "deferred": STATUS_DEFERRED,
+    }
+
+    def apply_brevo_event(self, event: str, event_at: datetime, reason: str | None) -> bool:
+        """Apply a Brevo webhook event. Returns True if applied, False if skipped (unknown/older)."""
+        new_status = self.BREVO_EVENT_MAP.get(event)
+        if not new_status:
+            return False
+        if self.brevo_event_at and event_at <= self.brevo_event_at:
+            return False
+        self.status = new_status
+        self.brevo_event_at = event_at
+        if reason:
+            self.error_message = reason
+        db.session.commit()
+        return True
