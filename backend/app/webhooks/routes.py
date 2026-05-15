@@ -1,11 +1,11 @@
 """Inbound webhooks from third parties (currently: Brevo email events)."""
 
+import hmac
 import logging
 from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, jsonify, request
 
-from app.extensions import db
 from app.models import EmailLog
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ def _parse_brevo_date(s: str | None) -> datetime | None:
     if not s:
         return None
     try:
-        return datetime.fromisoformat(s)
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
     except Exception:
         return None
 
@@ -46,7 +46,7 @@ def brevo_webhook():
         return jsonify({"error": "webhook not configured"}), 503
 
     provided = request.headers.get("X-Brevo-Secret", "")
-    if provided != expected:
+    if not hmac.compare_digest(provided, expected):
         logger.warning("Brevo webhook rejected: bad secret")
         return jsonify({"error": "unauthorized"}), 401
 
