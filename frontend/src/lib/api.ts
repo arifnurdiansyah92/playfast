@@ -1150,6 +1150,55 @@ export interface UserProfile {
   game_requests: UserProfileGameRequest[]
 }
 
+export type EmailLogStatus =
+  | 'queued' | 'sent' | 'failed'
+  | 'delivered' | 'bounced' | 'soft_bounced'
+  | 'spam' | 'blocked' | 'invalid_email' | 'deferred'
+
+export type EmailLogType =
+  | 'verification' | 'password_reset' | 'order_welcome'
+  | 'subscription_welcome' | 'game_request_fulfilled' | 'account_flag'
+
+export interface EmailLog {
+  id: number
+  user_id: number | null
+  recipient_email: string
+  type: EmailLogType
+  subject: string
+  status: EmailLogStatus
+  smtp_response: string | null
+  brevo_message_id: string | null
+  error_message: string | null
+  metadata: Record<string, any> | null
+  created_at: string
+  sent_at: string | null
+  brevo_event_at: string | null
+}
+
+export interface EmailLogDetail extends EmailLog {
+  user?: { id: number; email: string; email_verified: boolean }
+}
+
+export interface EmailLogsListResponse {
+  logs: EmailLog[]
+  total: number
+  page: number
+  per_page: number
+  pages: number
+}
+
+export interface EmailLogsFilters {
+  recipient?: string
+  type?: EmailLogType[]
+  status?: EmailLogStatus[]
+  user_id?: number
+  from?: string
+  to?: string
+  failed_only?: boolean
+  page?: number
+  per_page?: number
+}
+
 export const adminApi = {
   getDashboard() {
     return request<DashboardStats>('/api/admin/dashboard')
@@ -1882,6 +1931,31 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
       `/api/admin/creator-applications/${id}`,
       { method: 'DELETE' }
     )
+  },
+  listEmailLogs(filters: EmailLogsFilters = {}) {
+    const sp = new URLSearchParams()
+    if (filters.recipient) sp.set('recipient', filters.recipient)
+    if (filters.type?.length) sp.set('type', filters.type.join(','))
+    if (filters.status?.length) sp.set('status', filters.status.join(','))
+    if (filters.user_id != null) sp.set('user_id', String(filters.user_id))
+    if (filters.from) sp.set('from', filters.from)
+    if (filters.to) sp.set('to', filters.to)
+    if (filters.failed_only) sp.set('failed_only', '1')
+    if (filters.page) sp.set('page', String(filters.page))
+    if (filters.per_page) sp.set('per_page', String(filters.per_page))
+    return request<EmailLogsListResponse>(`/api/admin/email-logs?${sp.toString()}`)
+  },
+
+  getEmailLog(id: number) {
+    return request<EmailLogDetail>(`/api/admin/email-logs/${id}`)
+  },
+
+  resendEmailLog(id: number) {
+    return request<{ message: string }>(`/api/admin/email-logs/${id}/resend`, { method: 'POST' })
+  },
+
+  markEmailVerified(userId: number) {
+    return request<{ message: string }>(`/api/admin/users/${userId}/mark-email-verified`, { method: 'POST' })
   },
 }
 
