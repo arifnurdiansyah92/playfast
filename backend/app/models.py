@@ -1353,7 +1353,8 @@ class EmailLog(db.Model):
         log = db.session.get(cls, log_id)
         if not log:
             return
-        log.status = cls.STATUS_SENT
+        if log.status == cls.STATUS_QUEUED:
+            log.status = cls.STATUS_SENT
         log.smtp_response = smtp_response
         log.brevo_message_id = brevo_message_id
         log.sent_at = datetime.now(timezone.utc)
