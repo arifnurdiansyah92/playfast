@@ -4322,3 +4322,113 @@ def get_email_log(log_id: int):
             "email_verified": log.user.email_verified,
         }
     return jsonify(data)
+
+
+_RESEND_COOLDOWN_SECONDS = 60
+
+
+@admin_bp.route("/email-logs/<int:log_id>/resend", methods=["POST"])
+@admin_required
+def resend_email_log(log_id: int):
+    """Re-trigger a previously-sent email using its metadata.
+
+    Rate-limited: 60s cooldown per (user_id, type) — same as user-facing
+    /auth/resend-verification.
+
+    Supports only the types we know how to regenerate. For unsupported types
+    (e.g. account_flag, where metadata refers to flag state that may have
+    changed), returns 400.
+    """
+    from flask import current_app
+
+    log = db.session.get(EmailLog, log_id)
+    if not log:
+        return jsonify({"error": "Not found"}), 404
+
+    cooldown_cutoff = datetime.now(timezone.utc) - timedelta(seconds=_RESEND_COOLDOWN_SECONDS)
+    recent = (
+        EmailLog.query
+        .filter(EmailLog.type == log.type)
+        .filter(EmailLog.recipient_email == log.recipient_email)
+        .filter(EmailLog.created_at > cooldown_cutoff)
+        .filter(EmailLog.id != log.id)
+        .first()
+    )
+    if recent:
+        return jsonify({
+            "error": f"Tunggu {_RESEND_COOLDOWN_SECONDS} detik sebelum kirim ulang.",
+            "retry_after": _RESEND_COOLDOWN_SECONDS,
+        }), 429
+
+    from app.email_service import (
+        send_verification_email,
+        send_password_reset_email,
+        send_order_welcome_email,
+        send_subscription_welcome_email,
+        send_game_request_fulfilled_email,
+    )
+    from app.models import EmailVerificationToken, PasswordResetToken, Game
+
+    metadata = log.log_metadata or {}
+    frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
+
+    if log.type == EmailLog.TYPE_VERIFICATION:
+        if not log.user_id:
+            return jsonify({"error": "No user_id on log"}), 400
+        user = db.session.get(User, log.user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        if user.email_verified:
+            return jsonify({"error": "Email already verified"}), 400
+        token = EmailVerificationToken.create_for_user(user.id)
+        db.session.commit()
+        verify_url = f"{frontend_url}/verify-email?token={token.token}"
+        send_verification_email(user.email, verify_url, user_id=user.id, token_id=token.id)
+
+    elif log.type == EmailLog.TYPE_PASSWORD_RESET:
+        if not log.user_id:
+            return jsonify({"error": "No user_id on log"}), 400
+        user = db.session.get(User, log.user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        token = PasswordResetToken.create_for_user(user.id)
+        db.session.commit()
+        reset_url = f"{frontend_url}/reset-password?token={token.token}"
+        send_password_reset_email(user.email, reset_url, user_id=user.id)
+
+    elif log.type == EmailLog.TYPE_ORDER_WELCOME:
+        game_name = metadata.get("game_name") or "(game)"
+        order_id = metadata.get("order_id")
+        play_url = f"{frontend_url}/orders/{order_id}" if order_id else frontend_url
+        send_order_welcome_email(
+            log.recipient_email, game_name, play_url,
+            user_id=log.user_id, order_id=order_id,
+        )
+
+    elif log.type == EmailLog.TYPE_SUBSCRIPTION_WELCOME:
+        plan_label = metadata.get("plan_label") or "Premium"
+        subscription_id = metadata.get("subscription_id")
+        store_url = f"{frontend_url}/store"
+        send_subscription_welcome_email(
+            log.recipient_email, plan_label, store_url,
+            user_id=log.user_id, subscription_id=subscription_id,
+        )
+
+    elif log.type == EmailLog.TYPE_GAME_REQUEST_FULFILLED:
+        game_name = metadata.get("game_name") or "(game)"
+        game_id = metadata.get("game_id")
+        header_image = None
+        if game_id:
+            game = db.session.get(Game, game_id)
+            if game:
+                header_image = game.custom_header_image or game.header_image
+        game_url = f"{frontend_url}/games/{game_id}" if game_id else frontend_url
+        send_game_request_fulfilled_email(
+            log.recipient_email, game_name, game_url, header_image,
+            user_id=log.user_id, game_id=game_id,
+        )
+
+    else:
+        return jsonify({"error": f"Resend not supported for type '{log.type}'"}), 400
+
+    return jsonify({"message": "Email queued for resend"})
