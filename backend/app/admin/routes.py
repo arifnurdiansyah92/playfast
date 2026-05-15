@@ -26,6 +26,7 @@ from app.models import (
     AccountFlag,
     Assignment,
     CodeRequestLog,
+    EmailLog,
     Game,
     GameAccount,
     GameRequest,
@@ -4218,3 +4219,106 @@ def admin_review_user_search():
         .all()
     )
     return jsonify({"users": [{"id": u.id, "email": u.email} for u in users]})
+
+
+# ---------------------------------------------------------------------------
+# Email delivery tracking
+# ---------------------------------------------------------------------------
+
+
+_EMAIL_LOG_PER_PAGE_DEFAULT = 50
+_EMAIL_LOG_PER_PAGE_MAX = 200
+
+
+@admin_bp.route("/email-logs", methods=["GET"])
+@admin_required
+def list_email_logs():
+    """Paginated list with filters.
+
+    Query params:
+      - recipient: substring match on recipient_email
+      - type: comma-separated email types
+      - status: comma-separated statuses
+      - user_id: filter to a single user
+      - from, to: ISO date strings for created_at range
+      - failed_only: '1' to restrict to failed/bounced/spam/blocked/invalid_email
+      - page, per_page
+    """
+    q = EmailLog.query
+
+    recipient = (request.args.get("recipient") or "").strip().lower()
+    if recipient:
+        q = q.filter(EmailLog.recipient_email.ilike(f"%{recipient}%"))
+
+    types = [t for t in (request.args.get("type") or "").split(",") if t]
+    if types:
+        q = q.filter(EmailLog.type.in_(types))
+
+    statuses = [s for s in (request.args.get("status") or "").split(",") if s]
+    if statuses:
+        q = q.filter(EmailLog.status.in_(statuses))
+
+    user_id_param = request.args.get("user_id")
+    if user_id_param:
+        try:
+            q = q.filter(EmailLog.user_id == int(user_id_param))
+        except ValueError:
+            return jsonify({"error": "invalid user_id"}), 400
+
+    from_str = request.args.get("from")
+    if from_str:
+        try:
+            q = q.filter(EmailLog.created_at >= datetime.fromisoformat(from_str))
+        except ValueError:
+            return jsonify({"error": "invalid 'from' date"}), 400
+    to_str = request.args.get("to")
+    if to_str:
+        try:
+            q = q.filter(EmailLog.created_at <= datetime.fromisoformat(to_str))
+        except ValueError:
+            return jsonify({"error": "invalid 'to' date"}), 400
+
+    if request.args.get("failed_only") == "1":
+        q = q.filter(EmailLog.status.in_([
+            EmailLog.STATUS_FAILED,
+            EmailLog.STATUS_BOUNCED,
+            EmailLog.STATUS_SOFT_BOUNCED,
+            EmailLog.STATUS_SPAM,
+            EmailLog.STATUS_BLOCKED,
+            EmailLog.STATUS_INVALID_EMAIL,
+        ]))
+
+    page = max(1, int(request.args.get("page", 1) or 1))
+    per_page = min(
+        _EMAIL_LOG_PER_PAGE_MAX,
+        max(1, int(request.args.get("per_page", _EMAIL_LOG_PER_PAGE_DEFAULT) or _EMAIL_LOG_PER_PAGE_DEFAULT)),
+    )
+
+    pagination = (
+        q.order_by(EmailLog.created_at.desc())
+        .paginate(page=page, per_page=per_page, error_out=False)
+    )
+
+    return jsonify({
+        "logs": [log.to_dict() for log in pagination.items],
+        "total": pagination.total,
+        "page": pagination.page,
+        "per_page": pagination.per_page,
+        "pages": pagination.pages,
+    })
+
+
+@admin_bp.route("/email-logs/<int:log_id>", methods=["GET"])
+@admin_required
+def get_email_log(log_id: int):
+    log = db.session.get(EmailLog, log_id)
+    if not log:
+        return jsonify({"error": "Not found"}), 404
+    data = log.to_dict()
+    if log.user_id and log.user:
+        data["user"] = {
+            "id": log.user.id,
+            "email": log.user.email,
+            "email_verified": log.user.email_verified,
+        }
+    return jsonify(data)
