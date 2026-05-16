@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
@@ -25,7 +25,7 @@ import Grid from '@mui/material/Grid'
 
 import CheckoutReviewModal from '@/components/CheckoutReviewModal'
 
-import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
+import { cartApi, storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -44,10 +44,30 @@ const GameDetailPage = ({ appid }: Props) => {
   const [error, setError] = useState('')
   const [selectedMedia, setSelectedMedia] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [cartFeedback, setCartFeedback] = useState<{ severity: 'success' | 'error' | 'info'; message: string } | null>(null)
+
+  const queryClient = useQueryClient()
 
   const { data: game, isLoading } = useQuery({
     queryKey: ['game', appid],
     queryFn: () => storeApi.getGame(appid)
+  })
+
+  const addCartMutation = useMutation({
+    mutationFn: () => cartApi.add(game!.id),
+    onSuccess: () => {
+      setCartFeedback({ severity: 'success', message: 'Game berhasil ditambah ke keranjang' })
+      queryClient.invalidateQueries({ queryKey: ['cart'] })
+    },
+    onError: (err: any) => {
+      const code = err?.body?.code
+      let message = err?.message || 'Gagal menambah ke keranjang'
+
+      if (code === 'premium_active') message = 'Kamu sudah Premium — semua game bisa langsung dimainkan.'
+      else if (code === 'already_owned') message = 'Game ini sudah kamu miliki.'
+      else if (code === 'cart_full') message = 'Keranjang penuh (maks 20 game).'
+      setCartFeedback({ severity: 'info', message })
+    },
   })
 
   // Check if user already owns the game (only when logged in)
@@ -303,20 +323,39 @@ return
                   {buying ? 'Memproses...' : 'Main Sekarang (Premium)'}
                 </Button>
               ) : user ? (
-                <Button
-                  variant='contained'
-                  size='large'
-                  disabled={buying}
-                  onClick={() => setModalOpen(true)}
-                  startIcon={<i className='tabler-shopping-cart' />}
-                  sx={{
-                    minWidth: 220, py: 1.5, fontSize: '1rem', fontWeight: 700,
-                    boxShadow: '0 4px 16px rgba(201,168,76,0.2)',
-                    '&:hover': { boxShadow: '0 6px 24px rgba(201,168,76,0.3)' },
-                  }}
-                >
-                  {buying ? 'Memproses...' : 'Dapatkan Game Ini'}
-                </Button>
+                <Box>
+                  <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                    <Button
+                      variant='contained'
+                      color='warning'
+                      size='large'
+                      onClick={() => setModalOpen(true)}
+                      disabled={buying}
+                      sx={{ flex: '1 1 auto', minWidth: 180 }}
+                    >
+                      {buying ? 'Memproses...' : 'Beli Sekarang'}
+                    </Button>
+                    <Button
+                      variant='outlined'
+                      size='large'
+                      startIcon={<i className='tabler-shopping-cart' />}
+                      onClick={() => addCartMutation.mutate()}
+                      disabled={addCartMutation.isPending}
+                      sx={{ minWidth: 180 }}
+                    >
+                      Tambah Keranjang
+                    </Button>
+                  </Box>
+                  {cartFeedback && (
+                    <Alert
+                      severity={cartFeedback.severity}
+                      onClose={() => setCartFeedback(null)}
+                      sx={{ mt: 2 }}
+                    >
+                      {cartFeedback.message}
+                    </Alert>
+                  )}
+                </Box>
               ) : (
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Button
