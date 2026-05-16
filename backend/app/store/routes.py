@@ -2061,11 +2061,28 @@ def my_promos():
 
 
 def _send_cart_welcome(orders: list):
-    """Send a single cart-fulfilled email summarizing all games at once.
+    """Send a single cart-welcome email summarizing all fulfilled orders.
 
-    Stub — wired up properly in Task 7. For now just log.
+    All orders must belong to same user + same checkout_group_id.
     """
-    logger.info("TODO _send_cart_welcome: %d orders", len(orders))
+    if not orders:
+        return
+    from app.email_service import send_cart_welcome_email
+    user = orders[0].user if hasattr(orders[0], "user") else db.session.get(User, orders[0].user_id)
+    if not user:
+        return
+    frontend_url = (current_app.config.get("FRONTEND_URL") or "http://localhost:3000").rstrip("/")
+    games = [
+        {"name": (o.game.name if o.game else "Game"), "order_id": o.id}
+        for o in orders
+    ]
+    send_cart_welcome_email(
+        user.email,
+        games,
+        play_base_url=frontend_url,
+        user_id=user.id,
+        checkout_group_id=orders[0].checkout_group_id,
+    )
 
 
 # ---------------------------------------------------------------------------

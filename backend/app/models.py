@@ -1396,6 +1396,7 @@ class EmailLog(db.Model):
     TYPE_PASSWORD_RESET = "password_reset"
     TYPE_ORDER_WELCOME = "order_welcome"
     TYPE_SUBSCRIPTION_WELCOME = "subscription_welcome"
+    TYPE_CART_WELCOME = "cart_welcome"
     TYPE_GAME_REQUEST_FULFILLED = "game_request_fulfilled"
     TYPE_ACCOUNT_FLAG = "account_flag"
 

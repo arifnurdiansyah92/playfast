@@ -637,6 +637,68 @@ def send_subscription_welcome_email(
     )
 
 
+def send_cart_welcome_email(
+    to: str,
+    games: list,
+    play_base_url: str,
+    *,
+    user_id: int | None = None,
+    checkout_group_id: str | None = None,
+):
+    """Sent when a cart purchase fulfills successfully — N games in 1 email.
+
+    `games` is a list of dicts: [{"name": str, "order_id": int}, ...]
+    Each game gets a row in a table with a per-order play link.
+    """
+    safety = _play_safety_fragment()
+    hero = _hero_block(
+        gradient="linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)",
+        eyebrow=f"Cart Aktif · {len(games)} Game",
+    )
+
+    game_rows = ""
+    for g in games:
+        play_url = f"{play_base_url}/play/{g['order_id']}"
+        game_rows += f"""
+        <tr>
+          <td style="padding: 12px 16px; border-bottom: 1px solid #232743; color: #d8dee6; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 14px;">
+            {g['name']}
+          </td>
+          <td style="padding: 12px 16px; border-bottom: 1px solid #232743; text-align: right;">
+            <a href="{play_url}" style="color: #c9a84c; text-decoration: none; font-weight: 600; font-size: 13px;">Main →</a>
+          </td>
+        </tr>"""
+
+    content = f"""\
+      {hero}
+      <div style="padding: 36px 32px 32px 32px;">
+        <h2 style="color: #ffffff; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0 0 12px; font-size: 26px; font-weight: 800; line-height: 1.25;">
+          Cart kamu sudah aktif!
+        </h2>
+        <p style="color: #b0b8c4; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 15px; line-height: 1.7; margin: 0 0 24px;">
+          {len(games)} game sudah ready dimainkan. Klik link di tabel untuk akses tiap game — kredensial Steam ada di halaman main masing-masing.
+        </p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #131527; border: 1px solid #232743; border-radius: 10px; margin: 0 0 28px;">
+          {game_rows}
+        </table>
+        {safety}
+      </div>"""
+
+    metadata = {
+        "checkout_group_id": checkout_group_id,
+        "game_count": len(games),
+        "order_ids": [g["order_id"] for g in games],
+    }
+    send_email(
+        to,
+        f"Cart aktif: {len(games)} game ready dimainkan",
+        _base_template(content),
+        email_type="cart_welcome",
+        user_id=user_id,
+        metadata=metadata,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Email: Account Flag Notification (to support)
 # ---------------------------------------------------------------------------
