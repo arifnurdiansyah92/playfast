@@ -12,6 +12,7 @@ import midtransclient
 from flask import Blueprint, current_app, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload
 
 logger = logging.getLogger(__name__)
 
@@ -2074,7 +2075,13 @@ def _user_has_active_subscription(user_id: int) -> bool:
 @jwt_required()
 def get_cart():
     user_id = int(get_jwt_identity())
-    items = CartItem.list_for_user(user_id)
+    items = (
+        CartItem.query
+        .options(joinedload(CartItem.game))
+        .filter_by(user_id=user_id)
+        .order_by(CartItem.created_at.asc())
+        .all()
+    )
     cart_subtotal = sum((it.game.price if it.game else 0) for it in items)
     return jsonify({
         "items": [it.to_dict() for it in items],
@@ -2121,9 +2128,7 @@ def add_cart_item():
     item = CartItem.add_for_user(user_id, game_id)
     return jsonify({
         "item": item.to_dict(),
-        "cart_item_count": current_count + (0 if current_count > 0 and CartItem.query.filter_by(
-            user_id=user_id, game_id=game_id
-        ).count() > 1 else 1),
+        "cart_item_count": CartItem.query.filter_by(user_id=user_id).count(),
     }), 201
 
 
