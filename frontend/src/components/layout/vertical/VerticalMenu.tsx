@@ -108,6 +108,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
               <MenuItem href='/promos' icon={<i className='tabler-discount' />}>
                 Promo Saya
               </MenuItem>
+              <MenuItem href='/cart' icon={<i className='tabler-shopping-cart' />}>
+                Keranjang
+              </MenuItem>
               <MenuItem
                 href='https://playfast.id/creator'
                 target='_blank'

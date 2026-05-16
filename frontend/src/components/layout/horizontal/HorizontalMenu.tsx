@@ -1,5 +1,9 @@
 // MUI Imports
 import { useTheme } from '@mui/material/styles'
+import Box from '@mui/material/Box'
+
+// Third-party Imports
+import { useQuery } from '@tanstack/react-query'
 
 // Type Imports
 import type { VerticalMenuContextProps } from '@menu/components/vertical-menu/Menu'
@@ -25,6 +29,7 @@ import verticalMenuSectionStyles from '@core/styles/vertical/menuSectionStyles'
 // Context Imports
 import { useAuth } from '@/contexts/AuthContext'
 import { useWhatsappNumber } from '@/hooks/useWhatsappNumber'
+import { cartApi } from '@/lib/api'
 
 type RenderExpandIconProps = {
   level?: number
@@ -54,6 +59,14 @@ const HorizontalMenu = () => {
   const { user } = useAuth()
   const waNumber = useWhatsappNumber()
   const waSupportUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent('Halo Playfast, saya butuh bantuan.')}`
+
+  const { data: cartData } = useQuery({
+    queryKey: ['cart'],
+    queryFn: () => cartApi.list(),
+    enabled: !!user,
+    staleTime: 30000,
+  })
+  const cartCount = cartData?.item_count || 0
 
   // Vars
   const { transitionDuration } = verticalNavOptions
@@ -101,6 +114,32 @@ const HorizontalMenu = () => {
         <MenuItem href='/promos' icon={<i className='tabler-discount' />}>
           Promo Saya
         </MenuItem>
+        {user && (
+          <MenuItem
+            href='/cart'
+            icon={
+              <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+                <i className='tabler-shopping-cart' />
+                {cartCount > 0 && (
+                  <Box
+                    component='span'
+                    sx={{
+                      position: 'absolute', top: -6, right: -8,
+                      bgcolor: '#c9a84c', color: '#000', borderRadius: '999px',
+                      fontSize: 10, fontWeight: 700, minWidth: 18, height: 18,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      px: 0.5,
+                    }}
+                  >
+                    {cartCount}
+                  </Box>
+                )}
+              </Box>
+            }
+          >
+            Keranjang
+          </MenuItem>
+        )}
         <MenuItem
           href='https://playfast.id/creator'
           target='_blank'
