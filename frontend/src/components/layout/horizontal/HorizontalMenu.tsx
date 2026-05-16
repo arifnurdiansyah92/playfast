@@ -101,6 +101,14 @@ const HorizontalMenu = () => {
         <MenuItem href='/promos' icon={<i className='tabler-discount' />}>
           Promo Saya
         </MenuItem>
+        <MenuItem
+          href='https://playfast.id/creator'
+          target='_blank'
+          rel='noopener noreferrer'
+          icon={<i className='tabler-stars' />}
+        >
+          Creator Program
+        </MenuItem>
         {user && (
           <MenuItem
             href={waSupportUrl}

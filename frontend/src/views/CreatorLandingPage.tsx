@@ -630,14 +630,13 @@ const CreatorLandingPage = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
               <Box>
                 <Typography variant='caption' sx={{ color: textSecondary, letterSpacing: '0.1em', display: 'block', fontWeight: 700 }}>PLAYFAST CREATOR PROGRAM 2026</Typography>
-                <Typography variant='caption' sx={{ color: '#555' }}>Inkode · Creator Endorsement</Typography>
               </Box>
               <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                 <Typography variant='caption' sx={{ color: textSecondary }}>
-                  Partnership lead: <strong style={{ color: textPrimary }}>Arif</strong>
+                  Partnership lead: <strong style={{ color: textPrimary }}>Tim Playfast</strong>
                 </Typography>
-                <Box component='a' href='mailto:arifnurdiansyah92@gmail.com' sx={{ color: gold, textDecoration: 'none', fontSize: '0.75rem' }}>
-                  arifnurdiansyah92@gmail.com
+                <Box component='a' href='mailto:admin@playfast.id' sx={{ color: gold, textDecoration: 'none', fontSize: '0.75rem' }}>
+                  admin@playfast.id
                 </Box>
                 <Box component={Link} href='/' sx={{ color: textSecondary, textDecoration: 'none', fontSize: '0.75rem', '&:hover': { color: gold } }}>
                   playfast.id

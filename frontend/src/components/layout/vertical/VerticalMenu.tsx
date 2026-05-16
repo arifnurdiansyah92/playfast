@@ -109,6 +109,14 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
                 Promo Saya
               </MenuItem>
               <MenuItem
+                href='https://playfast.id/creator'
+                target='_blank'
+                rel='noopener noreferrer'
+                icon={<i className='tabler-stars' />}
+              >
+                Creator Program
+              </MenuItem>
+              <MenuItem
                 href={waSupportUrl}
                 target='_blank'
                 rel='noopener noreferrer'
@@ -117,6 +125,16 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
                 Bantuan
               </MenuItem>
             </>
+          )}
+          {!user && (
+            <MenuItem
+              href='https://playfast.id/creator'
+              target='_blank'
+              rel='noopener noreferrer'
+              icon={<i className='tabler-stars' />}
+            >
+              Creator Program
+            </MenuItem>
           )}
         </MenuSection>
         {!user && (
