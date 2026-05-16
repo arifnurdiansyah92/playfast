@@ -223,6 +223,12 @@ def _run_schema_upgrades():
         # Shopping cart: group related orders into one payment transaction
         "ALTER TABLE orders ADD COLUMN checkout_group_id VARCHAR(40)",
         "CREATE INDEX IF NOT EXISTS ix_orders_checkout_group_id ON orders (checkout_group_id)",
+        # Cart checkout creates N Orders sharing one midtrans_order_id, so
+        # the unique constraint must be dropped. Replace with a plain index
+        # for webhook lookups (kept under a different name to avoid clash).
+        "ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_midtrans_order_id_key",
+        "DROP INDEX IF EXISTS ix_orders_midtrans_order_id",
+        "CREATE INDEX IF NOT EXISTS ix_orders_midtrans_order_id ON orders (midtrans_order_id)",
     ]
     for stmt in alter_statements:
         try:

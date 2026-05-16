@@ -236,7 +236,10 @@ class Order(db.Model):
         db.String(20), default="purchase", nullable=False
     )  # purchase, subscription
     snap_token = db.Column(db.String(255), nullable=True)
-    midtrans_order_id = db.Column(db.String(100), nullable=True, unique=True, index=True)
+    # Cart checkout creates N Orders sharing the same midtrans_order_id
+    # (one Midtrans/Tripay transaction per cart), so this column is NOT
+    # unique. It is indexed for webhook lookup performance.
+    midtrans_order_id = db.Column(db.String(100), nullable=True, index=True)
     tripay_reference = db.Column(db.String(100), nullable=True, index=True)
     payment_type = db.Column(db.String(50), nullable=True)
     paid_at = db.Column(db.DateTime(timezone=True), nullable=True)

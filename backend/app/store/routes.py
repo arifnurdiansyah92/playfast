@@ -3,6 +3,7 @@
 import hashlib
 import logging
 import os
+import secrets
 import time
 import threading
 from collections import defaultdict
@@ -2148,4 +2149,238 @@ def clear_cart():
     user_id = int(get_jwt_identity())
     count = CartItem.clear_for_user(user_id)
     return jsonify({"message": f"Cleared {count} item(s)"}), 200
+
+
+def _generate_checkout_group_id(user_id: int) -> str:
+    """Generate a readable, collision-safe checkout group id."""
+    ts = int(datetime.now(timezone.utc).timestamp())
+    suffix = secrets.token_hex(2)  # 4 hex chars
+    return f"CG-{ts}-{user_id}-{suffix}"
+
+
+def _validate_cart_items_for_checkout(user_id: int, items: list) -> tuple[list, list]:
+    """Pre-validate cart items at checkout time.
+
+    Returns (valid_items, failed_items). Each failed_item is a dict with
+    `game_id` and `reason`.
+    """
+    valid = []
+    failed = []
+    for it in items:
+        if not it.game or not it.game.is_enabled:
+            failed.append({"game_id": it.game_id, "reason": "Game tidak tersedia"})
+            continue
+        # Has at least one active GameAccount on an active SteamAccount?
+        from app.models import GameAccount, SteamAccount
+        has_account = (
+            GameAccount.query.join(SteamAccount)
+            .filter(
+                GameAccount.game_id == it.game.id,
+                SteamAccount.is_active == True,  # noqa: E712
+            )
+            .first()
+            is not None
+        )
+        if not has_account:
+            failed.append({"game_id": it.game_id, "reason": "Stok akun habis untuk game ini"})
+            continue
+        if _user_owns_game(user_id, it.game_id):
+            failed.append({"game_id": it.game_id, "reason": "Kamu sudah punya game ini"})
+            continue
+        valid.append(it)
+    return valid, failed
+
+
+@store_bp.route("/checkout-cart", methods=["POST"])
+@jwt_required()
+def checkout_cart():
+    """Checkout the entire cart in a single payment transaction.
+
+    Creates N Orders (one per game), all sharing the same `checkout_group_id`
+    and same `midtrans_order_id` / `tripay_reference`. Webhook handler will
+    fulfill them atomically when payment is confirmed.
+    """
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    promo_code_input = (data.get("promo_code") or "").strip() or None
+    apply_credit = bool(data.get("apply_credit", True))
+
+    if _user_has_active_subscription(user_id):
+        return jsonify({"error": "Premium subscriber — tidak perlu cart"}), 400
+
+    items = CartItem.list_for_user(user_id)
+    if not items:
+        return jsonify({"error": "Keranjang kosong"}), 400
+
+    valid_items, failed_items = _validate_cart_items_for_checkout(user_id, items)
+    if failed_items:
+        return jsonify({
+            "error": "Beberapa item tidak bisa di-checkout",
+            "failed_items": failed_items,
+        }), 400
+
+    user_obj = db.session.get(User, user_id)
+
+    pricing_input = [
+        {"game_id": it.game.id, "unit_price": it.game.price} for it in valid_items
+    ]
+    from app.store.pricing import compute_cart_amount
+    pricing = compute_cart_amount(pricing_input, user_id, promo_code_input, apply_credit)
+    if pricing.get("error"):
+        return jsonify({"error": pricing["error"]}), 400
+
+    final_amount = pricing["cart_total"]
+    checkout_group_id = _generate_checkout_group_id(user_id)
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    midtrans_order_id = f"CART-{user_id}-{timestamp}"
+
+    # Create N Orders with prorated discounts
+    orders = []
+    for it, breakdown in zip(valid_items, pricing["per_item_breakdown"]):
+        order = Order(
+            user_id=user_id,
+            game_id=it.game.id,
+            status="pending_payment",
+            type="purchase",
+            midtrans_order_id=midtrans_order_id,
+            checkout_group_id=checkout_group_id,
+            amount_subtotal=breakdown["subtotal"],
+            promo_discount=breakdown["discount"],
+            credit_applied=breakdown["credit"],
+            amount=breakdown["final"],
+            promo_code_id=pricing["promo_code_id"],
+        )
+        db.session.add(order)
+        orders.append(order)
+    db.session.flush()
+
+    # One PromoCodeUsage row for the cart (attribute to first order in group)
+    if pricing["promo_code_id"]:
+        usage = PromoCodeUsage(
+            promo_code_id=pricing["promo_code_id"],
+            user_id=user_id,
+            order_id=orders[0].id,
+            discount_amount=pricing["promo_discount"],
+        )
+        db.session.add(usage)
+
+    # Deduct credit
+    if pricing["credit_applied"] > 0:
+        user_obj.referral_credit = max(0, user_obj.referral_credit - pricing["credit_applied"])
+
+    # Clear cart (commit happens after gateway interaction)
+    CartItem.query.filter_by(user_id=user_id).delete()
+
+    # Zero-total path: auto-fulfill all orders without payment
+    if final_amount == 0:
+        for order in orders:
+            order.payment_type = "credit"
+            order.paid_at = datetime.now(timezone.utc)
+            success = _fulfill_order(order)
+            if not success:
+                db.session.rollback()
+                return jsonify({"error": "Fulfillment failed for one or more games"}), 503
+        db.session.commit()
+        return jsonify({
+            "message": "Cart fulfilled via credit/discount",
+            "checkout_group_id": checkout_group_id,
+            "orders": [o.to_dict() for o in orders],
+            "payment_mode": "credit",
+            "total": 0,
+        }), 201
+
+    payment_mode = SiteSetting.get("payment_mode")
+    item_summary = ", ".join((it.game.name or "")[:30] for it in valid_items)[:90]
+
+    if payment_mode == "manual":
+        db.session.commit()
+        return jsonify({
+            "message": "Cart created, awaiting manual payment",
+            "checkout_group_id": checkout_group_id,
+            "orders": [o.to_dict() for o in orders],
+            "payment_mode": "manual",
+            "total": final_amount,
+            "manual_info": {
+                "qris_image_url": SiteSetting.get("manual_qris_image_url"),
+                "whatsapp_number": SiteSetting.get("manual_whatsapp_number"),
+                "instructions": SiteSetting.get("manual_payment_instructions"),
+            },
+        }), 201
+
+    if payment_mode == "tripay":
+        from app.tripay import service as tripay
+        if not tripay.is_configured():
+            db.session.rollback()
+            return jsonify({"error": "Tripay belum dikonfigurasi"}), 503
+        try:
+            frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
+            tx = tripay.create_transaction(
+                merchant_ref=midtrans_order_id,
+                amount=final_amount,
+                customer_email=user_obj.email if user_obj else "",
+                customer_name=(user_obj.email.split("@")[0] if user_obj and user_obj.email else "Customer"),
+                item_name=f"Cart: {item_summary}"[:90],
+                callback_url=f"{frontend_url}/callback/tripay",
+                return_url=f"{frontend_url}/cart/success?cg={checkout_group_id}",
+            )
+            for order in orders:
+                order.tripay_reference = tx.get("reference")
+                order.snap_token = tx.get("checkout_url")
+            db.session.commit()
+            return jsonify({
+                "message": "Cart created, awaiting payment",
+                "checkout_group_id": checkout_group_id,
+                "orders": [o.to_dict() for o in orders],
+                "payment_mode": "tripay",
+                "total": final_amount,
+                "checkout_url": tx.get("checkout_url"),
+                "tripay_reference": tx.get("reference"),
+            }), 201
+        except Exception as e:
+            db.session.rollback()
+            logger.exception("Tripay create failed for cart checkout: %s", e)
+            return jsonify({"error": f"Payment service error: {type(e).__name__}"}), 502
+
+    # Midtrans mode
+    try:
+        snap = _get_snap()
+        item_details = [
+            {
+                "id": str(b["game_id"]),
+                "price": b["final"] if b["final"] > 0 else 1,  # Midtrans requires price >= 1
+                "quantity": 1,
+                "name": (next((it.game.name for it in valid_items if it.game.id == b["game_id"]), "Game"))[:50],
+            }
+            for b in pricing["per_item_breakdown"]
+        ]
+        # Adjust totals so Midtrans gross_amount matches sum(item_details.price)
+        adjust = final_amount - sum(d["price"] for d in item_details)
+        if adjust != 0 and item_details:
+            item_details[-1]["price"] += adjust
+        transaction = snap.create_transaction({
+            "transaction_details": {
+                "order_id": midtrans_order_id,
+                "gross_amount": final_amount,
+            },
+            "item_details": item_details,
+            "customer_details": {
+                "email": user_obj.email if user_obj else "",
+            },
+        })
+        snap_token = transaction["token"]
+        for order in orders:
+            order.snap_token = snap_token
+        db.session.commit()
+        return jsonify({
+            "message": "Cart created, awaiting payment",
+            "checkout_group_id": checkout_group_id,
+            "orders": [o.to_dict() for o in orders],
+            "payment_mode": "midtrans",
+            "total": final_amount,
+            "snap_token": snap_token,
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Midtrans cart checkout failed: %s", e)
+        return jsonify({"error": "Payment service unavailable"}), 502
 
