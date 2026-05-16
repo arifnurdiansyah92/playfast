@@ -282,6 +282,7 @@ class Order(db.Model):
             "promo_discount": self.promo_discount,
             "credit_applied": self.credit_applied,
             "promo_code_id": self.promo_code_id,
+            "checkout_group_id": self.checkout_group_id,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
             "refunded_at": self.refunded_at.isoformat() if self.refunded_at else None,
             "refund_note": self.refund_note,

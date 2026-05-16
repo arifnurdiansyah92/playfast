@@ -246,6 +246,7 @@ export interface Order {
   promo_discount: number
   credit_applied: number
   promo_code_id: number | null
+  checkout_group_id?: string | null
   tripay_reference?: string | null
   refunded_at?: string | null
   refund_note?: string | null
