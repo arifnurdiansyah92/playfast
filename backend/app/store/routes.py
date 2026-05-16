@@ -2297,15 +2297,29 @@ def checkout_cart():
         orders.append(order)
     db.session.flush()
 
-    # One PromoCodeUsage row for the cart (attribute to first order in group)
+    # One PromoCodeUsage row per cart order, prorated by share — preserves
+    # revenue-sharing accounting (creator commission sums correctly across
+    # sibling orders in the cart since the tracker joins PromoCodeUsage →
+    # Order → reads order.amount).
     if pricing["promo_code_id"]:
-        usage = PromoCodeUsage(
-            promo_code_id=pricing["promo_code_id"],
-            user_id=user_id,
-            order_id=orders[0].id,
-            discount_amount=pricing["promo_discount"],
-        )
-        db.session.add(usage)
+        promo_total = pricing["promo_discount"]
+        cart_subtotal = pricing["cart_subtotal"] or 1
+        accumulated = 0
+        for idx, (order, breakdown) in enumerate(zip(orders, pricing["per_item_breakdown"])):
+            is_last = idx == len(orders) - 1
+            if is_last:
+                share_discount = promo_total - accumulated
+            else:
+                share = breakdown["subtotal"] / cart_subtotal
+                share_discount = int(round(promo_total * share))
+                accumulated += share_discount
+            usage = PromoCodeUsage(
+                promo_code_id=pricing["promo_code_id"],
+                user_id=user_id,
+                order_id=order.id,
+                discount_amount=share_discount,
+            )
+            db.session.add(usage)
 
     # Deduct credit
     if pricing["credit_applied"] > 0:
