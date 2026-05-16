@@ -19,6 +19,7 @@ from app.extensions import db
 from app.models import (
     AccountFlag,
     Assignment,
+    CartItem,
     CodeRequestLog,
     Game,
     GameAccount,
@@ -2037,4 +2038,109 @@ def my_promos():
         })
 
     return jsonify({"promos": result}), 200
+
+
+# ---------------------------------------------------------------------------
+# Cart (per-user, DB-persisted)
+# ---------------------------------------------------------------------------
+
+CART_MAX_ITEMS = 20
+
+
+def _user_owns_game(user_id: int, game_id: int) -> bool:
+    """Has user already bought + been fulfilled for this game?"""
+    return (
+        Order.query.filter_by(
+            user_id=user_id, game_id=game_id, status="fulfilled"
+        ).first()
+        is not None
+    )
+
+
+def _user_has_active_subscription(user_id: int) -> bool:
+    """Is user currently on an active Premium plan?"""
+    now = datetime.now(timezone.utc)
+    return (
+        Subscription.query.filter(
+            Subscription.user_id == user_id,
+            Subscription.status == "active",
+            Subscription.expires_at > now,
+        ).first()
+        is not None
+    )
+
+
+@store_bp.route("/cart", methods=["GET"])
+@jwt_required()
+def get_cart():
+    user_id = int(get_jwt_identity())
+    items = CartItem.list_for_user(user_id)
+    cart_subtotal = sum((it.game.price if it.game else 0) for it in items)
+    return jsonify({
+        "items": [it.to_dict() for it in items],
+        "cart_subtotal": cart_subtotal,
+        "item_count": len(items),
+    }), 200
+
+
+@store_bp.route("/cart/items", methods=["POST"])
+@jwt_required()
+def add_cart_item():
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    try:
+        game_id = int(data.get("game_id") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid game_id"}), 400
+    if game_id <= 0:
+        return jsonify({"error": "Invalid game_id"}), 400
+
+    if _user_has_active_subscription(user_id):
+        return jsonify({
+            "error": "Premium subscriber — semua game sudah bisa langsung dimainkan",
+            "code": "premium_active",
+        }), 400
+
+    game = db.session.get(Game, game_id)
+    if not game or not game.is_enabled:
+        return jsonify({"error": "Game tidak tersedia"}), 404
+
+    if _user_owns_game(user_id, game_id):
+        return jsonify({
+            "error": "Kamu sudah punya akses ke game ini",
+            "code": "already_owned",
+        }), 400
+
+    current_count = CartItem.query.filter_by(user_id=user_id).count()
+    if current_count >= CART_MAX_ITEMS:
+        return jsonify({
+            "error": f"Keranjang penuh (maks {CART_MAX_ITEMS} game)",
+            "code": "cart_full",
+        }), 400
+
+    item = CartItem.add_for_user(user_id, game_id)
+    return jsonify({
+        "item": item.to_dict(),
+        "cart_item_count": current_count + (0 if current_count > 0 and CartItem.query.filter_by(
+            user_id=user_id, game_id=game_id
+        ).count() > 1 else 1),
+    }), 201
+
+
+@store_bp.route("/cart/items/<int:item_id>", methods=["DELETE"])
+@jwt_required()
+def remove_cart_item(item_id: int):
+    user_id = int(get_jwt_identity())
+    ok = CartItem.remove_for_user(user_id, item_id)
+    if not ok:
+        return jsonify({"error": "Item tidak ditemukan"}), 404
+    return jsonify({"message": "Removed"}), 200
+
+
+@store_bp.route("/cart", methods=["DELETE"])
+@jwt_required()
+def clear_cart():
+    user_id = int(get_jwt_identity())
+    count = CartItem.clear_for_user(user_id)
+    return jsonify({"message": f"Cleared {count} item(s)"}), 200
 
