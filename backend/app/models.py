@@ -245,6 +245,10 @@ class Order(db.Model):
     promo_discount = db.Column(db.Integer, nullable=False, default=0)
     credit_applied = db.Column(db.Integer, nullable=False, default=0)
     promo_code_id = db.Column(db.Integer, db.ForeignKey("promo_codes.id"), nullable=True)
+    # Shopping cart: groups orders created together from a single cart
+    # checkout so they share one payment transaction. NULL for one-off
+    # (non-cart) orders, which remain the common case for direct purchases.
+    checkout_group_id = db.Column(db.String(40), nullable=True, index=True)
     refunded_at = db.Column(db.DateTime(timezone=True), nullable=True)
     refund_note = db.Column(db.Text, nullable=True)
     refunded_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
@@ -1258,6 +1262,47 @@ class CreatorApplication(db.Model):
                 self.reviewed_at.isoformat() if self.reviewed_at else None
             )
         return data
+
+
+class CartItem(db.Model):
+    """A single game queued in a user's cart, ready to checkout.
+
+    Unique constraint on (user_id, game_id) — a game can't appear twice in
+    the same cart. Quantity is always 1 (one game = one access). Cart is
+    deleted atomically when checkout-cart endpoint succeeds.
+    """
+
+    __tablename__ = "cart_items"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "game_id", name="uq_cart_user_game"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=False, index=True
+    )
+    game_id = db.Column(
+        db.Integer, db.ForeignKey("games.id"), nullable=False
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    user = db.relationship(
+        "User", backref=db.backref("cart_items", lazy="dynamic")
+    )
+    game = db.relationship("Game")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "game_id": self.game_id,
+            "game": self.game.to_dict() if self.game else None,
+            "created_at": self.created_at.isoformat(),
+        }
 
 
 class EmailLog(db.Model):

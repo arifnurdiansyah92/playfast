@@ -220,6 +220,9 @@ def _run_schema_upgrades():
         # Revenue sharing / creator commission tracking on promo code usages.
         "ALTER TABLE promo_code_usages ADD COLUMN paid_to_creator_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE promo_code_usages ADD COLUMN paid_to_creator_note TEXT",
+        # Shopping cart: group related orders into one payment transaction
+        "ALTER TABLE orders ADD COLUMN checkout_group_id VARCHAR(40)",
+        "CREATE INDEX IF NOT EXISTS ix_orders_checkout_group_id ON orders (checkout_group_id)",
     ]
     for stmt in alter_statements:
         try:
@@ -273,6 +276,9 @@ def _run_schema_upgrades():
             db.session.commit()
         except Exception:
             db.session.rollback()
+
+    from app.models import CartItem
+    CartItem.__table__.create(db.engine, checkfirst=True)
 
 
 def _seed_initial_reviews():
