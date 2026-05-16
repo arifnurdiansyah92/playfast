@@ -13,6 +13,7 @@ import Button from '@mui/material/Button'
 import NavToggle from './NavToggle'
 import ModeDropdown from '@components/layout/shared/ModeDropdown'
 import UserDropdown from '@components/layout/shared/UserDropdown'
+import CartIconButton from '@components/layout/shared/CartIconButton'
 
 // Util Imports
 import { verticalLayoutClasses } from '@layouts/utils/layoutClasses'
@@ -31,7 +32,10 @@ const NavbarContent = () => {
       </div>
       <div className='flex items-center gap-2'>
         {user ? (
-          <UserDropdown />
+          <>
+            <CartIconButton />
+            <UserDropdown />
+          </>
         ) : (
           <>
             <Button component={Link} href='/login' variant='text' size='small' sx={{ fontWeight: 600 }}>

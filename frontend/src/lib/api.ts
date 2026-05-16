@@ -280,6 +280,17 @@ export interface CartCheckoutBody {
   apply_credit?: boolean
 }
 
+export interface CartPreviewResponse {
+  cart_subtotal: number
+  first_order_discount: number
+  promo_discount: number
+  credit_applied: number
+  cart_total: number
+  promo_valid: boolean
+  promo_error: string | null
+  available_credit: number
+}
+
 export interface CartCheckoutResponse {
   message: string
   checkout_group_id: string
@@ -2017,6 +2028,13 @@ export const cartApi = {
 
   clear() {
     return request<{ message: string }>('/api/store/cart', { method: 'DELETE' })
+  },
+
+  preview(body: CartCheckoutBody) {
+    return request<CartPreviewResponse>('/api/store/cart/preview', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
   },
 
   checkout(body: CartCheckoutBody) {

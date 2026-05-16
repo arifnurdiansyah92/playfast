@@ -2194,6 +2194,54 @@ def clear_cart():
     return jsonify({"message": f"Cleared {count} item(s)"}), 200
 
 
+@store_bp.route("/cart/preview", methods=["POST"])
+@jwt_required()
+def preview_cart_pricing():
+    """Compute cart pricing without creating any orders. Used by the
+    checkout page to show subtotal/discount/total before user clicks Bayar.
+
+    Body: { promo_code?: str, apply_credit?: bool }
+    """
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    promo_code_input = (data.get("promo_code") or "").strip() or None
+    apply_credit = bool(data.get("apply_credit", True))
+
+    items = CartItem.list_for_user(user_id)
+    if not items:
+        return jsonify({
+            "cart_subtotal": 0,
+            "first_order_discount": 0,
+            "promo_discount": 0,
+            "credit_applied": 0,
+            "cart_total": 0,
+            "promo_valid": False,
+            "promo_error": None,
+            "available_credit": 0,
+        }), 200
+
+    pricing_input = [
+        {"game_id": it.game.id, "unit_price": it.game.price}
+        for it in items if it.game
+    ]
+    from app.store.pricing import compute_cart_amount
+    pricing = compute_cart_amount(pricing_input, user_id, promo_code_input, apply_credit)
+
+    user_obj = db.session.get(User, user_id)
+    available_credit = (user_obj.referral_credit or 0) if user_obj else 0
+
+    return jsonify({
+        "cart_subtotal": pricing["cart_subtotal"],
+        "first_order_discount": pricing["first_order_discount"],
+        "promo_discount": pricing["promo_discount"],
+        "credit_applied": pricing["credit_applied"],
+        "cart_total": pricing["cart_total"],
+        "promo_valid": promo_code_input is not None and pricing.get("error") is None and pricing["promo_discount"] > 0,
+        "promo_error": pricing.get("error") if promo_code_input else None,
+        "available_credit": available_credit,
+    }), 200
+
+
 def _generate_checkout_group_id(user_id: int) -> str:
     """Generate a readable, collision-safe checkout group id."""
     ts = int(datetime.now(timezone.utc).timestamp())
