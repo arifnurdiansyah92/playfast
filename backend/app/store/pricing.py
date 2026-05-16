@@ -120,3 +120,111 @@ def compute_final_amount(subtotal: int, user_id: int, promo_code: str | None, ap
         "promo_code_id": promo_code_id,
         "error": None,
     }
+
+
+def compute_cart_amount(
+    cart_items: list,
+    user_id: int,
+    promo_code: str | None,
+    apply_credit: bool,
+):
+    """Compute final cart amount with promo + first-order discount + credit.
+
+    cart_items is a list of dicts: [{"game_id": int, "unit_price": int}, ...]
+    Returns dict with:
+        cart_subtotal, first_order_discount, promo_discount, credit_applied,
+        cart_total, promo_code_id, per_item_breakdown, error
+    per_item_breakdown is a list aligned with cart_items, each containing
+    `subtotal`, `discount`, `credit`, `final` so the caller can persist
+    prorated values into each Order.
+    """
+    cart_subtotal = sum(it["unit_price"] for it in cart_items)
+    if cart_subtotal <= 0 or not cart_items:
+        return {
+            "cart_subtotal": 0, "first_order_discount": 0,
+            "promo_discount": 0, "credit_applied": 0,
+            "cart_total": 0, "promo_code_id": None,
+            "per_item_breakdown": [],
+            "error": "Cart is empty",
+        }
+
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        return {
+            "cart_subtotal": cart_subtotal, "first_order_discount": 0,
+            "promo_discount": 0, "credit_applied": 0,
+            "cart_total": cart_subtotal, "promo_code_id": None,
+            "per_item_breakdown": [],
+            "error": "User not found",
+        }
+
+    # First-order referee discount (one-time, applies only if no fulfilled order yet)
+    from app.models import Order, SiteSetting
+    first_order_discount = 0
+    if user.referred_by_user_id and not Order.query.filter_by(
+        user_id=user_id, status="fulfilled"
+    ).first():
+        referee_pct = int(SiteSetting.get("referral_referee_discount_pct") or "10")
+        first_order_discount = int(cart_subtotal * referee_pct / 100)
+
+    interim_after_first = cart_subtotal - first_order_discount
+
+    promo_discount = 0
+    promo_code_id = None
+    if promo_code:
+        promo, discount, err = validate_promo_code(
+            promo_code, user_id, interim_after_first, "game"
+        )
+        if err:
+            return {
+                "cart_subtotal": cart_subtotal,
+                "first_order_discount": 0, "promo_discount": 0,
+                "credit_applied": 0, "cart_total": cart_subtotal,
+                "promo_code_id": None, "per_item_breakdown": [],
+                "error": err,
+            }
+        promo_discount = discount
+        promo_code_id = promo.id
+
+    interim_after_promo = interim_after_first - promo_discount
+
+    credit_applied = 0
+    if apply_credit and user.referral_credit > 0:
+        credit_applied = min(user.referral_credit, interim_after_promo)
+
+    cart_total = max(0, interim_after_promo - credit_applied)
+
+    # Prorate total discount per item: share = unit_price / cart_subtotal
+    total_discount_per_item = first_order_discount + promo_discount
+    per_item = []
+    accumulated_discount = 0
+    accumulated_credit = 0
+    for idx, it in enumerate(cart_items):
+        is_last = idx == len(cart_items) - 1
+        if is_last:
+            item_discount = total_discount_per_item - accumulated_discount
+            item_credit = credit_applied - accumulated_credit
+        else:
+            share = it["unit_price"] / cart_subtotal
+            item_discount = round(total_discount_per_item * share)
+            item_credit = round(credit_applied * share)
+            accumulated_discount += item_discount
+            accumulated_credit += item_credit
+        per_item.append({
+            "game_id": it["game_id"],
+            "subtotal": it["unit_price"],
+            "discount": item_discount,
+            "credit": item_credit,
+            "final": max(0, it["unit_price"] - item_discount - item_credit),
+        })
+
+    return {
+        "cart_subtotal": cart_subtotal,
+        "first_order_discount": first_order_discount,
+        "promo_discount": promo_discount,
+        "credit_applied": credit_applied,
+        "cart_total": cart_total,
+        "promo_code_id": promo_code_id,
+        "per_item_breakdown": per_item,
+        "error": None,
+    }
