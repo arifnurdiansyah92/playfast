@@ -252,6 +252,45 @@ export interface Order {
   refunded_by_user_id?: number | null
 }
 
+export interface CartItem {
+  id: number
+  user_id: number
+  game_id: number
+  game: {
+    id: number
+    appid: number
+    name: string
+    price: number
+    header_image: string | null
+    custom_header_image: string | null
+    custom_name: string | null
+  } | null
+  created_at: string
+}
+
+export interface CartResponse {
+  items: CartItem[]
+  cart_subtotal: number
+  item_count: number
+}
+
+export interface CartCheckoutBody {
+  promo_code?: string
+  apply_credit?: boolean
+}
+
+export interface CartCheckoutResponse {
+  message: string
+  checkout_group_id: string
+  orders: Order[]
+  payment_mode: 'manual' | 'midtrans' | 'tripay' | 'credit'
+  total: number
+  snap_token?: string
+  checkout_url?: string
+  tripay_reference?: string
+  manual_info?: { qris_image_url: string; whatsapp_number: string; instructions: string }
+}
+
 export interface SteamGuardCode {
   code: string
   remaining: number
@@ -1956,6 +1995,34 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
 
   markEmailVerified(userId: number) {
     return request<{ message: string }>(`/api/admin/users/${userId}/mark-email-verified`, { method: 'POST' })
+  },
+}
+
+export const cartApi = {
+  list() {
+    return request<CartResponse>('/api/store/cart')
+  },
+
+  add(gameId: number) {
+    return request<{ item: CartItem; cart_item_count: number }>(
+      '/api/store/cart/items',
+      { method: 'POST', body: JSON.stringify({ game_id: gameId }) }
+    )
+  },
+
+  remove(itemId: number) {
+    return request<{ message: string }>(`/api/store/cart/items/${itemId}`, { method: 'DELETE' })
+  },
+
+  clear() {
+    return request<{ message: string }>('/api/store/cart', { method: 'DELETE' })
+  },
+
+  checkout(body: CartCheckoutBody) {
+    return request<CartCheckoutResponse>('/api/store/checkout-cart', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
   },
 }
 
