@@ -2888,6 +2888,15 @@ def confirm_manual_payment(order_id: int):
         db.session.rollback()
         return jsonify({"error": "No accounts available for this game. Retry once an account is free."}), 503
 
+    # Cart welcome email: if this order completes a cart group (all siblings
+    # fulfilled), send cart_welcome once. Admin confirms one at a time, so
+    # this fires only on the LAST confirm that completes the group.
+    if order.checkout_group_id:
+        from app.store.routes import _send_cart_welcome
+        siblings = Order.query.filter_by(checkout_group_id=order.checkout_group_id).all()
+        if siblings and all(s.status == "fulfilled" for s in siblings):
+            _send_cart_welcome(siblings)
+
     return jsonify({
         "message": "Payment confirmed and order fulfilled",
         "order": order.to_dict(include_credentials=True),
