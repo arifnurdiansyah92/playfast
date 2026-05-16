@@ -1304,6 +1304,48 @@ class CartItem(db.Model):
             "created_at": self.created_at.isoformat(),
         }
 
+    @classmethod
+    def add_for_user(cls, user_id: int, game_id: int) -> "CartItem":
+        """Add a game to user's cart. Idempotent — if already in cart,
+        returns the existing row without raising. Caller is responsible
+        for premium/already-owned checks before calling.
+        """
+        existing = cls.query.filter_by(user_id=user_id, game_id=game_id).first()
+        if existing:
+            return existing
+        item = cls(user_id=user_id, game_id=game_id)
+        db.session.add(item)
+        db.session.commit()
+        return item
+
+    @classmethod
+    def remove_for_user(cls, user_id: int, item_id: int) -> bool:
+        """Remove a specific cart item. Returns True if removed, False
+        if not found or not owned by user.
+        """
+        item = cls.query.filter_by(id=item_id, user_id=user_id).first()
+        if not item:
+            return False
+        db.session.delete(item)
+        db.session.commit()
+        return True
+
+    @classmethod
+    def clear_for_user(cls, user_id: int) -> int:
+        """Delete all cart items for a user. Returns number deleted."""
+        count = cls.query.filter_by(user_id=user_id).delete()
+        db.session.commit()
+        return count
+
+    @classmethod
+    def list_for_user(cls, user_id: int) -> "list[CartItem]":
+        """Return cart items for a user, oldest first."""
+        return (
+            cls.query.filter_by(user_id=user_id)
+            .order_by(cls.created_at.asc())
+            .all()
+        )
+
 
 class EmailLog(db.Model):
     __tablename__ = "email_logs"
