@@ -1315,52 +1315,59 @@ def midtrans_webhook():
 
         return jsonify({"status": "ignored"}), 200
 
-    # Look up order by midtrans_order_id
-    order = Order.query.filter_by(midtrans_order_id=order_id).first()
-    if not order:
+    # Look up orders by midtrans_order_id (could be 1 single-buy order or N cart orders)
+    orders = Order.query.filter_by(midtrans_order_id=order_id).all()
+    if not orders:
         logger.warning("Midtrans webhook: order not found for %s", order_id)
         return jsonify({"error": "Order not found"}), 404
 
+    is_cart = orders[0].checkout_group_id is not None
     logger.info(
-        "Midtrans webhook: order=%s status=%s fraud=%s payment_type=%s",
-        order_id, transaction_status, fraud_status, payment_type,
+        "Midtrans webhook: order=%s status=%s fraud=%s payment_type=%s order_count=%d cart=%s",
+        order_id, transaction_status, fraud_status, payment_type, len(orders), is_cart,
     )
 
-    # Process based on transaction status
     if transaction_status in ("capture", "settlement"):
-        # For capture, only accept if fraud_status is "accept" or empty
         if transaction_status == "capture" and fraud_status not in ("accept", ""):
             logger.warning(
                 "Midtrans webhook: fraud detected for %s (fraud_status=%s)",
                 order_id, fraud_status,
             )
-            order.status = "cancelled"
+            for o in orders:
+                if o.status == "pending_payment":
+                    o.status = "cancelled"
             db.session.commit()
             return jsonify({"status": "cancelled"}), 200
 
-        # Only fulfill if still pending
-        if order.status == "pending_payment":
-            order.payment_type = payment_type
-            order.paid_at = datetime.now(timezone.utc)
-            db.session.flush()
+        pending_orders = [o for o in orders if o.status == "pending_payment"]
+        for o in pending_orders:
+            o.payment_type = payment_type
+            o.paid_at = datetime.now(timezone.utc)
+        db.session.flush()
 
-            success = _fulfill_order(order)
+        fulfilled_orders = []
+        for o in pending_orders:
+            success = _fulfill_order(o)
             if not success:
                 logger.error(
-                    "Midtrans webhook: payment received but fulfillment failed for %s",
-                    order_id,
+                    "Midtrans webhook: payment received but fulfillment failed for order %s",
+                    o.id,
                 )
-                # Still mark as paid even if no account available -- admin can resolve
-                order.status = "fulfilled"
-                db.session.commit()
+                o.status = "fulfilled"  # mark fulfilled so admin sees + can rotate
+            fulfilled_orders.append(o)
+        db.session.commit()
+
+        if is_cart and fulfilled_orders:
+            _send_cart_welcome(fulfilled_orders)
 
         return jsonify({"status": "ok"}), 200
 
     elif transaction_status in ("cancel", "deny", "expire"):
-        if order.status == "pending_payment":
-            order.status = "cancelled"
-            db.session.commit()
-            logger.info("Midtrans webhook: order %s cancelled (%s)", order_id, transaction_status)
+        for o in orders:
+            if o.status == "pending_payment":
+                o.status = "cancelled"
+        db.session.commit()
+        logger.info("Midtrans webhook: orders for %s cancelled (%s)", order_id, transaction_status)
         return jsonify({"status": "cancelled"}), 200
 
     elif transaction_status == "pending":
@@ -1443,44 +1450,55 @@ def tripay_callback():
 
         return jsonify({"success": True, "status": "ignored"}), 200
 
-    # Order path — anything else, look up by reference first
-    order = (
-        Order.query.filter_by(tripay_reference=reference).first()
-        or Order.query.filter_by(midtrans_order_id=merchant_ref).first()
+    # Look up order(s) — Tripay returns to single-buy by reference,
+    # cart-checkout by merchant_ref. Take all matches in case of cart.
+    orders = (
+        Order.query.filter_by(tripay_reference=reference).all()
+        or Order.query.filter_by(midtrans_order_id=merchant_ref).all()
     )
-    if not order:
+    if not orders:
         logger.warning("Tripay callback: order not found ref=%s merchant_ref=%s", reference, merchant_ref)
         return jsonify({"success": False, "message": "Order not found"}), 404
 
+    is_cart = orders[0].checkout_group_id is not None
+    expected_total = sum(o.amount or 0 for o in orders)
+
     if status == tripay.STATUS_PAID:
-        if order.status == "pending_payment":
-            if paid_amount and order.amount and paid_amount < order.amount:
-                logger.warning(
-                    "Tripay callback amount mismatch order %s: expected %s got %s",
-                    order.id, order.amount, paid_amount,
-                )
-                return jsonify({"success": False, "message": "Amount mismatch"}), 400
+        pending = [o for o in orders if o.status == "pending_payment"]
+        if not pending:
+            return jsonify({"success": True, "status": "already_processed"}), 200
 
-            order.payment_type = f"tripay:{payment_method}"
-            order.paid_at = datetime.now(timezone.utc)
-            db.session.flush()
+        if paid_amount and expected_total and paid_amount < expected_total:
+            logger.warning(
+                "Tripay callback amount mismatch group %s: expected %s got %s",
+                merchant_ref, expected_total, paid_amount,
+            )
+            return jsonify({"success": False, "message": "Amount mismatch"}), 400
 
-            success = _fulfill_order(order)
+        for o in pending:
+            o.payment_type = f"tripay:{payment_method}"
+            o.paid_at = datetime.now(timezone.utc)
+        db.session.flush()
+
+        fulfilled = []
+        for o in pending:
+            success = _fulfill_order(o)
             if not success:
-                logger.error("Tripay callback: paid but fulfillment failed for order %s", order.id)
-                # Mirror the Midtrans path — leave as fulfilled so admin can
-                # rotate manually rather than leaving it stuck pending.
-                order.status = "fulfilled"
-                db.session.commit()
-            else:
-                _maybe_award_referrer(order, is_subscription=False)
-                db.session.commit()
+                logger.error("Tripay callback: paid but fulfillment failed for order %s", o.id)
+                o.status = "fulfilled"
+            fulfilled.append(o)
+        db.session.commit()
+
+        if is_cart and fulfilled:
+            _send_cart_welcome(fulfilled)
+
         return jsonify({"success": True}), 200
 
     if status in (tripay.STATUS_EXPIRED, tripay.STATUS_FAILED):
-        if order.status == "pending_payment":
-            order.status = "cancelled"
-            db.session.commit()
+        for o in orders:
+            if o.status == "pending_payment":
+                o.status = "cancelled"
+        db.session.commit()
         return jsonify({"success": True}), 200
 
     return jsonify({"success": True, "status": "ignored"}), 200
@@ -2040,6 +2058,14 @@ def my_promos():
         })
 
     return jsonify({"promos": result}), 200
+
+
+def _send_cart_welcome(orders: list):
+    """Send a single cart-fulfilled email summarizing all games at once.
+
+    Stub — wired up properly in Task 7. For now just log.
+    """
+    logger.info("TODO _send_cart_welcome: %d orders", len(orders))
 
 
 # ---------------------------------------------------------------------------
