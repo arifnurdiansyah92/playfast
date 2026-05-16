@@ -78,6 +78,25 @@ const RootLayout = async (props: ChildrenType) => {
           </AuthProvider>
         </QueryProvider>
 
+        {/* Google Analytics (gtag.js) — loads after page is interactive */}
+        <Script
+          id='gtag-loader'
+          src='https://www.googletagmanager.com/gtag/js?id=G-J6HPBP2R83'
+          strategy='afterInteractive'
+        />
+        <Script
+          id='gtag-init'
+          strategy='afterInteractive'
+          dangerouslySetInnerHTML={{
+            __html: `
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-J6HPBP2R83');
+            `,
+          }}
+        />
+
         {/* Tawk.to live chat widget — loads after page is interactive */}
         <Script
           id='tawk-to'

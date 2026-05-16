@@ -304,8 +304,8 @@ const StorePage = () => {
         </CardContent>
       </Card>
 
-      {/* Featured Games — always pinned on top */}
-      {featuredGames.length > 0 && (
+      {/* Featured Games — only shown when not actively searching/filtering */}
+      {featuredGames.length > 0 && !debouncedSearch && !selectedGenre && (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <i className='tabler-star-filled' style={{ fontSize: 20, color: '#c9a84c' }} />
