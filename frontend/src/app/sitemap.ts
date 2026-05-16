@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next'
 
+import { gameSlug } from '@/utils/slug'
+
 const BASE = 'https://playfast.id'
 
 const STATIC_PATHS = [
@@ -28,17 +30,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     if (!res.ok) return staticEntries
 
-    const { games } = (await res.json()) as { games: { appid: number }[] }
+    const { games } = (await res.json()) as { games: { appid: number; name: string; release_date: string | null }[] }
 
-    return [
-      ...staticEntries,
-      ...games.map(g => ({
-        url: `${BASE}/game/${g.appid}`,
-        lastModified: now,
-        changeFrequency: 'weekly' as const,
-        priority: 0.6
-      }))
-    ]
+    const gameEntries: MetadataRoute.Sitemap = games.flatMap(g => {
+      const slug = gameSlug(g.appid, g.name)
+      const lastMod = g.release_date ? new Date(g.release_date) : now
+
+      return [
+        {
+          url: `${BASE}/game/${slug}`,
+          lastModified: lastMod,
+          changeFrequency: 'weekly' as const,
+          priority: 0.6
+        },
+        {
+          url: `${BASE}/cara-main/${slug}`,
+          lastModified: lastMod,
+          changeFrequency: 'weekly' as const,
+          priority: 0.7
+        }
+      ]
+    })
+
+    return [...staticEntries, ...gameEntries]
   } catch {
     return staticEntries
   }

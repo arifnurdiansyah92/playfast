@@ -27,6 +27,7 @@ import InputLabel from '@mui/material/InputLabel'
 
 import { storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import { gameSlug } from '@/utils/slug'
 
 const SORT_OPTIONS = [
   { value: '', label: 'Terbaru & Termahal' },
@@ -42,8 +43,11 @@ const StorePage = () => {
   const { user } = useAuth()
   const codeParam = searchParams?.get('code')
 
-  const buildGameHref = (appid: number) =>
-    codeParam ? `/game/${appid}?code=${encodeURIComponent(codeParam)}` : `/game/${appid}`
+  const buildGameHref = (appid: number, name: string) => {
+    const slug = gameSlug(appid, name)
+
+    return codeParam ? `/game/${slug}?code=${encodeURIComponent(codeParam)}` : `/game/${slug}`
+  }
 
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -330,7 +334,7 @@ const StorePage = () => {
                   }}
                 >
                   <CardActionArea
-                    onClick={() => router.push(buildGameHref(game.appid))}
+                    onClick={() => router.push(buildGameHref(game.appid, game.name))}
                     sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
                   >
                     <Box sx={{ position: 'relative', overflow: 'hidden' }}>
@@ -455,7 +459,7 @@ const StorePage = () => {
                   }}
                 >
                   <CardActionArea
-                    onClick={() => router.push(buildGameHref(game.appid))}
+                    onClick={() => router.push(buildGameHref(game.appid, game.name))}
                     sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}
                   >
                     <Box sx={{ position: 'relative', overflow: 'hidden' }}>

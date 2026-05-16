@@ -28,6 +28,7 @@ import CheckoutReviewModal from '@/components/CheckoutReviewModal'
 import { cartApi, storeApi, formatIDR, gameHeaderImage, handleImageError } from '@/lib/api'
 import type { ApiError } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
+import { gameSlug } from '@/utils/slug'
 
 interface Props {
   appid: string
@@ -278,9 +279,18 @@ return
                 <Divider sx={{ my: 2 }} />
 
                 {/* Price */}
-                <Typography variant='h3' color='primary.main' sx={{ fontWeight: 700, mb: 3 }}>
+                <Typography variant='h3' color='primary.main' sx={{ fontWeight: 700, mb: 1 }}>
                   {formatIDR(game.price)}
                 </Typography>
+
+                <Link
+                  href={`/cara-main/${gameSlug(game.appid, game.name)}`}
+                  style={{ color: '#c9a84c', fontSize: '0.875rem', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16 }}
+                >
+                  <i className='tabler-book-2' style={{ fontSize: 16 }} />
+                  Lihat panduan main {game.name}
+                </Link>
+                <Box sx={{ mb: 3 }} />
               </Box>
 
               {/* Action area */}

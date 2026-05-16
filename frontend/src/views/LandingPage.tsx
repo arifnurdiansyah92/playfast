@@ -21,6 +21,7 @@ import { storeApi, reviewsApi, gameRequestsApi, formatIDR, gameHeaderImage, hand
 import type { Game, GameRequest, Review } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import LandingPromoBanner from '@/components/LandingPromoBanner'
+import { gameSlug } from '@/utils/slug'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -533,7 +534,7 @@ const LandingPage = () => {
                 : games.map(game => (
                   <Grid size={{ xs: 12, sm: 6, md: 3 }} key={game.id}>
                     <Card sx={{ ...cardSx, '&:hover': { ...cardSx['&:hover'], borderColor: gold } }}>
-                      <CardActionArea component={Link} href={`/game/${game.appid}`}>
+                      <CardActionArea component={Link} href={`/game/${gameSlug(game.appid, game.name)}`}>
                         <Box sx={{ position: 'relative' }}>
                           <CardMedia
                             component='img' height={130}
@@ -706,7 +707,7 @@ const LandingPage = () => {
                       <Card
                         key={r.id}
                         component={Link}
-                        href={`/game/${r.appid}`}
+                        href={`/game/${gameSlug(r.appid, r.name)}`}
                         sx={{
                           ...cardSx,
                           cursor: 'pointer',
