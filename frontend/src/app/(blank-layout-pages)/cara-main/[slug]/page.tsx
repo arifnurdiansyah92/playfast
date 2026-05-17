@@ -318,12 +318,12 @@ export default async function CaraMainPage(props: Props) {
       <script type='application/ld+json' dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }} />
       <script type='application/ld+json' dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
 
-      <Container maxWidth='lg' sx={{ py: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      <Container maxWidth='lg' sx={{ py: { xs: 2, sm: 3 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: { xs: 3, sm: 4 }, gap: 1 }}>
           <Link href='/'>
-            <Box component='img' src='/images/brand/wordmark.png' alt='Playfast' sx={{ height: 28 }} />
+            <Box component='img' src='/images/brand/wordmark.png' alt='Playfast' sx={{ height: { xs: 24, sm: 28 }, display: 'block' }} />
           </Link>
-          <Box sx={{ display: 'flex', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', gap: { xs: 0.75, sm: 1.5 }, flexShrink: 0 }}>
             <Button component={Link} href='/katalog' size='small' sx={{ color: textSecondary, fontWeight: 600, '&:hover': { color: gold } }}>
               Katalog
             </Button>
@@ -342,19 +342,28 @@ export default async function CaraMainPage(props: Props) {
         </Box>
       </Container>
 
-      <Container maxWidth='lg' sx={{ pb: 8 }}>
-        <Grid container spacing={4}>
+      <Container maxWidth='lg' sx={{ pb: { xs: 5, sm: 8 } }}>
+        <Grid container spacing={{ xs: 3, md: 4 }}>
           <Grid size={{ xs: 12, md: 7 }}>
-            <Typography component='h1' variant='h3' sx={{ fontWeight: 800, mb: 2, lineHeight: 1.2 }}>
+            <Typography
+              component='h1'
+              sx={{
+                fontWeight: 800,
+                mb: 2,
+                lineHeight: 1.2,
+                fontSize: { xs: '1.6rem', sm: '2.1rem', md: '2.5rem' },
+                letterSpacing: '-0.01em'
+              }}
+            >
               Cara Main {game.name} Murah di Indonesia
               {game.price > 0 && (
-                <Box component='span' sx={{ display: 'block', fontSize: '0.55em', color: gold, fontWeight: 700, mt: 1 }}>
+                <Box component='span' sx={{ display: 'block', fontSize: '0.6em', color: gold, fontWeight: 700, mt: 1 }}>
                   Mulai {formatRp(game.price)}
                 </Box>
               )}
             </Typography>
 
-            <Typography sx={{ color: textSecondary, fontSize: '1.05rem', lineHeight: 1.7, mb: 3 }}>
+            <Typography sx={{ color: textSecondary, fontSize: { xs: '0.95rem', sm: '1.05rem' }, lineHeight: 1.7, mb: 3 }}>
               {aboveFold}
             </Typography>
 
@@ -369,11 +378,38 @@ export default async function CaraMainPage(props: Props) {
               </Box>
             )}
 
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 4 }}>
-              <Button component={Link} href={buyHref} variant='contained' size='large' sx={{ bgcolor: gold, color: dark, fontWeight: 700, px: 4, '&:hover': { bgcolor: goldLight } }}>
+            <Box sx={{ display: 'flex', gap: { xs: 1.25, sm: 2 }, flexDirection: { xs: 'column', sm: 'row' }, flexWrap: 'wrap', mb: 4 }}>
+              <Button
+                component={Link}
+                href={buyHref}
+                variant='contained'
+                size='large'
+                sx={{
+                  bgcolor: gold,
+                  color: dark,
+                  fontWeight: 700,
+                  px: { xs: 2, sm: 4 },
+                  width: { xs: '100%', sm: 'auto' },
+                  whiteSpace: 'normal',
+                  lineHeight: 1.3,
+                  '&:hover': { bgcolor: goldLight }
+                }}
+              >
                 Beli Akses {game.name}
               </Button>
-              <Button component={Link} href='/subscribe' variant='outlined' size='large' sx={{ borderColor: 'rgba(201,168,76,0.4)', color: textPrimary, fontWeight: 600, '&:hover': { borderColor: gold } }}>
+              <Button
+                component={Link}
+                href='/subscribe'
+                variant='outlined'
+                size='large'
+                sx={{
+                  borderColor: 'rgba(201,168,76,0.4)',
+                  color: textPrimary,
+                  fontWeight: 600,
+                  width: { xs: '100%', sm: 'auto' },
+                  '&:hover': { borderColor: gold }
+                }}
+              >
                 Lihat Paket Premium
               </Button>
             </Box>
@@ -403,10 +439,10 @@ export default async function CaraMainPage(props: Props) {
           </Grid>
         </Grid>
 
-        <Divider sx={{ my: 6, borderColor: darkCardBorder }} />
+        <Divider sx={{ my: { xs: 4, sm: 6 }, borderColor: darkCardBorder }} />
 
-        <Box sx={{ mb: 6 }}>
-          <Typography component='h2' variant='h4' sx={{ fontWeight: 700, mb: 1 }}>
+        <Box sx={{ mb: { xs: 4, sm: 6 } }}>
+          <Typography component='h2' variant='h4' sx={{ fontSize: { xs: '1.4rem', sm: '1.7rem', md: '2rem' }, fontWeight: 700, mb: 1 }}>
             4 Langkah Main {game.name} via Playfast
           </Typography>
           <Typography sx={{ color: textSecondary, mb: 4 }}>
@@ -432,8 +468,8 @@ export default async function CaraMainPage(props: Props) {
           </Grid>
         </Box>
 
-        <Box sx={{ mb: 6 }}>
-          <Typography component='h2' variant='h4' sx={{ fontWeight: 700, mb: 2 }}>
+        <Box sx={{ mb: { xs: 4, sm: 6 } }}>
+          <Typography component='h2' variant='h4' sx={{ fontSize: { xs: '1.4rem', sm: '1.7rem', md: '2rem' }, fontWeight: 700, mb: 2 }}>
             Apakah {game.name} Cocok dengan Playfast?
           </Typography>
           <Card sx={{ bgcolor: darkCard, border: `1px solid ${darkCardBorder}` }}>
@@ -444,8 +480,8 @@ export default async function CaraMainPage(props: Props) {
         </Box>
 
         {game.description && (
-          <Box sx={{ mb: 6 }}>
-            <Typography component='h2' variant='h4' sx={{ fontWeight: 700, mb: 2 }}>
+          <Box sx={{ mb: { xs: 4, sm: 6 } }}>
+            <Typography component='h2' variant='h4' sx={{ fontSize: { xs: '1.4rem', sm: '1.7rem', md: '2rem' }, fontWeight: 700, mb: 2 }}>
               Tentang {game.name}
             </Typography>
             <Typography sx={{ color: textSecondary, lineHeight: 1.8, whiteSpace: 'pre-line' }}>
@@ -454,8 +490,8 @@ export default async function CaraMainPage(props: Props) {
           </Box>
         )}
 
-        <Box sx={{ mb: 6 }}>
-          <Typography component='h2' variant='h4' sx={{ fontWeight: 700, mb: 3 }}>
+        <Box sx={{ mb: { xs: 4, sm: 6 } }}>
+          <Typography component='h2' variant='h4' sx={{ fontSize: { xs: '1.4rem', sm: '1.7rem', md: '2rem' }, fontWeight: 700, mb: 3 }}>
             Pertanyaan Umum tentang Playfast + {game.name}
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -471,8 +507,8 @@ export default async function CaraMainPage(props: Props) {
         </Box>
 
         {related.length > 0 && (
-          <Box sx={{ mb: 6 }}>
-            <Typography component='h2' variant='h4' sx={{ fontWeight: 700, mb: 1 }}>
+          <Box sx={{ mb: { xs: 4, sm: 6 } }}>
+            <Typography component='h2' variant='h4' sx={{ fontSize: { xs: '1.4rem', sm: '1.7rem', md: '2rem' }, fontWeight: 700, mb: 1 }}>
               Game Lain di Genre yang Sama
             </Typography>
             <Typography sx={{ color: textSecondary, mb: 3 }}>
@@ -487,7 +523,20 @@ export default async function CaraMainPage(props: Props) {
                     <Card component={Link} href={`${PLAY_GUIDE_BASE}/${rSlug}`} sx={{ bgcolor: darkCard, border: `1px solid ${darkCardBorder}`, textDecoration: 'none', display: 'block', transition: 'border-color .2s', '&:hover': { borderColor: gold } }}>
                       <Box component='img' src={r.header_image || `https://cdn.akamai.steamstatic.com/steam/apps/${r.appid}/header.jpg`} alt={r.name} sx={{ width: '100%', display: 'block', aspectRatio: '460/215', objectFit: 'cover' }} />
                       <CardContent>
-                        <Typography variant='subtitle2' sx={{ fontWeight: 700, color: textPrimary, mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Typography
+                          variant='subtitle2'
+                          sx={{
+                            fontWeight: 700,
+                            color: textPrimary,
+                            mb: 0.5,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            minHeight: '2.6em',
+                            lineHeight: 1.3
+                          }}
+                        >
                           Cara Main {r.name}
                         </Typography>
                         <Typography variant='body2' sx={{ color: gold, fontWeight: 700 }}>Mulai {formatRp(r.price)}</Typography>
@@ -500,17 +549,42 @@ export default async function CaraMainPage(props: Props) {
           </Box>
         )}
 
-        <Card sx={{ bgcolor: 'rgba(201,168,76,0.06)', border: `1px solid rgba(201,168,76,0.3)`, textAlign: 'center', py: 4 }}>
+        <Card sx={{ bgcolor: 'rgba(201,168,76,0.06)', border: `1px solid rgba(201,168,76,0.3)`, textAlign: 'center', py: { xs: 3, sm: 4 } }}>
           <CardContent>
-            <Typography variant='h5' sx={{ fontWeight: 700, mb: 1 }}>Siap main {game.name}?</Typography>
-            <Typography sx={{ color: textSecondary, mb: 3 }}>
+            <Typography variant='h5' sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 700, mb: 1 }}>Siap main {game.name}?</Typography>
+            <Typography sx={{ color: textSecondary, mb: 3, fontSize: { xs: '0.9rem', sm: '1rem' }, px: { xs: 1, sm: 0 } }}>
               Beli akses sekali atau subscribe Premium untuk akses ke semua game di katalog.
             </Typography>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <Button component={Link} href={buyHref} variant='contained' size='large' sx={{ bgcolor: gold, color: dark, fontWeight: 700, '&:hover': { bgcolor: goldLight } }}>
+            <Box sx={{ display: 'flex', gap: { xs: 1.25, sm: 2 }, flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'center', flexWrap: 'wrap', px: { xs: 1.5, sm: 0 } }}>
+              <Button
+                component={Link}
+                href={buyHref}
+                variant='contained'
+                size='large'
+                sx={{
+                  bgcolor: gold,
+                  color: dark,
+                  fontWeight: 700,
+                  width: { xs: '100%', sm: 'auto' },
+                  whiteSpace: 'normal',
+                  lineHeight: 1.3,
+                  '&:hover': { bgcolor: goldLight }
+                }}
+              >
                 Beli Akses {game.name}
               </Button>
-              <Button component={Link} href='/subscribe' variant='outlined' size='large' sx={{ borderColor: gold, color: textPrimary, fontWeight: 600 }}>
+              <Button
+                component={Link}
+                href='/subscribe'
+                variant='outlined'
+                size='large'
+                sx={{
+                  borderColor: gold,
+                  color: textPrimary,
+                  fontWeight: 600,
+                  width: { xs: '100%', sm: 'auto' }
+                }}
+              >
                 Subscribe Premium
               </Button>
             </Box>
