@@ -108,6 +108,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
               <MenuItem href='/promos' icon={<i className='tabler-discount' />}>
                 Promo Saya
               </MenuItem>
+              <MenuItem href='/redeem' icon={<i className='tabler-gift' />}>
+                Tukar Kode
+              </MenuItem>
               <MenuItem href='/cart' icon={<i className='tabler-shopping-cart' />}>
                 Keranjang
               </MenuItem>
@@ -191,6 +194,9 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
             <SubMenu label='Marketing' icon={<i className='tabler-rocket' />}>
               <MenuItem href='/admin/promo-codes' icon={<i className='tabler-discount' />}>
                 Promo Codes
+              </MenuItem>
+              <MenuItem href='/admin/redeem' icon={<i className='tabler-gift' />}>
+                Redeem Codes
               </MenuItem>
               <MenuItem href='/admin/referrals' icon={<i className='tabler-share' />}>
                 Referrals

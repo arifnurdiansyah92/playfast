@@ -83,6 +83,7 @@ def create_app(config_name: str | None = None) -> Flask:
         admin_creator_applications_bp,
     )
     from app.webhooks.routes import webhooks_bp
+    from app.redeem.routes import admin_redeem_bp, redeem_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(store_bp)
@@ -95,6 +96,8 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(creator_applications_bp)
     app.register_blueprint(admin_creator_applications_bp)
     app.register_blueprint(webhooks_bp)
+    app.register_blueprint(admin_redeem_bp)
+    app.register_blueprint(redeem_bp)
 
     # ---------- Serve uploaded files ----------
     from flask import send_from_directory
@@ -285,6 +288,10 @@ def _run_schema_upgrades():
 
     from app.models import CartItem
     CartItem.__table__.create(db.engine, checkfirst=True)
+
+    from app.models import RedeemCampaign, RedeemCode
+    RedeemCampaign.__table__.create(db.engine, checkfirst=True)
+    RedeemCode.__table__.create(db.engine, checkfirst=True)
 
 
 def _seed_initial_reviews():

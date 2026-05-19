@@ -1485,3 +1485,142 @@ class EmailLog(db.Model):
             self.error_message = reason
         db.session.commit()
         return True
+
+
+# ---------------------------------------------------------------------------
+# Redeem code campaigns (giveaways) — distinct from PromoCode (which is a
+# checkout discount). A RedeemCode grants direct access to a subscription
+# or a specific game when redeemed by a logged-in user. One code = one
+# successful redemption.
+# ---------------------------------------------------------------------------
+
+
+class RedeemCampaign(db.Model):
+    __tablename__ = "redeem_campaigns"
+
+    REWARD_TYPES = ("subscription", "game")
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    reward_type = db.Column(db.String(20), nullable=False)
+    reward_subscription_plan = db.Column(db.String(20), nullable=True)
+    reward_subscription_duration_days = db.Column(db.Integer, nullable=True)
+    reward_game_id = db.Column(
+        db.Integer, db.ForeignKey("games.id"), nullable=True, index=True
+    )
+    max_redemptions_per_user = db.Column(db.Integer, nullable=False, default=1)
+    starts_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+
+    reward_game = db.relationship("Game", foreign_keys=[reward_game_id])
+    codes = db.relationship(
+        "RedeemCode",
+        backref="campaign",
+        lazy="dynamic",
+        cascade="all, delete-orphan",
+    )
+
+    def reward_label(self) -> str:
+        if self.reward_type == "subscription":
+            if self.reward_subscription_plan and self.reward_subscription_plan in Subscription.PLAN_LABELS:
+                return f"Subscription: {Subscription.PLAN_LABELS[self.reward_subscription_plan]}"
+            if self.reward_subscription_duration_days:
+                return f"Subscription: {self.reward_subscription_duration_days} hari"
+            return "Subscription"
+        if self.reward_type == "game" and self.reward_game:
+            return f"Game: {self.reward_game.custom_name or self.reward_game.name}"
+        return self.reward_type
+
+    def is_within_window(self, now: datetime | None = None) -> bool:
+        now = now or datetime.now(timezone.utc)
+        if self.starts_at and now < self.starts_at:
+            return False
+        if self.expires_at and now > self.expires_at:
+            return False
+        return True
+
+    def to_dict(self, include_counts: bool = False) -> dict:
+        data = {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "reward_type": self.reward_type,
+            "reward_subscription_plan": self.reward_subscription_plan,
+            "reward_subscription_duration_days": self.reward_subscription_duration_days,
+            "reward_game_id": self.reward_game_id,
+            "reward_game_name": (
+                (self.reward_game.custom_name or self.reward_game.name)
+                if self.reward_game else None
+            ),
+            "reward_label": self.reward_label(),
+            "max_redemptions_per_user": self.max_redemptions_per_user,
+            "starts_at": self.starts_at.isoformat() if self.starts_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat(),
+            "created_by_user_id": self.created_by_user_id,
+        }
+        if include_counts:
+            total = self.codes.count()
+            redeemed = self.codes.filter(RedeemCode.redeemed_at.isnot(None)).count()
+            data["total_codes"] = total
+            data["redeemed_codes"] = redeemed
+            data["available_codes"] = total - redeemed
+        return data
+
+
+class RedeemCode(db.Model):
+    __tablename__ = "redeem_codes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    campaign_id = db.Column(
+        db.Integer,
+        db.ForeignKey("redeem_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    redeemed_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True, index=True
+    )
+    redeemed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Cross-link to the artefact created on redemption — Subscription.id for
+    # subscription rewards, Order.id for game rewards (so the admin can see
+    # exactly which row was generated, and the user lands on it).
+    granted_subscription_id = db.Column(
+        db.Integer, db.ForeignKey("subscriptions.id"), nullable=True
+    )
+    granted_order_id = db.Column(
+        db.Integer, db.ForeignKey("orders.id"), nullable=True
+    )
+    created_at = db.Column(
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    redeemed_by = db.relationship("User", foreign_keys=[redeemed_by_user_id])
+    granted_subscription = db.relationship("Subscription", foreign_keys=[granted_subscription_id])
+    granted_order = db.relationship("Order", foreign_keys=[granted_order_id])
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "code": self.code,
+            "campaign_id": self.campaign_id,
+            "redeemed_by_user_id": self.redeemed_by_user_id,
+            "redeemed_by_email": self.redeemed_by.email if self.redeemed_by else None,
+            "redeemed_at": self.redeemed_at.isoformat() if self.redeemed_at else None,
+            "granted_subscription_id": self.granted_subscription_id,
+            "granted_order_id": self.granted_order_id,
+            "created_at": self.created_at.isoformat(),
+            "is_redeemed": self.redeemed_at is not None,
+        }

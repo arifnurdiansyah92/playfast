@@ -679,6 +679,53 @@ export interface PromoValidateResponse {
   error?: string
 }
 
+// ─── Redeem code campaigns (giveaways) ──────────────────────────────────────
+
+export type RedeemRewardType = 'subscription' | 'game'
+
+export interface RedeemCampaign {
+  id: number
+  name: string
+  description: string | null
+  reward_type: RedeemRewardType
+  reward_subscription_plan: string | null
+  reward_subscription_duration_days: number | null
+  reward_game_id: number | null
+  reward_game_name: string | null
+  reward_label: string
+  max_redemptions_per_user: number
+  starts_at: string | null
+  expires_at: string | null
+  is_active: boolean
+  created_at: string
+  created_by_user_id: number | null
+  total_codes?: number
+  redeemed_codes?: number
+  available_codes?: number
+}
+
+export interface RedeemCode {
+  id: number
+  code: string
+  campaign_id: number
+  redeemed_by_user_id: number | null
+  redeemed_by_email: string | null
+  redeemed_at: string | null
+  granted_subscription_id: number | null
+  granted_order_id: number | null
+  created_at: string
+  is_redeemed: boolean
+}
+
+export interface RedeemResponse {
+  message: string
+  reward_label: string
+  reward_type: RedeemRewardType
+  redirect_to: string
+  granted_subscription_id: number | null
+  granted_order_id: number | null
+}
+
 export const storeApi = {
   getGames(params?: { q?: string; page?: number; genre?: string; sort?: string }) {
     const search = new URLSearchParams()
@@ -2007,6 +2054,91 @@ return request<{ subscriptions: Subscription[]; total: number; page: number; pag
 
   markEmailVerified(userId: number) {
     return request<{ message: string }>(`/api/admin/users/${userId}/mark-email-verified`, { method: 'POST' })
+  },
+
+  // ── Redeem code campaigns (giveaways) ─────────────────────────────────
+  getRedeemCampaigns(params?: { page?: number; per_page?: number; q?: string }) {
+    const sp = new URLSearchParams()
+
+    if (params?.page) sp.set('page', String(params.page))
+    if (params?.per_page) sp.set('per_page', String(params.per_page))
+    if (params?.q) sp.set('q', params.q)
+
+    const suffix = sp.toString() ? `?${sp.toString()}` : ''
+
+    return request<{
+      campaigns: RedeemCampaign[]
+      total: number
+      page: number
+      per_page: number
+      pages: number
+    }>(`/api/admin/redeem/campaigns${suffix}`)
+  },
+  getRedeemCampaign(id: number) {
+    return request<{ campaign: RedeemCampaign }>(`/api/admin/redeem/campaigns/${id}`)
+  },
+  createRedeemCampaign(data: Partial<RedeemCampaign>) {
+    return request<{ message: string; campaign: RedeemCampaign }>(
+      '/api/admin/redeem/campaigns',
+      { method: 'POST', body: JSON.stringify(data) }
+    )
+  },
+  updateRedeemCampaign(id: number, data: Partial<RedeemCampaign>) {
+    return request<{ message: string; campaign: RedeemCampaign }>(
+      `/api/admin/redeem/campaigns/${id}`,
+      { method: 'PATCH', body: JSON.stringify(data) }
+    )
+  },
+  deleteRedeemCampaign(id: number) {
+    return request<{ message: string }>(
+      `/api/admin/redeem/campaigns/${id}`,
+      { method: 'DELETE' }
+    )
+  },
+  generateRedeemCodes(id: number, count: number) {
+    return request<{
+      message: string
+      generated: number
+      requested: number
+      codes: string[]
+    }>(`/api/admin/redeem/campaigns/${id}/generate`, {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    })
+  },
+  getRedeemCodes(id: number, params?: {
+    page?: number
+    per_page?: number
+    status?: 'all' | 'redeemed' | 'unredeemed'
+  }) {
+    const sp = new URLSearchParams()
+
+    if (params?.page) sp.set('page', String(params.page))
+    if (params?.per_page) sp.set('per_page', String(params.per_page))
+    if (params?.status) sp.set('status', params.status)
+
+    const suffix = sp.toString() ? `?${sp.toString()}` : ''
+
+    return request<{
+      codes: RedeemCode[]
+      total: number
+      page: number
+      per_page: number
+      pages: number
+      campaign: RedeemCampaign
+    }>(`/api/admin/redeem/campaigns/${id}/codes${suffix}`)
+  },
+  redeemCodesCsvUrl(id: number): string {
+    return `${API_BASE}/api/admin/redeem/campaigns/${id}/codes.csv`
+  },
+}
+
+export const redeemApi = {
+  redeem(code: string) {
+    return request<RedeemResponse>('/api/redeem/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    })
   },
 }
 
